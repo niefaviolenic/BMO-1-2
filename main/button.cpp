@@ -3,6 +3,7 @@
 #include "audio.h"
 #include "display.h"
 #include "state.h"
+#include "wakeword.h"
 
 #include "driver/gpio.h"
 #include "esp_err.h"
@@ -117,9 +118,9 @@ void button_update()
             TAG,
             "Touch detected");
 
-        if (getState() == BMOState::SLEEP)
+        if (getState() == BMOState::IDLE)
         {
-            setState(BMOState::WAKE);
+            wakeword_task();
         }
     }
 

@@ -230,5 +230,9 @@ D:/BMO/all_bmo/managed_components/espressif__esp-sr/lib/esp32s3/libmultinet.a
 D:/BMO/all_bmo/managed_components/espressif__esp-sr/lib/esp32s3/libnsnet.a
 D:/BMO/all_bmo/managed_components/espressif__esp-sr/lib/esp32s3/libvadnet.a
 D:/BMO/all_bmo/managed_components/espressif__esp-sr/lib/esp32s3/libwakenet.a
+D:/BMO/all_bmo/build/esp-idf/espressif__esp_websocket_client/libespressif__esp_websocket_client.a
+D:/BMO/all_bmo/build/esp-idf/chmorgan__esp-libhelix-mp3/libchmorgan__esp-libhelix-mp3.a
 D:/BMO/all_bmo/build/esp-idf/main/libmain.a
 D:/BMO/all_bmo/build/esp-idf/espressif__esp_lcd_ili9341/libespressif__esp_lcd_ili9341.a
+D:/BMO/all_bmo/build/esp-idf/espressif__esp_websocket_client/libespressif__esp_websocket_client.a
+D:/BMO/all_bmo/build/esp-idf/chmorgan__esp-libhelix-mp3/libchmorgan__esp-libhelix-mp3.a

@@ -10,16 +10,30 @@
 
 static const char *TAG = "STATE";
 
-BMOState currentState = BMOState::SLEEP;
+BMOState currentState = BMOState::IDLE;
 
 void setState(BMOState state)
 {
     currentState = state;
     ESP_LOGI(TAG, "State changed to %d", (int)state);
 
-    if (state == BMOState::SLEEP)
-    {
-        display_sleep();
+    switch (state) {
+        case BMOState::IDLE:
+            display_set_mode(DisplayMode::IDLE);
+            break;
+        case BMOState::RECORDING:
+            // Recording adalah state internal, display tetap IDLE (Hardware Contract v1.0.5)
+            display_set_mode(DisplayMode::IDLE);
+            break;
+        case BMOState::THINKING:
+            display_set_mode(DisplayMode::THINKING);
+            break;
+        case BMOState::SPEAKING:
+            display_set_mode(DisplayMode::SPEAKING);
+            break;
+        case BMOState::ERROR_STATE:
+            display_set_mode(DisplayMode::ERROR);
+            break;
     }
 }
 
@@ -38,39 +52,33 @@ static void bmo_state_machine_task(void *pvParameters)
 
         switch (current)
         {
-            case BMOState::SLEEP:
-                // Menunggu trigger dari Wake Word atau Touch Sensor
+            case BMOState::IDLE:
+                // Menunggu trigger dari Wake Word (yang merubah state ke RECORDING)
                 vTaskDelay(pdMS_TO_TICKS(100));
                 break;
 
-            case BMOState::WAKE:
-                ESP_LOGI(TAG, "Entering WAKE state");
-                display_face(FACE_EXCITED);
-                audio_playHello();
-                setState(BMOState::LISTENING);
-                break;
-
-            case BMOState::LISTENING:
-                ESP_LOGI(TAG, "Entering LISTENING state");
-                display_face(FACE_CUTE);
+            case BMOState::RECORDING:
+                ESP_LOGI(TAG, "Entering RECORDING state");
                 start_recording();
                 while (is_recording())
                 {
                     vTaskDelay(pdMS_TO_TICKS(50));
                 }
-                setState(BMOState::THINKING);
+                api_upload_audio_and_process();
+                setState(BMOState::IDLE);
                 break;
 
             case BMOState::THINKING:
                 ESP_LOGI(TAG, "Entering THINKING state");
-                display_face(FACE_CONFUSED);
-                api_send_audio_and_play();
-                // Setelah selesai memutar respon atau jika error, kembali ke SLEEP
-                setState(BMOState::SLEEP);
+                // api_upload_audio_and_process mengupload, menunggu WS audio_ready, 
+                // memutar MP3 progresif secara blocking, dan mengirim completion events.
+                api_upload_audio_and_process();
+                setState(BMOState::IDLE);
                 break;
 
             case BMOState::SPEAKING:
-                // SPEAKING diatur oleh pemutaran audio di api_send_audio_and_play()
+            case BMOState::ERROR_STATE:
+                // State ini dikendalikan didalam api_upload_audio_and_process
                 vTaskDelay(pdMS_TO_TICKS(100));
                 break;
         }

@@ -962,3 +962,22 @@ void display_face(
 
     unlock_display();
 }
+
+void display_set_mode(DisplayMode mode)
+{
+    switch (mode)
+    {
+        case DisplayMode::IDLE:
+            display_face(FACE_HAPPY);
+            break;
+        case DisplayMode::THINKING:
+            display_face(FACE_CONFUSED);
+            break;
+        case DisplayMode::SPEAKING:
+            display_face(FACE_HAPPY);
+            break;
+        case DisplayMode::ERROR:
+            display_face(FACE_SAD);
+            break;
+    }
+}

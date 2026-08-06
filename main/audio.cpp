@@ -23,16 +23,17 @@ static const char *TAG = "AUDIO";
 #define SPEAKER_SAMPLE_RATE 16000
 #define SPEAKER_DEFAULT_VOLUME 8
 #define SPEAKER_CHUNK_FRAMES 256
+#define SPEAKER_OUTPUT_CHUNK_FRAMES 64
 
 static i2s_chan_handle_t speaker_tx_handle = NULL;
 
 static bool speaker_ready = false;
 
-static int volume = SPEAKER_DEFAULT_VOLUME;
+static volatile int volume = SPEAKER_DEFAULT_VOLUME;
 
 //--------------------------------------------------
 
-static int16_t speaker_amplitude()
+static int speaker_volume_percent()
 {
     int safe_volume = volume;
 
@@ -42,7 +43,23 @@ static int16_t speaker_amplitude()
     if(safe_volume > 100)
         safe_volume = 100;
 
-    return (int16_t)(safe_volume * 55);
+    return safe_volume;
+}
+
+//--------------------------------------------------
+
+static int16_t speaker_scale_sample(
+    int16_t sample,
+    int safe_volume)
+{
+    return (int16_t)(((int32_t)sample * safe_volume) / 100);
+}
+
+//--------------------------------------------------
+
+static int16_t speaker_amplitude()
+{
+    return (int16_t)(speaker_volume_percent() * 55);
 }
 
 //--------------------------------------------------
@@ -54,7 +71,7 @@ static esp_err_t speaker_write_tone(
     if(!speaker_ready)
         return ESP_ERR_INVALID_STATE;
 
-    int16_t samples[SPEAKER_CHUNK_FRAMES * 2];
+    int16_t samples[SPEAKER_OUTPUT_CHUNK_FRAMES * 2];
 
     int total_frames =
         (SPEAKER_SAMPLE_RATE * duration_ms) / 1000;
@@ -72,8 +89,8 @@ static esp_err_t speaker_write_tone(
         int frames =
             total_frames;
 
-        if(frames > SPEAKER_CHUNK_FRAMES)
-            frames = SPEAKER_CHUNK_FRAMES;
+        if(frames > SPEAKER_OUTPUT_CHUNK_FRAMES)
+            frames = SPEAKER_OUTPUT_CHUNK_FRAMES;
 
         // Mendapatkan amplitudo secara dinamis dari volume terbaru
         int16_t amplitude = speaker_amplitude();
@@ -121,7 +138,7 @@ static esp_err_t speaker_write_silence(
     if(!speaker_ready)
         return ESP_ERR_INVALID_STATE;
 
-    int16_t samples[SPEAKER_CHUNK_FRAMES * 2] = {};
+    int16_t samples[SPEAKER_OUTPUT_CHUNK_FRAMES * 2] = {};
 
     int total_frames =
         (SPEAKER_SAMPLE_RATE * duration_ms) / 1000;
@@ -131,8 +148,8 @@ static esp_err_t speaker_write_silence(
         int frames =
             total_frames;
 
-        if(frames > SPEAKER_CHUNK_FRAMES)
-            frames = SPEAKER_CHUNK_FRAMES;
+        if(frames > SPEAKER_OUTPUT_CHUNK_FRAMES)
+            frames = SPEAKER_OUTPUT_CHUNK_FRAMES;
 
         size_t bytes_written = 0;
 
@@ -303,13 +320,15 @@ void audio_playHello()
 void audio_setVolume(
     int vol)
 {
-    volume = vol;
+    int safe_volume = vol;
 
-    if(volume < 0)
-        volume = 0;
+    if(safe_volume < 0)
+        safe_volume = 0;
 
-    if(volume > 100)
-        volume = 100;
+    if(safe_volume > 100)
+        safe_volume = 100;
+
+    volume = safe_volume;
 
     ESP_LOGI(
         TAG,
@@ -340,19 +359,20 @@ void audio_play_pcm(const int16_t *mono_samples, size_t sample_count)
     if(!speaker_ready)
         return;
 
-    int16_t stereo_buf[SPEAKER_CHUNK_FRAMES * 2];
+    int16_t stereo_buf[SPEAKER_OUTPUT_CHUNK_FRAMES * 2];
     size_t i = 0;
     while(i < sample_count)
     {
         size_t chunk_samples = sample_count - i;
-        if(chunk_samples > SPEAKER_CHUNK_FRAMES)
-            chunk_samples = SPEAKER_CHUNK_FRAMES;
+        if(chunk_samples > SPEAKER_OUTPUT_CHUNK_FRAMES)
+            chunk_samples = SPEAKER_OUTPUT_CHUNK_FRAMES;
+
+        int safe_volume = speaker_volume_percent();
 
         for(size_t j = 0; j < chunk_samples; j++)
         {
             int16_t sample = mono_samples[i + j];
-            // Apply volume dynamically
-            sample = (int16_t)(((int32_t)sample * volume) / 100);
+            sample = speaker_scale_sample(sample, safe_volume);
 
             stereo_buf[j * 2] = sample;
             stereo_buf[j * 2 + 1] = sample;
@@ -367,5 +387,117 @@ void audio_play_pcm(const int16_t *mono_samples, size_t sample_count)
             pdMS_TO_TICKS(500));
 
         i += chunk_samples;
+    }
+}
+
+static uint32_t current_sample_rate = SPEAKER_SAMPLE_RATE;
+
+void audio_set_sample_rate(uint32_t sample_rate)
+{
+    if (!speaker_ready || current_sample_rate == sample_rate)
+        return;
+
+    ESP_LOGI(TAG, "Changing speaker sample rate to %lu Hz", (unsigned long)sample_rate);
+    i2s_channel_disable(speaker_tx_handle);
+    i2s_std_clk_config_t clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate);
+    esp_err_t err = i2s_channel_reconfig_std_clock(speaker_tx_handle, &clk_cfg);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to reconfig I2S clock: %s", esp_err_to_name(err));
+    }
+    i2s_channel_enable(speaker_tx_handle);
+    current_sample_rate = sample_rate;
+}
+
+void audio_play_raw(const int16_t *samples, size_t sample_count, int channels, int sample_rate)
+{
+    if (!speaker_ready)
+        return;
+
+    audio_set_sample_rate(sample_rate);
+
+    int16_t stereo_buf[SPEAKER_OUTPUT_CHUNK_FRAMES * 2];
+    size_t i = 0;
+
+    if (channels == 1) {
+        // Mono input
+        while (i < sample_count) {
+            size_t chunk_samples = sample_count - i;
+            if (chunk_samples > SPEAKER_OUTPUT_CHUNK_FRAMES)
+                chunk_samples = SPEAKER_OUTPUT_CHUNK_FRAMES;
+
+            int safe_volume = speaker_volume_percent();
+
+            for (size_t j = 0; j < chunk_samples; j++) {
+                int16_t sample = samples[i + j];
+                sample = speaker_scale_sample(sample, safe_volume);
+
+                stereo_buf[j * 2] = sample;
+                stereo_buf[j * 2 + 1] = sample;
+            }
+
+            size_t bytes_written = 0;
+            i2s_channel_write(
+                speaker_tx_handle,
+                stereo_buf,
+                chunk_samples * 2 * sizeof(int16_t),
+                &bytes_written,
+                pdMS_TO_TICKS(500));
+
+            i += chunk_samples;
+        }
+    } else if (channels == 2) {
+        // Stereo input (sample_count is total sample elements, so pairs * 2)
+        size_t total_frames = sample_count / 2;
+        size_t frame_idx = 0;
+        while (frame_idx < total_frames) {
+            size_t chunk_frames = total_frames - frame_idx;
+            if (chunk_frames > SPEAKER_OUTPUT_CHUNK_FRAMES)
+                chunk_frames = SPEAKER_OUTPUT_CHUNK_FRAMES;
+
+            int safe_volume = speaker_volume_percent();
+
+            for (size_t j = 0; j < chunk_frames; j++) {
+                int16_t left = samples[(frame_idx + j) * 2];
+                int16_t right = samples[(frame_idx + j) * 2 + 1];
+
+                left = speaker_scale_sample(left, safe_volume);
+                right = speaker_scale_sample(right, safe_volume);
+
+                stereo_buf[j * 2] = left;
+                stereo_buf[j * 2 + 1] = right;
+            }
+
+            size_t bytes_written = 0;
+            i2s_channel_write(
+                speaker_tx_handle,
+                stereo_buf,
+                chunk_frames * 2 * sizeof(int16_t),
+                &bytes_written,
+                pdMS_TO_TICKS(500));
+
+            frame_idx += chunk_frames;
+        }
+    }
+}
+
+void audio_play_error()
+{
+    ESP_LOGI(TAG, "Play error tone sequence");
+
+    // Make sure clock rate is reset for playHello / play_tone
+    audio_set_sample_rate(SPEAKER_SAMPLE_RATE);
+
+    esp_err_t result = ESP_OK;
+
+    // Play a error buzz: descending tones 440 -> 330 -> 220
+    result |= speaker_write_tone(440, 150);
+    result |= speaker_write_silence(50);
+    result |= speaker_write_tone(330, 150);
+    result |= speaker_write_silence(50);
+    result |= speaker_write_tone(220, 250);
+
+    if(result != ESP_OK)
+    {
+        ESP_LOGW(TAG, "Error beep skipped: %s", esp_err_to_name(result));
     }
 }

@@ -166,6 +166,8 @@
 		"D:/BMO/all_bmo/build/esp-idf/espressif__dl_fft/cmake_install.cmake",
 		"D:/BMO/all_bmo/build/esp-idf/espressif__esp-dsp/cmake_install.cmake",
 		"D:/BMO/all_bmo/build/esp-idf/espressif__esp-sr/cmake_install.cmake",
+		"D:/BMO/all_bmo/build/esp-idf/espressif__esp_websocket_client/cmake_install.cmake",
+		"D:/BMO/all_bmo/build/esp-idf/chmorgan__esp-libhelix-mp3/cmake_install.cmake",
 		"D:/BMO/all_bmo/build/esp-idf/main/cmake_install.cmake"
 	],
 	"Parallel" : false

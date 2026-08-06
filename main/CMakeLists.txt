@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "state.cpp" "api.cpp" "wifi.cpp" "button.cpp" "wakeword.cpp" "audio.cpp" "display.cpp" "main.cpp"
+    SRCS "network.cpp" "state.cpp" "api.cpp" "wifi.cpp" "button.cpp" "wakeword.cpp" "audio.cpp" "display.cpp" "main.cpp"
     INCLUDE_DIRS "."
     REQUIRES
         driver
@@ -15,4 +15,5 @@ idf_component_register(
         nvs_flash
         esp_netif
         esp_http_client
+        esp_websocket_client
 )

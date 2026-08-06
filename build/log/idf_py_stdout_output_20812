@@ -1,0 +1,323 @@
+Command: C:\Espressif\tools\python\v6.0.1\venv\Scripts\python.exe C:\esp\v6.0.1\esp-idf\tools/idf_monitor.py -p COM7 -b 115200 --toolchain-prefix xtensa-esp32s3-elf- --target esp32s3 --revision 0 D:\BMO\all_bmo\build\all_bmo.elf D:\BMO\all_bmo\build\bootloader\bootloader.elf --force-color -m 'C:\Espressif\tools\python\v6.0.1\venv\Scripts\python.exe' 'C:\esp\v6.0.1\esp-idf\tools\idf.py' '-p' 'COM7'
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0x1 (POWERON),boot:0x8 (SPI_FAST_FLASH_BOOT)
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2820,len:0x14f0
+load:0x403c8700,len:0xda0
+load:0x403cb700,len:0x2f58
+entry 0x403c8908
+[0;32mI (24) boot: ESP-IDF v6.0.1 2nd stage bootloader[0m
+[0;32mI (25) boot: compile time Jul 25 2026 22:19:32[0m
+[0;32mI (25) boot: Multicore bootloader[0m
+[0;32mI (25) boot: chip revision: v0.2[0m
+[0;32mI (28) boot: efuse block revision: v1.4[0m
+[0;32mI (31) boot.esp32s3: Boot SPI Speed : 80MHz[0m
+[0;32mI (35) boot.esp32s3: SPI Mode       : DIO[0m
+[0;32mI (39) boot.esp32s3: SPI Flash Size : 8MB[0m
+[0;32mI (43) boot: Enabling RNG early entropy source...[0m
+[0;32mI (47) boot: Partition Table:[0m
+[0;32mI (50) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (56) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (63) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (69) boot:  2 factory          factory app      00 00 00010000 00200000[0m
+[0;32mI (76) boot:  3 model            Unknown data     01 82 00210000 00400000[0m
+[0;32mI (82) boot: End of partition table[0m
+[0;32mI (85) esp_image: segment 0: paddr=00010020 vaddr=3c0e0020 size=2b91ch (178460) map[0m
+[0;32mI (125) esp_image: segment 1: paddr=0003b944 vaddr=3fc9b800 size=046d4h ( 18132) load[0m
+[0;32mI (129) esp_image: segment 2: paddr=00040020 vaddr=42000020 size=d0cf4h (855284) map[0m
+[0;32mI (283) esp_image: segment 3: paddr=00110d1c vaddr=3fc9fed4 size=02898h ( 10392) load[0m
+[0;32mI (285) esp_image: segment 4: paddr=001135bc vaddr=40374000 size=17708h ( 96008) load[0m
+[0;32mI (308) esp_image: segment 5: paddr=0012accc vaddr=50000000 size=00024h (    36) load[0m
+[0;32mI (318) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (318) boot: Disabling RNG early entropy source...[0m
+[0;32mI (329) octal_psram: vendor id    : 0x0d (AP)[0m
+[0;32mI (329) octal_psram: dev id       : 0x02 (generation 3)[0m
+[0;32mI (329) octal_psram: density      : 0x03 (64 Mbit)[0m
+[0;32mI (331) octal_psram: good-die     : 0x01 (Pass)[0m
+[0;32mI (335) octal_psram: Latency      : 0x01 (Fixed)[0m
+[0;32mI (339) octal_psram: VCC          : 0x01 (3V)[0m
+[0;32mI (344) octal_psram: SRF          : 0x01 (Fast Refresh)[0m
+[0;32mI (348) octal_psram: BurstType    : 0x01 (Hybrid Wrap)[0m
+[0;32mI (353) octal_psram: BurstLen     : 0x01 (32 Byte)[0m
+[0;32mI (358) octal_psram: Readlatency  : 0x02 (10 cycles@Fixed)[0m
+[0;32mI (363) octal_psram: DriveStrength: 0x00 (1/1)[0m
+[0;32mI (367) esp_psram: Found 8MB PSRAM device[0m
+[0;32mI (371) esp_psram: Speed: 40MHz[0m
+[0;32mI (374) cpu_start: Multicore app[0m
+[0;32mI (1108) esp_psram: SPI SRAM memory test OK[0m
+[0;32mI (1116) cpu_start: GPIO 44 and 43 are used as console UART I/O pins[0m
+[0;32mI (1117) cpu_start: Pro cpu start user code[0m
+[0;32mI (1117) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (1119) app_init: Application information:[0m
+[0;32mI (1122) app_init: Project name:     all_bmo[0m
+[0;32mI (1126) app_init: App version:      0406519-dirty[0m
+[0;32mI (1131) app_init: Compile time:     Jul 25 2026 21:42:37[0m
+[0;32mI (1136) app_init: ELF file SHA256:  4cca21ddc...[0m
+[0;32mI (1141) app_init: ESP-IDF:          v6.0.1[0m
+[0;32mI (1144) efuse_init: Min chip rev:     v0.0[0m
+[0;32mI (1148) efuse_init: Max chip rev:     v0.99 [0m
+[0;32mI (1152) efuse_init: Chip rev:         v0.2[0m
+[0;32mI (1156) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (1163) heap_init: At 3FCA6CF0 len 00042A20 (266 KiB): RAM[0m
+[0;32mI (1168) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM[0m
+[0;32mI (1173) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM[0m
+[0;32mI (1178) heap_init: At 600FE000 len 00001FE8 (7 KiB): RTCRAM[0m
+[0;32mI (1184) esp_psram: Adding pool of 8192K of PSRAM memory to heap allocator[0m
+[0;32mI (1191) spi_flash: detected chip: boya[0m
+[0;32mI (1194) spi_flash: flash io: dio[0m
+[0;33mW (1197) spi_flash: Detected size(16384k) larger than the size in the binary image header(8192k). Using the size in the binary image header.[0m
+[0;32mI (1210) sleep_gpio: Configure to isolate all GPIO pins in sleep state[0m
+[0;32mI (1216) sleep_gpio: Enable automatic switching of GPIO sleep configuration[0m
+[0;32mI (1223) main_task: Started on CPU0[0m
+[0;32mI (1243) esp_psram: Reserving pool of 32K of internal memory for DMA/internal allocations[0m
+[0;32mI (1243) main_task: Calling app_main()[0m
+[0;32mI (1243) DISPLAY: Initialize ILI9341 landscape[0m
+[0;32mI (1253) ili9341: LCD panel create success, version: 2.0.2[0m
+[0;32mI (1373) DISPLAY: ILI9341 Ready[0m
+[0;32mI (1603) DISPLAY: Display sleep screen[0m
+[0;32mI (1603) AUDIO: MAX98357A ready: BCLK=1 WS=2 DIN=42 volume=8[0m
+[0;32mI (1603) BUTTON: Input ready: touch=14 vol_up=15 vol_down=16[0m
+[0;32mI (1623) pp: pp rom version: e7ae62f[0m
+[0;32mI (1623) net80211: net80211 rom version: e7ae62f[0m
+[0;32mI (1633) wifi:wifi driver task: 3fcb8728, prio:23, stack:6656, core=0[0m
+[0;32mI (1643) wifi:wifi firmware version: b37c951[0m
+[0;32mI (1643) wifi:wifi certification version: v7.0[0m
+[0;32mI (1643) wifi:config NVS flash: enabled[0m
+[0;32mI (1643) wifi:config nano formatting: disabled[0m
+[0;32mI (1643) wifi:Init data frame dynamic rx buffer num: 32[0m
+[0;32mI (1653) wifi:Init static rx mgmt buffer num: 5[0m
+[0;32mI (1653) wifi:Init management short buffer num: 32[0m
+[0;32mI (1663) wifi:Init dynamic tx buffer num: 32[0m
+[0;32mI (1663) wifi:Init static tx FG buffer num: 2[0m
+[0;32mI (1663) wifi:Init static rx buffer size: 1600[0m
+[0;32mI (1673) wifi:Init static rx buffer num: 10[0m
+[0;32mI (1673) wifi:Init dynamic rx buffer num: 32[0m
+[0;32mI (1683) wifi_init: rx ba win: 6[0m
+[0;32mI (1683) wifi_init: accept mbox: 6[0m
+[0;32mI (1683) wifi_init: tcpip mbox: 32[0m
+[0;32mI (1683) wifi_init: udp mbox: 6[0m
+[0;32mI (1693) wifi_init: tcp mbox: 6[0m
+[0;32mI (1693) wifi_init: tcp tx win: 5760[0m
+[0;32mI (1693) wifi_init: tcp rx win: 5760[0m
+[0;32mI (1703) wifi_init: tcp mss: 1440[0m
+[0;32mI (1703) wifi_init: WiFi IRAM OP enabled[0m
+[0;32mI (1703) wifi_init: WiFi RX IRAM OP enabled[0m
+[0;32mI (1713) phy_init: phy_version 711,97bcf0a2,Aug 25 2025,19:04:10[0m
+[0;32mI (1763) wifi:mode : sta (28:84:85:51:dc:38)[0m
+[0;32mI (1763) wifi:enable tsf[0m
+[0;32mI (1763) WIFI: WiFi initialization complete. Connecting to Your_WiFi_SSID...[0m
+[0;33mW (1763) websocket_client: `network_timeout_ms` is not set, or it is less than or equal to zero, using default time out 10000 (milliseconds)[0m
+[1;31mE (1773) esp-tls: [sock=54] connect() error: Host is unreachable[0m
+[1;31mE (1783) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (1783) transport_ws: Error connecting to host 192.168.1.100:3000[0m
+[1;31mE (1793) websocket_client: esp_transport_connect() failed with -1, transport_error=ESP_ERR_ESP_TLS_FAILED_CONNECT_TO_HOST, tls_error_code=0, tls_flags=0, esp_ws_handshake_status_code=0, errno=118[0m
+[1;31mE (1813) API: WebSocket error event[0m
+[0;32mI (1813) API: WebSocket disconnected[0m
+[0;32mI (1813) websocket_client: Started[0m
+[0;32mI (1823) API: Reconnecting WebSocket in 1 seconds...[0m
+[0;32mI (1823) STATE: State machine orchestrator task started[0m
+[0;32mI (1833) MODEL_LOADER: The storage free size is 23488 KB[0m
+[0;32mI (1833) MODEL_LOADER: The partition size is 4096 KB[0m
+[0;32mI (1843) MODEL_LOADER: Successfully load srmodels[0m
+[0;32mI (1843) WAKE: WakeNet model: wn9_hijoy_tts[0m
+[0;32mI (1843) WAKE: Wake words: Hi,Joy[0m
+MC Quantized wakenet9: wakenet9l_tts1h8_Hi,Joy_3_0.631_0.633, tigger:v4, mode:0, p:0, (May 25 2026 15:51:00)
+[0;32mI (1923) WAKE: WakeNet sample_rate=16000 chunk=512 channels=1[0m
+[0;33mW (1923) i2s_platform: i2s controller 0 has been occupied by i2s_driver[0m
+[0;32mI (1933) WAKE: I2S mic ready: BCLK=5 WS=4 DIN=6 rate=16000[0m
+[0;32mI (1933) WAKE: Wakeword initialized[0m
+[0;32mI (1933) WAKE: Listening for Hi Joy[0m
+[0;33mW (2823) websocket_client: Client was not started[0m
+[1;31mE (2823) esp-tls: [sock=54] connect() error: Host is unreachable[0m
+[1;31mE (2823) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (2823) transport_ws: Error connecting to host 192.168.1.100:3000[0m
+[0;32mI (2823) websocket_client: Started[0m
+[1;31mE (2833) websocket_client: esp_transport_connect() failed with -1, transport_error=ESP_ERR_ESP_TLS_FAILED_CONNECT_TO_HOST, tls_error_code=0, tls_flags=0, esp_ws_handshake_status_code=0, errno=118[0m
+[1;31mE (2853) API: WebSocket error event[0m
+[0;32mI (2853) API: WebSocket disconnected[0m
+[0;32mI (4173) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (4843) API: Reconnecting WebSocket in 2 seconds...[0m
+[0;32mI (5143) WAKE: Mic peak: 187[0m
+[0;32mI (6593) WIFI: Disconnected, retrying connection...[0m
+[0;33mW (6843) websocket_client: Client was not started[0m
+[1;31mE (6843) esp-tls: [sock=54] connect() error: Host is unreachable[0m
+[1;31mE (6843) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (6843) transport_ws: Error connecting to host 192.168.1.100:3000[0m
+[0;32mI (6843) websocket_client: Started[0m
+[1;31mE (6853) websocket_client: esp_transport_connect() failed with -1, transport_error=ESP_ERR_ESP_TLS_FAILED_CONNECT_TO_HOST, tls_error_code=0, tls_flags=0, esp_ws_handshake_status_code=0, errno=118[0m
+[1;31mE (6873) API: WebSocket error event[0m
+[0;32mI (6873) API: WebSocket disconnected[0m
+[0;32mI (8333) WAKE: Mic peak: 122[0m
+[0;32mI (8863) API: Reconnecting WebSocket in 4 seconds...[0m
+[0;32mI (9013) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (10843) WAKE: Hi Joy detected[0m
+[0;32mI (10843) STATE: State changed to 1[0m
+[0;32mI (10843) DISPLAY: display_face()[0m
+[0;32mI (10933) STATE: Entering RECORDING state[0m
+[0;32mI (10933) WAKE: Recording started[0m
+[0;32mI (11423) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (12363) DISPLAY: Face : 0[0m
+[0;32mI (12363) WAKE: Wake detected, starting recording[0m
+[0;33mW (12863) websocket_client: Client was not started[0m
+[1;31mE (12863) esp-tls: [sock=54] connect() error: Host is unreachable[0m
+[1;31mE (12863) transport_base: Failed to open a new connection: 32772[0m
+[0;32mI (12863) websocket_client: Started[0m
+[1;31mE (12863) transport_ws: Error connecting to host 192.168.1.100:3000[0m
+[1;31mE (12873) websocket_client: esp_transport_connect() failed with -1, transport_error=ESP_ERR_ESP_TLS_FAILED_CONNECT_TO_HOST, tls_error_code=0, tls_flags=0, esp_ws_handshake_status_code=0, errno=118[0m
+[1;31mE (12893) API: WebSocket error event[0m
+[0;32mI (12893) API: WebSocket disconnected[0m
+[0;32mI (13843) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (14873) API: Reconnecting WebSocket in 8 seconds...[0m
+[0;32mI (15493) WAKE: Mic peak: 83[0m
+[0;32mI (16253) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (17323) WAKE: Recording finished: silence detected[0m
+[0;32mI (17323) WAKE: WAV header written: 40448 samples[0m
+[0;33mW (17333) API: WebSocket is not connected or authenticated. Refusing voice processing.[0m
+[0;32mI (17333) STATE: State changed to 4[0m
+[0;32mI (17333) DISPLAY: display_face()[0m
+[0;32mI (18673) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (18703) WAKE: Mic peak: 97[0m
+[0;32mI (18963) DISPLAY: Face : 5[0m
+[0;32mI (18963) DISPLAY: display_face()[0m
+[0;32mI (20593) DISPLAY: Face : 5[0m
+[0;32mI (20593) AUDIO: Play error tone sequence[0m
+[0;32mI (21083) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (21173) API: Voice Error: Oh no. BMO could not answer. Please try again. Code: WEBSOCKET_NOT_CONNECTED[0m
+[0;32mI (21893) WAKE: Mic peak: 116[0m
+[0;33mW (22873) websocket_client: Client was not started[0m
+[1;31mE (22873) esp-tls: [sock=54] connect() error: Host is unreachable[0m
+[0;32mI (22873) websocket_client: Started[0m
+[1;31mE (22873) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (22873) transport_ws: Error connecting to host 192.168.1.100:3000[0m
+[1;31mE (22883) websocket_client: esp_transport_connect() failed with -1, transport_error=ESP_ERR_ESP_TLS_FAILED_CONNECT_TO_HOST, tls_error_code=0, tls_flags=0, esp_ws_handshake_status_code=0, errno=118[0m
+[1;31mE (22903) API: WebSocket error event[0m
+[0;32mI (22903) API: WebSocket disconnected[0m
+[0;32mI (23173) STATE: State changed to 0[0m
+[0;32mI (23173) DISPLAY: display_face()[0m
+[0;32mI (23493) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (24703) DISPLAY: Face : 0[0m
+[0;32mI (24703) DISPLAY: display_face()[0m
+[0;32mI (24873) API: Reconnecting WebSocket in 16 seconds...[0m
+[0;32mI (25093) WAKE: Mic peak: 129[0m
+[0;32mI (25913) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (26223) DISPLAY: Face : 0[0m
+[0;32mI (26233) STATE: State changed to 0[0m
+[0;32mI (26233) DISPLAY: display_face()[0m
+[0;32mI (27753) DISPLAY: Face : 0[0m
+[0;32mI (28303) WAKE: Mic peak: 118[0m
+[0;32mI (28333) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (30753) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (31493) WAKE: Mic peak: 159[0m
+[0;32mI (33163) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (34693) WAKE: Mic peak: 85[0m
+[0;32mI (35583) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (37903) WAKE: Mic peak: 101[0m
+[0;32mI (37993) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (40413) WIFI: Disconnected, retrying connection...[0m
+[0;33mW (40873) websocket_client: Client was not started[0m
+[1;31mE (40873) esp-tls: [sock=54] connect() error: Host is unreachable[0m
+[1;31mE (40873) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (40873) transport_ws: Error connecting to host 192.168.1.100:3000[0m
+[0;32mI (40873) websocket_client: Started[0m
+[1;31mE (40883) websocket_client: esp_transport_connect() failed with -1, transport_error=ESP_ERR_ESP_TLS_FAILED_CONNECT_TO_HOST, tls_error_code=0, tls_flags=0, esp_ws_handshake_status_code=0, errno=118[0m
+[1;31mE (40903) API: WebSocket error event[0m
+[0;32mI (40903) API: WebSocket disconnected[0m
+[0;32mI (41093) WAKE: Mic peak: 107[0m
+[0;32mI (42833) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (42893) API: Reconnecting WebSocket in 30 seconds...[0m
+[0;32mI (44293) WAKE: Mic peak: 148[0m
+[0;32mI (45253) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (46093) WAKE: Hi Joy detected[0m
+[0;32mI (46093) STATE: State changed to 1[0m
+[0;32mI (46093) DISPLAY: display_face()[0m
+[0;32mI (46153) STATE: Entering RECORDING state[0m
+[0;32mI (46153) WAKE: Recording started[0m
+[0;32mI (47613) DISPLAY: Face : 0[0m
+[0;32mI (47613) WAKE: Wake detected, starting recording[0m
+[0;32mI (47663) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (50073) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (50663) AUDIO: Volume : 13[0m
+[0;32mI (50663) BUTTON: Volume up: 13[0m
+[0;32mI (51063) AUDIO: Volume : 18[0m
+[0;32mI (51063) BUTTON: Volume up: 18[0m
+[0;32mI (51403) AUDIO: Volume : 23[0m
+[0;32mI (51403) BUTTON: Volume up: 23[0m
+[0;32mI (51443) WAKE: Mic peak: 182[0m
+[0;32mI (51683) AUDIO: Volume : 28[0m
+[0;32mI (51683) BUTTON: Volume up: 28[0m
+[0;32mI (52083) AUDIO: Volume : 33[0m
+[0;32mI (52083) BUTTON: Volume up: 33[0m
+[0;32mI (52493) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (52573) WAKE: Recording finished: silence detected[0m
+[0;32mI (52573) WAKE: WAV header written: 40448 samples[0m
+[0;33mW (52603) API: WebSocket is not connected or authenticated. Refusing voice processing.[0m
+[0;32mI (52603) STATE: State changed to 4[0m
+[0;32mI (52603) DISPLAY: display_face()[0m
+[0;32mI (52723) AUDIO: Volume : 38[0m
+[0;32mI (52723) BUTTON: Volume up: 38[0m
+[0;32mI (54233) DISPLAY: Face : 5[0m
+[0;32mI (54233) DISPLAY: display_face()[0m
+[0;32mI (54253) AUDIO: Volume : 43[0m
+[0;32mI (54253) BUTTON: Volume up: 43[0m
+[0;32mI (54653) WAKE: Mic peak: 189[0m
+[0;32mI (54903) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (55863) DISPLAY: Face : 5[0m
+[0;32mI (55863) AUDIO: Play error tone sequence[0m
+[0;32mI (56443) API: Voice Error: Oh no. BMO could not answer. Please try again. Code: WEBSOCKET_NOT_CONNECTED[0m
+[0;32mI (57323) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (57853) WAKE: Mic peak: 170[0m
+[0;32mI (58443) STATE: State changed to 0[0m
+[0;32mI (58443) DISPLAY: display_face()[0m
+[0;32mI (59733) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (59963) DISPLAY: Face : 0[0m
+[0;32mI (59963) DISPLAY: display_face()[0m
+[0;32mI (61043) WAKE: Mic peak: 146[0m
+[0;32mI (61493) DISPLAY: Face : 0[0m
+[0;32mI (61493) STATE: State changed to 0[0m
+[0;32mI (61493) DISPLAY: display_face()[0m
+[0;32mI (62153) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (63033) DISPLAY: Face : 0[0m
+[0;32mI (64253) WAKE: Mic peak: 158[0m
+[0;32mI (64563) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (66983) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (67453) WAKE: Mic peak: 138[0m
+[0;32mI (67743) WAKE: Hi Joy detected[0m
+[0;32mI (67743) STATE: State changed to 1[0m
+[0;32mI (67743) DISPLAY: display_face()[0m
+[0;32mI (67833) STATE: Entering RECORDING state[0m
+[0;32mI (67833) WAKE: Recording started[0m
+[0;32mI (69403) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (71813) WIFI: Disconnected, retrying connection...[0m
+[0;33mW (72893) websocket_client: Client was not started[0m
+[1;31mE (72893) esp-tls: [sock=54] connect() error: Host is unreachable[0m
+[1;31mE (72893) transport_base: Failed to open a new connection: 32772[0m
+[0;32mI (72893) websocket_client: Started[0m
+[1;31mE (72893) transport_ws: Error connecting to host 192.168.1.100:3000[0m
+[1;31mE (72903) websocket_client: esp_transport_connect() failed with -1, transport_error=ESP_ERR_ESP_TLS_FAILED_CONNECT_TO_HOST, tls_error_code=0, tls_flags=0, esp_ws_handshake_status_code=0, errno=118[0m
+[1;31mE (72923) API: WebSocket error event[0m
+[0;32mI (72923) API: WebSocket disconnected[0m
+[0;32mI (74223) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (74903) API: Reconnecting WebSocket in 30 seconds...[0m
+[0;32mI (76643) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (79053) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (81463) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (82143) AUDIO: Volume : 38[0m
+[0;32mI (82143) BUTTON: Volume down: 38[0m
+[0;32mI (83143) AUDIO: Volume : 33[0m
+[0;32mI (83143) BUTTON: Volume down: 33[0m
+[0;32mI (83423) AUDIO: Volume : 28[0m
+[0;32mI (83423) BUTTON: Volume down: 28[0m
+[0;32mI (83743) AUDIO: Volume : 23[0m
+[0;32mI (83743) BUTTON: Volume down: 23[0m
+[0;32mI (83873) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (84063) AUDIO: Volume : 18[0m
+[0;32mI (84063) BUTTON: Volume down: 18[0m
+[0;32mI (84963) AUDIO: Volume : 13[0m
+[0;32mI (84963) BUTTON: Volume down: 13[0m
+[0;32mI (86293) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (88703) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (91113) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (93523) WIFI: Disconnected, retrying connection...[0m
+[0;32mI (95943) WIFI: Disconnected, retrying connection...[0m

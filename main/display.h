@@ -15,11 +15,21 @@ enum Face
     FACE_CONFUSED
 };
 
+enum class DisplayMode
+{
+    IDLE,
+    THINKING,
+    SPEAKING,
+    ERROR
+};
+
 void display_init();
 
 void display_sleep();
 
 void display_face(Face face);
+
+void display_set_mode(DisplayMode mode);
 
 void display_test_pattern();
 

@@ -37,10 +37,50 @@ static const char *TAG = "WAKE";
 #define WAKEWORD_TASK_STACK_SIZE 8192
 #define WAKEWORD_TASK_PRIORITY   5
 #define WAKEWORD_COOLDOWN_MS     2500
+#define WAKEWORD_STARTUP_GUARD_MS 2500
 
-#define RECORD_DURATION_SEC 4
+#define RECORD_DURATION_SEC 60
 #define RECORD_SAMPLE_RATE 16000
-#define RECORD_BUFFER_SIZE (RECORD_SAMPLE_RATE * RECORD_DURATION_SEC) // 64000 samples
+#define RECORD_MAX_SAMPLES (RECORD_SAMPLE_RATE * RECORD_DURATION_SEC) // 960000 samples
+
+#define RECORD_BUFFER_SIZE (RECORD_MAX_SAMPLES + WAV_HEADER_SAMPLES)
+
+#define SILENCE_THRESHOLD 800
+
+#pragma pack(push, 1)
+struct WAVHeader {
+    char riff[4];
+    uint32_t overall_size;
+    char wave[4];
+    char fmt_chunk_marker[4];
+    uint32_t length_of_fmt;
+    uint16_t format_type;
+    uint16_t channels;
+    uint32_t sample_rate;
+    uint32_t byterate;
+    uint16_t block_align;
+    uint16_t bits_per_sample;
+    char data_chunk_header[4];
+    uint32_t data_size;
+};
+#pragma pack(pop)
+
+static void write_wav_header(int16_t *buf, uint32_t pcm_samples) {
+    WAVHeader *header = (WAVHeader *)buf;
+    memcpy(header->riff, "RIFF", 4);
+    header->overall_size = 36 + pcm_samples * sizeof(int16_t);
+    memcpy(header->wave, "WAVE", 4);
+    memcpy(header->fmt_chunk_marker, "fmt ", 4);
+    header->length_of_fmt = 16;
+    header->format_type = 1; // PCM
+    header->channels = 1; // Mono
+    header->sample_rate = 16000;
+    header->byterate = 16000 * 1 * 2;
+    header->block_align = 1 * 2;
+    header->bits_per_sample = 16;
+    memcpy(header->data_chunk_header, "data", 4);
+    header->data_size = pcm_samples * sizeof(int16_t);
+}
 
 static i2s_chan_handle_t i2s_rx_handle = NULL;
 
@@ -61,7 +101,8 @@ static TaskHandle_t wakeword_task_handle = NULL;
 // Buffer rekaman suara untuk dikirim ke backend
 static int16_t *record_buffer = NULL;
 static int record_index = 0;
-static bool recording_active = false;
+static volatile bool recording_active = false;
+static int silence_samples = 0;
 
 //--------------------------------------------------
 
@@ -176,6 +217,9 @@ static void wakeword_listener_task(
     (void)arg;
 
     int frame_count = 0;
+    TickType_t guard_until =
+        xTaskGetTickCount() +
+        pdMS_TO_TICKS(WAKEWORD_STARTUP_GUARD_MS);
 
     ESP_LOGI(
         TAG,
@@ -220,6 +264,11 @@ static void wakeword_listener_task(
 
         frame_count++;
 
+        if(xTaskGetTickCount() < guard_until)
+        {
+            continue;
+        }
+
         if((frame_count % 100) == 0)
         {
             ESP_LOGI(
@@ -232,7 +281,7 @@ static void wakeword_listener_task(
 
         BMOState current_state = getState();
 
-        if (current_state == BMOState::SLEEP)
+        if (current_state == BMOState::IDLE)
         {
             wakenet_state_t detected =
                 wakenet->detect(
@@ -251,8 +300,19 @@ static void wakeword_listener_task(
                     pdMS_TO_TICKS(WAKEWORD_COOLDOWN_MS));
             }
         }
-        else if (current_state == BMOState::LISTENING && recording_active)
+        else if (current_state == BMOState::RECORDING && recording_active)
         {
+            // Calculate absolute peak amplitude for silence detection
+            int peak = sample_peak(sample_buffer, wakeword_chunk_size);
+            if (peak < SILENCE_THRESHOLD)
+            {
+                silence_samples += wakeword_chunk_size;
+            }
+            else
+            {
+                silence_samples = 0;
+            }
+
             for (int i = 0; i < wakeword_chunk_size; i++)
             {
                 if (record_index < RECORD_BUFFER_SIZE)
@@ -262,9 +322,24 @@ static void wakeword_listener_task(
                 else
                 {
                     recording_active = false;
-                    ESP_LOGI(TAG, "Recording finished, buffer full");
+                    ESP_LOGI(TAG, "Recording finished: buffer full");
                     break;
                 }
+            }
+
+            // Check stop conditions: 2.5 seconds of silence OR 60 seconds duration
+            if (silence_samples >= (RECORD_SAMPLE_RATE * 2.5))
+            {
+                recording_active = false;
+                ESP_LOGI(TAG, "Recording finished: silence detected");
+            }
+            
+            if (!recording_active)
+            {
+                // Write WAV header in the reserved space at the start
+                uint32_t pcm_samples = record_index - WAV_HEADER_SAMPLES;
+                write_wav_header(record_buffer, pcm_samples);
+                ESP_LOGI(TAG, "WAV header written: %lu samples", (unsigned long)pcm_samples);
             }
         }
     }
@@ -446,12 +521,12 @@ void wakeword_init()
         "Wakeword initialized");
 }
 
-//--------------------------------------------------
+#include "esp_heap_caps.h"
 
 void wakeword_task()
 {
-    setState(BMOState::WAKE);
-    ESP_LOGI(TAG, "Wake detected");
+    setState(BMOState::RECORDING);
+    ESP_LOGI(TAG, "Wake detected, starting recording");
 }
 
 //--------------------------------------------------
@@ -460,14 +535,21 @@ void start_recording()
 {
     if (record_buffer == NULL)
     {
-        record_buffer = (int16_t *)malloc(RECORD_BUFFER_SIZE * sizeof(int16_t));
+        // Try allocating in PSRAM (SPIRAM) first, fallback to standard malloc
+        record_buffer = (int16_t *)heap_caps_malloc(RECORD_BUFFER_SIZE * sizeof(int16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (record_buffer == NULL)
+        {
+            ESP_LOGW(TAG, "Failed to allocate record buffer in SPIRAM, trying standard malloc...");
+            record_buffer = (int16_t *)malloc(RECORD_BUFFER_SIZE * sizeof(int16_t));
+        }
         if (record_buffer == NULL)
         {
             ESP_LOGE(TAG, "Failed to allocate record buffer!");
             return;
         }
     }
-    record_index = 0;
+    record_index = WAV_HEADER_SAMPLES; // Offset by 22 samples for WAV Header
+    silence_samples = 0;
     recording_active = true;
     ESP_LOGI(TAG, "Recording started");
 }

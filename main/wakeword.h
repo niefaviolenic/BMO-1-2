@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
+
+#define WAV_HEADER_SAMPLES 22  // Number of int16 samples used by WAV header
 
 void wakeword_init();
 void wakeword_task();

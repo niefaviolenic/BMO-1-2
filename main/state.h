@@ -3,11 +3,11 @@
 
 enum class BMOState
 {
-    SLEEP,
-    WAKE,
-    LISTENING,
+    IDLE,
+    RECORDING,
     THINKING,
-    SPEAKING
+    SPEAKING,
+    ERROR_STATE
 };
 
 extern BMOState currentState;
