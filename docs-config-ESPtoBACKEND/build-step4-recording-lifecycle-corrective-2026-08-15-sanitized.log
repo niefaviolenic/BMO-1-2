@@ -1,0 +1,41 @@
+Step 4 recording lifecycle corrective official build — sanitized evidence
+Date: 2026-08-15
+Project: D:\BMO\all_bmo\esp
+Build directory: D:\BMO\all_bmo\esp\build
+
+Command:
+cmd.exe /d /c call "C:\esp\v6.0.1\esp-idf\export.bat" && set "PYTHONUTF8=1" && set "PYTHONIOENCODING=utf-8" && "C:\Users\violenic\.espressif\python_env\idf6.0_py3.13_env\Scripts\python.exe" "C:\esp\v6.0.1\esp-idf\tools\idf.py" -B "D:\BMO\all_bmo\esp\build" build
+
+BUILD_EXIT_CODE=0
+BUILD_RESULT=PASS
+BUILD_PROGRESS=[13/13]
+BUILD_SIZE_CHECK=PASS
+EDR_CREATEPROCESS_ERROR=ABSENT
+PERMISSION_DENIED_ERROR=ABSENT
+ACCESS_IS_DENIED_ERROR=ABSENT
+SECOND_BUILD=NOT_RUN
+NINJA_DIRECT_OR_DRY_RUN=NOT_RUN
+INCREMENTAL_VERIFICATION=NOT_RUN
+FULLCLEAN=NOT_RUN
+
+Build output confirmed:
+- Project build complete.
+- Generated D:/BMO/all_bmo/esp/build/all_bmo.bin.
+- Application image size 0x132240 bytes; smallest app partition 0x200000 bytes; 40% free.
+
+Application artifacts:
+- build/all_bmo.bin: 1,253,952 bytes; 2026-08-15T21:43:57.4014319+07:00; SHA-256 EE19260C30DC567A73CE03B3B4E86708C8E24C156DA630FABC6CEBE6271AA452.
+- build/all_bmo.elf: 12,599,916 bytes; 2026-08-15T21:43:57.0263405+07:00; SHA-256 12E05D55F3C71CEFBE17FB2C9CF69893A53DA39D2D9F056CEEDD73D55407A74F.
+
+Exact flash inputs present before flash:
+- bootloader/bootloader.bin: 21,056 bytes; SHA-256 E0B92A021C68DEA0AC4D2E91A61E05CFAE1238780719E29355E2A9FDA79EF9E3.
+- partition_table/partition-table.bin: 3,072 bytes; SHA-256 DE50DD8816B5BC7D3C48E6363EBAC66B0D0986F55B460D932842C82205C5F428.
+- srmodels/srmodels.bin: 291,036 bytes; SHA-256 B9B234189DB01EAA5123438225860726023D33BA3789515118298EB73493933C.
+- all_bmo.bin: SHA-256 EE19260C30DC567A73CE03B3B4E86708C8E24C156DA630FABC6CEBE6271AA452.
+- flash_args present and references only the exact build-folder artifacts.
+
+Source stability:
+- wakeword.cpp SHA-256 317580756F161D66B55FF6BDA64F7DAA48C2AB67451E4692352E671F1F0CBD78 before/after build.
+- wakeword.h SHA-256 821F0BE95DF23F7729E45618672EAF3883DFE51ADD726EE28952966AED36C17D before/after build.
+- state.cpp SHA-256 C16F60CECD160650A9FEA766D566E89B1040EFCEA40B8922E2A59F16D01C4126 before/after build.
+- No credential, raw audio, backend, router, or unrelated source content is included.

@@ -1,0 +1,5 @@
+Command: ninja all
+[1/1261] Building C object esp-idf/tcp_transport/CMakeFiles/__idf_tcp_transport.dir/transport_socks_proxy.c.obj
+[2/1261] Building C object esp-idf/tcp_transport/CMakeFiles/__idf_tcp_transport.dir/transport_ws.c.obj
+[3/1261] Linking C static library esp-idf\esp_http_client\libesp_http_client.a
+[4/1261] Building C object esp-idf/esp_driver_i2s/CMakeFiles/__idf_esp_driver_i2s.dir/i2s_common.c.obj

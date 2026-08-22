@@ -1,0 +1,10 @@
+Step 3 corrective official build result (sanitized)
+Timestamp: 2026-08-14 15:54:13 +07:00
+Command: cmd.exe /d /c call "C:\esp\v6.0.1\esp-idf\export.bat" && set "PYTHONUTF8=1" && set "PYTHONIOENCODING=utf-8" && "C:\Users\violenic\.espressif\python_env\idf6.0_py3.13_env\Scripts\python.exe" "C:\esp\v6.0.1\esp-idf\tools\idf.py" -B "D:\BMO\all_bmo\esp\build" build
+Build exit code: 0
+Build output: Project build complete; ESP-IDF application size check passed.
+EDR/CreateProcess/PermissionDenied error: not observed.
+Post-build Ninja/dry-run: not run by instruction.
+
+all_bmo.bin: 1249040 bytes; SHA-256 8875EB10EBB9433FCE6C26596DDCBDA1F2387F2A30F57DB976F65BDFF0ECF00C
+all_bmo.elf: 12577532 bytes; SHA-256 30C49B5A3FF0BD725400DD9035AC269862DBCDE19B9E494AAA324B2F750F55AE

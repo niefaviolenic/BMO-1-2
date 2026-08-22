@@ -1,0 +1,43 @@
+Step 1 serial verification log (sanitized)
+Captured: 2026-08-09 15:13 +07:00
+Project: D:/BMO/all_bmo/esp
+Board: ESP32-S3
+Serial port: COM7 / USB-Enhanced-SERIAL CH343
+Artifact: D:/BMO/all_bmo/esp/build-step1/all_bmo.bin
+
+Flash result:
+- PASS: application image written at 0x00010000.
+- PASS: esptool verified written data hash.
+- PASS: board hard-reset after flash.
+
+Serial boot evidence:
+I (24) boot: ESP-IDF v6.0.1 2nd stage bootloader
+I (332) boot: Loaded app from partition at offset 0x10000
+I (1136) app_init: Project name:     all_bmo
+I (1154) app_init: ESP-IDF:          v6.0.1
+I (1737) WIFI: WiFi initialization complete. Waiting for STA_START event...
+I (1787) WIFI: Connecting to WiFi SSID "[REDACTED_SSID]"...
+I (1797) MAIN: Waiting for WiFi IP before API init...
+
+Failure/blocker evidence:
+W (4207) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...
+W (4207) WIFI: No AP found for configured SSID. Check SSID, 2.4 GHz visibility, range, or hidden AP settings.
+W (6627) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...
+W (9047) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...
+W (11477) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...
+W (13897) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...
+W (16317) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...
+
+Acceptance evidence:
+- Wi-Fi got IP: NOT OBSERVED
+- SNTP/time valid: NOT OBSERVED
+- API init after valid time: NOT OBSERVED; firmware remained at "Waiting for WiFi IP before API init"
+- Production WSS connect: NOT OBSERVED
+- ESP authenticate sent: NOT OBSERVED
+- authenticated event: NOT OBSERVED
+- Backend state idle: NOT OBSERVED
+- TLS/authentication error: NOT OBSERVED; TLS was not reached
+
+Host-side check: the configured target SSID was not visible in the host WLAN scan; host was connected to a different 2.4 GHz network.
+Result: READY_FOR_VERIFY; blocked by unavailable configured Wi-Fi AP.
+Next action: make the configured 2.4 GHz AP available, then rerun the same flashed artifact and serial monitor.

@@ -1,0 +1,348 @@
+Adding "flash"'s dependency "all" to list of commands with default set of options.
+Executing action: all (aliases: build)
+Running ninja in directory D:\BMO\all_bmo\esp\build
+Executing "ninja all"...
+[1/4] C:\WINDOWS\system32\cmd.exe /C "cd /D D:\BMO\all_bmo\esp\build && C:\Users\violenic\.espressif\python_env\idf6.0_py3.13_env\Scripts\python.exe C:/esp/v6.0.1/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app D:/BMO/all_bmo/esp/build/partition_table/partition-table.bin D:/BMO/all_bmo/esp/build/all_bmo.bin"
+
+all_bmo.bin binary size 0x12def0 bytes. Smallest app partition is 0x200000 bytes. 0xd2110 bytes (41%) free.
+
+
+[2/4] Performing build step for 'bootloader'
+
+[1/1] C:\WINDOWS\system32\cmd.exe /C "cd /D D:\BMO\all_bmo\esp\build\bootloader && C:\Users\violenic\.espressif\python_env\idf6.0_py3.13_env\Scripts\python.exe C:/esp/v6.0.1/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x0 D:/BMO/all_bmo/esp/build/bootloader/bootloader.bin"
+
+
+Bootloader binary size 0x5240 bytes. 0x2dc0 bytes (36%) free.
+
+
+
+[3/4] No install step for 'bootloader'
+
+[4/4] Completed 'bootloader'
+
+Executing action: flash
+Running ninja in directory D:\BMO\all_bmo\esp\build
+Executing "ninja flash"...
+[1/5] C:\WINDOWS\system32\cmd.exe /C "cd /D D:\BMO\all_bmo\esp\build && C:\Users\violenic\.espressif\python_env\idf6.0_py3.13_env\Scripts\python.exe C:/esp/v6.0.1/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app D:/BMO/all_bmo/esp/build/partition_table/partition-table.bin D:/BMO/all_bmo/esp/build/all_bmo.bin"
+
+all_bmo.bin binary size 0x12def0 bytes. Smallest app partition is 0x200000 bytes. 0xd2110 bytes (41%) free.
+
+
+[2/5] Performing build step for 'bootloader'
+
+[1/1] C:\WINDOWS\system32\cmd.exe /C "cd /D D:\BMO\all_bmo\esp\build\bootloader && C:\Users\violenic\.espressif\python_env\idf6.0_py3.13_env\Scripts\python.exe C:/esp/v6.0.1/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x0 D:/BMO/all_bmo/esp/build/bootloader/bootloader.bin"
+
+
+Bootloader binary size 0x5240 bytes. 0x2dc0 bytes (36%) free.
+
+
+
+[3/5] No install step for 'bootloader'
+
+[4/5] Completed 'bootloader'
+
+[4/5] Running utility command for flash
+
+esptool --chip esp32s3 -p COM7 -b 460800 --before=default-reset --after=hard-reset write-flash --flash-mode dio --flash-freq 80m --flash-size 8MB 0x0 bootloader/bootloader.bin 0x8000 partition_table/partition-table.bin 0x210000 srmodels/srmodels.bin 0x10000 all_bmo.bin
+
+esptool v5.3.0
+
+Serial port COM7:
+
+Connecting....
+
+Connected to ESP32-S3 on COM7:
+
+Chip type:          ESP32-S3 (QFN56) (revision v0.2)
+
+Features:           Wi-Fi, BT 5 (LE), Dual Core + LP Core, 240MHz, Embedded PSRAM 8MB (AP_3v3)
+
+Crystal frequency:  40MHz
+
+MAC:                28:84:85:51:dc:38
+
+
+
+Uploading stub flasher...
+
+Running stub flasher...
+
+Stub flasher running.
+
+Changing baud rate to 460800...
+
+Changed.
+
+
+
+Configuring flash size...
+
+
+
+Writing 'bootloader/bootloader.bin' at 0x00000000...
+
+SHA digest in image updated.
+
+Flash will be erased from 0x00000000 to 0x00005fff...
+
+Compressed 21056 bytes to 13532...
+
+
+Writing at 0x00000000 [                              ]   0.0% 0/13532 bytes... 
+
+
+Writing at 0x00005240 [==============================] 100.0% 13532/13532 bytes... 
+
+Wrote 21056 bytes (13532 compressed) at 0x00000000 in 0.5 seconds (313.5 kbit/s).
+
+Verifying written data...
+
+Hash of data verified.
+
+
+
+Writing 'partition_table/partition-table.bin' at 0x00008000...
+
+Flash will be erased from 0x00008000 to 0x00008fff...
+
+Compressed 3072 bytes to 120...
+
+
+Writing at 0x00008000 [                              ]   0.0% 0/120 bytes... 
+
+
+Writing at 0x00008c00 [==============================] 100.0% 120/120 bytes... 
+
+Wrote 3072 bytes (120 compressed) at 0x00008000 in 0.0 seconds (739.9 kbit/s).
+
+Verifying written data...
+
+Hash of data verified.
+
+
+
+Writing 'srmodels/srmodels.bin' at 0x00210000...
+
+Flash will be erased from 0x00210000 to 0x00257fff...
+
+Compressed 291036 bytes to 229934...
+
+
+Writing at 0x00210000 [                              ]   0.0% 0/229934 bytes... 
+
+
+Writing at 0x00214ce9 [=>                            ]   7.1% 16384/229934 bytes... 
+
+
+Writing at 0x0021a110 [===>                          ]  14.3% 32768/229934 bytes... 
+
+
+Writing at 0x0021f05e [=====>                        ]  21.4% 49152/229934 bytes... 
+
+
+Writing at 0x0022340a [=======>                      ]  28.5% 65536/229934 bytes... 
+
+
+Writing at 0x002280bf [=========>                    ]  35.6% 81920/229934 bytes... 
+
+
+Writing at 0x0022d167 [===========>                  ]  42.8% 98304/229934 bytes... 
+
+
+Writing at 0x0023229e [=============>                ]  49.9% 114688/229934 bytes... 
+
+
+Writing at 0x00237a4f [================>             ]  57.0% 131072/229934 bytes... 
+
+
+Writing at 0x0023d50c [==================>           ]  64.1% 147456/229934 bytes... 
+
+
+Writing at 0x00242289 [====================>         ]  71.3% 163840/229934 bytes... 
+
+
+Writing at 0x00246a13 [======================>       ]  78.4% 180224/229934 bytes... 
+
+
+Writing at 0x0024c2ae [========================>     ]  85.5% 196608/229934 bytes... 
+
+
+Writing at 0x0025215b [==========================>   ]  92.6% 212992/229934 bytes... 
+
+
+Writing at 0x00256b43 [============================> ]  99.8% 229376/229934 bytes... 
+
+
+Writing at 0x002570dc [==============================] 100.0% 229934/229934 bytes... 
+
+Wrote 291036 bytes (229934 compressed) at 0x00210000 in 5.8 seconds (399.2 kbit/s).
+
+Verifying written data...
+
+Hash of data verified.
+
+
+
+Writing 'all_bmo.bin' at 0x00010000...
+
+Flash will be erased from 0x00010000 to 0x0013dfff...
+
+Compressed 1236720 bytes to 781601...
+
+
+Writing at 0x00010000 [                              ]   0.0% 0/781601 bytes... 
+
+
+Writing at 0x0001cba6 [                              ]   2.1% 16384/781601 bytes... 
+
+
+Writing at 0x0002902e [>                             ]   4.2% 32768/781601 bytes... 
+
+
+Writing at 0x00031031 [>                             ]   6.3% 49152/781601 bytes... 
+
+
+Writing at 0x00035cfe [=>                            ]   8.4% 65536/781601 bytes... 
+
+
+Writing at 0x0003abec [==>                           ]  10.5% 81920/781601 bytes... 
+
+
+Writing at 0x00040322 [==>                           ]  12.6% 98304/781601 bytes... 
+
+
+Writing at 0x000472a5 [===>                          ]  14.7% 114688/781601 bytes... 
+
+
+Writing at 0x000504be [====>                         ]  16.8% 131072/781601 bytes... 
+
+
+Writing at 0x0005641a [====>                         ]  18.9% 147456/781601 bytes... 
+
+
+Writing at 0x0005c9f2 [=====>                        ]  21.0% 163840/781601 bytes... 
+
+
+Writing at 0x00062b50 [=====>                        ]  23.1% 180224/781601 bytes... 
+
+
+Writing at 0x00068c54 [======>                       ]  25.2% 196608/781601 bytes... 
+
+
+Writing at 0x0006f3f3 [=======>                      ]  27.3% 212992/781601 bytes... 
+
+
+Writing at 0x00079dbe [=======>                      ]  29.3% 229376/781601 bytes... 
+
+
+Writing at 0x0007f94d [========>                     ]  31.4% 245760/781601 bytes... 
+
+
+Writing at 0x000864e6 [=========>                    ]  33.5% 262144/781601 bytes... 
+
+
+Writing at 0x0008ca7b [=========>                    ]  35.6% 278528/781601 bytes... 
+
+
+Writing at 0x00092dee [==========>                   ]  37.7% 294912/781601 bytes... 
+
+
+Writing at 0x000981f3 [==========>                   ]  39.8% 311296/781601 bytes... 
+
+
+Writing at 0x0009d55b [===========>                  ]  41.9% 327680/781601 bytes... 
+
+
+Writing at 0x000a2cb0 [============>                 ]  44.0% 344064/781601 bytes... 
+
+
+Writing at 0x000a8318 [============>                 ]  46.1% 360448/781601 bytes... 
+
+
+Writing at 0x000ad612 [=============>                ]  48.2% 376832/781601 bytes... 
+
+
+Writing at 0x000b2fbc [==============>               ]  50.3% 393216/781601 bytes... 
+
+
+Writing at 0x000b8567 [==============>               ]  52.4% 409600/781601 bytes... 
+
+
+Writing at 0x000bd8aa [===============>              ]  54.5% 425984/781601 bytes... 
+
+
+Writing at 0x000c2919 [===============>              ]  56.6% 442368/781601 bytes... 
+
+
+Writing at 0x000c8096 [================>             ]  58.7% 458752/781601 bytes... 
+
+
+Writing at 0x000cd80e [=================>            ]  60.8% 475136/781601 bytes... 
+
+
+Writing at 0x000d2d0e [=================>            ]  62.9% 491520/781601 bytes... 
+
+
+Writing at 0x000d8141 [==================>           ]  65.0% 507904/781601 bytes... 
+
+
+Writing at 0x000dd6fe [===================>          ]  67.1% 524288/781601 bytes... 
+
+
+Writing at 0x000e3b39 [===================>          ]  69.2% 540672/781601 bytes... 
+
+
+Writing at 0x000e9450 [====================>         ]  71.3% 557056/781601 bytes... 
+
+
+Writing at 0x000eef10 [=====================>        ]  73.4% 573440/781601 bytes... 
+
+
+Writing at 0x000f4aec [=====================>        ]  75.5% 589824/781601 bytes... 
+
+
+Writing at 0x000fa721 [======================>       ]  77.6% 606208/781601 bytes... 
+
+
+Writing at 0x0010006a [======================>       ]  79.7% 622592/781601 bytes... 
+
+
+Writing at 0x00105d6d [=======================>      ]  81.8% 638976/781601 bytes... 
+
+
+Writing at 0x0010b76f [========================>     ]  83.8% 655360/781601 bytes... 
+
+
+Writing at 0x00110ee6 [========================>     ]  85.9% 671744/781601 bytes... 
+
+
+Writing at 0x00119646 [=========================>    ]  88.0% 688128/781601 bytes... 
+
+
+Writing at 0x0011f535 [==========================>   ]  90.1% 704512/781601 bytes... 
+
+
+Writing at 0x00127bc8 [==========================>   ]  92.2% 720896/781601 bytes... 
+
+
+Writing at 0x0012db04 [===========================>  ]  94.3% 737280/781601 bytes... 
+
+
+Writing at 0x001345ea [===========================>  ]  96.4% 753664/781601 bytes... 
+
+
+Writing at 0x00139988 [============================> ]  98.5% 770048/781601 bytes... 
+
+
+Writing at 0x0013def0 [==============================] 100.0% 781601/781601 bytes... 
+
+Wrote 1236720 bytes (781601 compressed) at 0x00010000 in 19.8 seconds (500.5 kbit/s).
+
+Verifying written data...
+
+Hash of data verified.
+
+
+
+Hard resetting via RTS pin...
+

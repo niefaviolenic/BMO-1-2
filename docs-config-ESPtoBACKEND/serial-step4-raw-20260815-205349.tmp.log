@@ -1,0 +1,1331 @@
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0x1 (POWERON),boot:0x8 (SPI_FAST_FLASH_BOOT)
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2820,len:0x14f0
+load:0x403c8700,len:0xda0
+load:0x403cb700,len:0x2f58
+entry 0x403c8908
+[0;32mI (24) boot: ESP-IDF v6.0.1 2nd stage bootloader[0m
+[0;32mI (25) boot: compile time Aug 13 2026 19:08:05[0m
+[0;32mI (25) boot: Multicore bootloader[0m
+[0;32mI (25) boot: chip revision: v0.2[0m
+[0;32mI (28) boot: efuse block revision: v1.4[0m
+[0;32mI (31) boot.esp32s3: Boot SPI Speed : 80MHz[0m
+[0;32mI (35) boot.esp32s3: SPI Mode       : DIO[0m
+[0;32mI (39) boot.esp32s3: SPI Flash Size : 8MB[0m
+[0;32mI (43) boot: Enabling RNG early entropy source...[0m
+[0;32mI (47) boot: Partition Table:[0m
+[0;32mI (50) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (56) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (63) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (69) boot:  2 factory          factory app      00 00 00010000 00200000[0m
+[0;32mI (76) boot:  3 model            Unknown data     01 82 00210000 00400000[0m
+[0;32mI (82) boot: End of partition table[0m
+[0;32mI (85) esp_image: segment 0: paddr=00010020 vaddr=3c0e0020 size=3e904h (256260) map[0m
+[0;32mI (139) esp_image: segment 1: paddr=0004e92c vaddr=3fc9b800 size=016ech (  5868) load[0m
+[0;32mI (140) esp_image: segment 2: paddr=00050020 vaddr=42000020 size=d4a8ch (871052) map[0m
+[0;32mI (299) esp_image: segment 3: paddr=00124ab4 vaddr=3fc9ceec size=05890h ( 22672) load[0m
+[0;32mI (304) esp_image: segment 4: paddr=0012a34c vaddr=40374000 size=17708h ( 96008) load[0m
+[0;32mI (325) esp_image: segment 5: paddr=00141a5c vaddr=50000000 size=00024h (    36) load[0m
+[0;32mI (336) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (336) boot: Disabling RNG early entropy source...[0m
+[0;32mI (346) octal_psram: vendor id    : 0x0d (AP)[0m
+[0;32mI (346) octal_psram: dev id       : 0x02 (generation 3)[0m
+[0;32mI (346) octal_psram: density      : 0x03 (64 Mbit)[0m
+[0;32mI (348) octal_psram: good-die     : 0x01 (Pass)[0m
+[0;32mI (353) octal_psram: Latency      : 0x01 (Fixed)[0m
+[0;32mI (357) octal_psram: VCC          : 0x01 (3V)[0m
+[0;32mI (361) octal_psram: SRF          : 0x01 (Fast Refresh)[0m
+[0;32mI (366) octal_psram: BurstType    : 0x01 (Hybrid Wrap)[0m
+[0;32mI (371) octal_psram: BurstLen     : 0x01 (32 Byte)[0m
+[0;32mI (375) octal_psram: Readlatency  : 0x02 (10 cycles@Fixed)[0m
+[0;32mI (381) octal_psram: DriveStrength: 0x00 (1/1)[0m
+[0;32mI (385) esp_psram: Found 8MB PSRAM device[0m
+[0;32mI (389) esp_psram: Speed: 40MHz[0m
+[0;32mI (392) cpu_start: Multicore app[0m
+[0;32mI (1125) esp_psram: SPI SRAM memory test OK[0m
+[0;32mI (1134) cpu_start: GPIO 44 and 43 are used as console UART I/O pins[0m
+[0;32mI (1134) cpu_start: Pro cpu start user code[0m
+[0;32mI (1134) cpu_start: cpu freq: 160000000 Hz[0m
+[0;32mI (1136) app_init: Application information:[0m
+[0;32mI (1140) app_init: Project name:     all_bmo[0m
+[0;32mI (1144) app_init: App version:      c02dea1-dirty[0m
+[0;32mI (1149) app_init: Compile time:     Aug 14 2026 14:45:21[0m
+[0;32mI (1154) app_init: ELF file SHA256:  97f9111fd...[0m
+[0;32mI (1158) app_init: ESP-IDF:          v6.0.1[0m
+[0;32mI (1162) efuse_init: Min chip rev:     v0.0[0m
+[0;32mI (1166) efuse_init: Max chip rev:     v0.99 [0m
+[0;32mI (1170) efuse_init: Chip rev:         v0.2[0m
+[0;32mI (1174) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (1180) heap_init: At 3FCA6E20 len 000428F0 (266 KiB): RAM[0m
+[0;32mI (1186) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM[0m
+[0;32mI (1191) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM[0m
+[0;32mI (1196) heap_init: At 600FE000 len 00001FE8 (7 KiB): RTCRAM[0m
+[0;32mI (1202) esp_psram: Adding pool of 8192K of PSRAM memory to heap allocator[0m
+[0;32mI (1209) spi_flash: detected chip: boya[0m
+[0;32mI (1212) spi_flash: flash io: dio[0m
+[0;33mW (1215) spi_flash: Detected size(16384k) larger than the size in the binary image header(8192k). Using the size in the binary image header.[0m
+[0;32mI (1228) sleep_gpio: Configure to isolate all GPIO pins in sleep state[0m
+[0;32mI (1234) sleep_gpio: Enable automatic switching of GPIO sleep configuration[0m
+[0;32mI (1241) main_task: Started on CPU0[0m
+[0;32mI (1261) esp_psram: Reserving pool of 32K of internal memory for DMA/internal allocations[0m
+[0;32mI (1261) main_task: Calling app_main()[0m
+[0;32mI (1261) DISPLAY: Initialize ILI9341 landscape[0m
+[0;32mI (1271) ili9341: LCD panel create success, version: 2.0.2[0m
+[0;32mI (1391) DISPLAY: ILI9341 Ready[0m
+[0;32mI (1621) DISPLAY: Display sleep screen[0m
+[0;32mI (1621) AUDIO: MAX98357A ready: BCLK=1 WS=2 DIN=42 volume=8[0m
+[0;32mI (1621) BUTTON: Input ready: touch=14 vol_up=15 vol_down=16[0m
+[0;32mI (1641) WIFI: SNTP init return_code=ESP_OK(0)[0m
+[0;32mI (1641) pp: pp rom version: e7ae62f[0m
+[0;32mI (1641) net80211: net80211 rom version: e7ae62f[0m
+[0;32mI (1651) wifi:wifi driver task: 3fcb88e8, prio:23, stack:6656, core=0[0m
+[0;32mI (1661) wifi:wifi firmware version: b37c951[0m
+[0;32mI (1661) wifi:wifi certification version: v7.0[0m
+[0;32mI (1661) wifi:config NVS flash: enabled[0m
+[0;32mI (1661) wifi:config nano formatting: disabled[0m
+[0;32mI (1661) wifi:Init data frame dynamic rx buffer num: 32[0m
+[0;32mI (1671) wifi:Init static rx mgmt buffer num: 5[0m
+[0;32mI (1671) wifi:Init management short buffer num: 32[0m
+[0;32mI (1681) wifi:Init dynamic tx buffer num: 32[0m
+[0;32mI (1681) wifi:Init static tx FG buffer num: 2[0m
+[0;32mI (1681) wifi:Init static rx buffer size: 1600[0m
+[0;32mI (1691) wifi:Init static rx buffer num: 10[0m
+[0;32mI (1691) wifi:Init dynamic rx buffer num: 32[0m
+[0;32mI (1701) wifi_init: rx ba win: 6[0m
+[0;32mI (1701) wifi_init: accept mbox: 6[0m
+[0;32mI (1701) wifi_init: tcpip mbox: 32[0m
+[0;32mI (1701) wifi_init: udp mbox: 6[0m
+[0;32mI (1711) wifi_init: tcp mbox: 6[0m
+[0;32mI (1711) wifi_init: tcp tx win: 5760[0m
+[0;32mI (1711) wifi_init: tcp rx win: 5760[0m
+[0;32mI (1721) wifi_init: tcp mss: 1440[0m
+[0;32mI (1721) wifi_init: WiFi IRAM OP enabled[0m
+[0;32mI (1721) wifi_init: WiFi RX IRAM OP enabled[0m
+[0;32mI (1731) WIFI: SNTP event handler register return_code=ESP_OK(0)[0m
+[0;32mI (1731) WIFI: WiFi config prepared: ssid="Jagurawi", ssid_len=8, password_len=14, auth_threshold=WPA2_PSK[0m
+[0;32mI (1741) WIFI: WiFi STA config applied[0m
+[0;32mI (1751) phy_init: phy_version 711,97bcf0a2,Aug 25 2025,19:04:10[0m
+[0;32mI (1791) wifi:mode : sta (28:84:85:51:dc:38)[0m
+[0;32mI (1791) wifi:enable tsf[0m
+[0;32mI (1801) WIFI: WiFi initialization complete. Waiting for STA_START event...[0m
+[0;32mI (1801) WIFI: Connecting to WiFi SSID "Jagurawi"...[0m
+[0;32mI (1801) MAIN: Waiting for WiFi IP before API init...[0m
+[0;32mI (1811) STATE: State machine orchestrator task started[0m
+[0;32mI (1811) MODEL_LOADER: The storage free size is 23424 KB[0m
+[0;32mI (1821) MODEL_LOADER: The partition size is 4096 KB[0m
+[0;32mI (1821) MODEL_LOADER: Successfully load srmodels[0m
+[0;32mI (1831) WAKE: WakeNet model: wn9_hijoy_tts[0m
+[0;32mI (1831) WAKE: Wake words: Hi,Joy[0m
+MC Quantized wakenet9: wakenet9l_tts1h8_Hi,Joy_3_0.631_0.633, tigger:v4, mode:0, p:0, (May 25 2026 15:51:00)
+[0;32mI (1901) WAKE: WakeNet sample_rate=16000 chunk=512 channels=1[0m
+[0;33mW (1901) i2s_platform: i2s controller 0 has been occupied by i2s_driver[0m
+[0;32mI (1911) WAKE: I2S mic ready: BCLK=5 WS=4 DIN=6 rate=16000[0m
+[0;32mI (1921) WAKE: Wakeword initialized[0m
+[0;32mI (1921) WAKE: Listening for Hi Joy[0m
+[0;33mW (4221) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (4221) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (5121) WAKE: Mic peak: 235[0m
+[0;33mW (6641) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (6641) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (8321) WAKE: Mic peak: 284[0m
+[0;33mW (9061) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (9061) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (11491) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (11491) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (11511) WAKE: Mic peak: 420[0m
+[0;33mW (13911) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (13911) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (14721) WAKE: Mic peak: 219[0m
+[0;33mW (16331) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (16331) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (17921) WAKE: Mic peak: 695[0m
+[0;33mW (18761) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (18761) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (21111) WAKE: Mic peak: 703[0m
+[0;33mW (21181) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (21181) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (23601) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (23601) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (24321) WAKE: Mic peak: 482[0m
+[0;33mW (26031) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (26031) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (27521) WAKE: Mic peak: 214[0m
+[0;33mW (28451) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (28451) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (30711) WAKE: Mic peak: 190[0m
+[0;33mW (30881) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (30881) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (33301) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (33301) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (33921) WAKE: Mic peak: 375[0m
+[0;33mW (35721) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (35721) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (37121) WAKE: Mic peak: 274[0m
+[0;33mW (38151) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (38151) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (40311) WAKE: Mic peak: 335[0m
+[0;33mW (40571) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (40571) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (42991) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (42991) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (43521) WAKE: Mic peak: 398[0m
+[0;33mW (45421) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (45421) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (46721) WAKE: Mic peak: 290[0m
+[0;33mW (47841) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (47841) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (49911) WAKE: Mic peak: 339[0m
+[0;33mW (50261) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (50261) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (52691) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (52691) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (53121) WAKE: Mic peak: 370[0m
+[0;33mW (55111) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (55111) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (56321) WAKE: Mic peak: 592[0m
+[0;33mW (57541) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (57541) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (59511) WAKE: Mic peak: 338[0m
+[0;33mW (59961) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (59961) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (62381) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (62381) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (62721) WAKE: Mic peak: 273[0m
+[0;33mW (64811) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (64811) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (65921) WAKE: Mic peak: 495[0m
+[0;33mW (67231) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (67231) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (69111) WAKE: Mic peak: 236[0m
+[0;33mW (69651) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (69651) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (72081) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (72081) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (72321) WAKE: Mic peak: 189[0m
+[0;33mW (74501) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (74501) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (75521) WAKE: Mic peak: 356[0m
+[0;33mW (76921) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (76921) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (78711) WAKE: Mic peak: 454[0m
+[0;33mW (79351) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (79351) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (81771) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (81771) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (81921) WAKE: Mic peak: 276[0m
+[0;33mW (84201) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (84201) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (85121) WAKE: Mic peak: 311[0m
+[0;33mW (86621) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (86621) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (88311) WAKE: Mic peak: 219[0m
+[0;33mW (89041) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (89041) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (91471) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (91471) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (91521) WAKE: Mic peak: 390[0m
+[0;33mW (93891) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (93891) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (94721) WAKE: Mic peak: 330[0m
+[0;33mW (96311) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (96311) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (97911) WAKE: Mic peak: 268[0m
+[0;33mW (98741) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (98741) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (101121) WAKE: Mic peak: 168[0m
+[0;33mW (101161) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (101161) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (103581) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (103591) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (104321) WAKE: Mic peak: 346[0m
+[0;33mW (106011) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (106011) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (107511) WAKE: Mic peak: 429[0m
+[0;33mW (108431) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (108431) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (110721) WAKE: Mic peak: 245[0m
+[0;33mW (110861) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (110861) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (113281) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (113281) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (113921) WAKE: Mic peak: 329[0m
+[0;33mW (115701) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (115701) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (117111) WAKE: Mic peak: 554[0m
+[0;33mW (118131) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (118131) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (120321) WAKE: Mic peak: 421[0m
+[0;33mW (120551) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (120551) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (122971) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (122971) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (123521) WAKE: Mic peak: 289[0m
+[0;32mI (124211) NETWORK: NETWORK_TIME_SYNCED_BIT cleared before=0x0 after=0x0[0m
+[0;33mW (124211) WIFI: Lost IP address[0m
+[0;33mW (125401) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (125401) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (126711) WAKE: Mic peak: 343[0m
+[0;33mW (127821) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (127821) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (129921) WAKE: Mic peak: 240[0m
+[0;33mW (130251) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (130251) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (132671) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (132671) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (133121) WAKE: Mic peak: 254[0m
+[0;33mW (135091) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (135091) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (136311) WAKE: Mic peak: 345[0m
+[0;33mW (137521) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (137521) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (139521) WAKE: Mic peak: 408[0m
+[0;33mW (139941) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (139941) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (142361) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (142371) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (142721) WAKE: Mic peak: 324[0m
+[0;33mW (144791) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (144791) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (145911) WAKE: Mic peak: 273[0m
+[0;33mW (147211) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (147211) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (149121) WAKE: Mic peak: 293[0m
+[0;33mW (149641) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (149641) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (152061) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (152061) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (152321) WAKE: Mic peak: 318[0m
+[0;33mW (154481) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (154491) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (155511) WAKE: Mic peak: 237[0m
+[0;33mW (156911) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (156911) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (158721) WAKE: Mic peak: 253[0m
+[0;33mW (159331) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (159331) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (161761) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (161761) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (161921) WAKE: Mic peak: 734[0m
+[0;33mW (164181) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (164181) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (165111) WAKE: Mic peak: 403[0m
+[0;33mW (166601) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (166601) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (168321) WAKE: Mic peak: 519[0m
+[0;33mW (169031) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (169031) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (171451) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (171451) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (171521) WAKE: Mic peak: 451[0m
+[0;33mW (173881) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (173881) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (174711) WAKE: Mic peak: 355[0m
+[0;33mW (176301) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (176301) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (177921) WAKE: Mic peak: 279[0m
+[0;33mW (178721) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (178721) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (181121) WAKE: Mic peak: 310[0m
+[0;33mW (181151) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (181151) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (183571) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (183571) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (184311) WAKE: Mic peak: 189[0m
+[0;33mW (185991) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (185991) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (187521) WAKE: Mic peak: 329[0m
+[0;33mW (188421) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (188421) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (190721) WAKE: Mic peak: 254[0m
+[0;33mW (190841) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (190841) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (193271) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (193271) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (193911) WAKE: Mic peak: 454[0m
+[0;33mW (195691) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (195691) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (197121) WAKE: Mic peak: 620[0m
+[0;33mW (198111) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (198111) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (200321) WAKE: Mic peak: 1142[0m
+[0;33mW (200541) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (200541) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (202961) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (202961) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (203511) WAKE: Mic peak: 262[0m
+[0;33mW (205381) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (205391) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (206721) WAKE: Mic peak: 266[0m
+[0;33mW (207811) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (207811) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (209921) WAKE: Mic peak: 190[0m
+[0;33mW (210231) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (210231) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (212661) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (212661) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (213111) WAKE: Mic peak: 364[0m
+[0;33mW (215081) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (215081) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (216321) WAKE: Mic peak: 313[0m
+[0;33mW (217501) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (217501) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (219521) WAKE: Mic peak: 325[0m
+[0;33mW (219931) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (219931) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (222351) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (222351) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (222711) WAKE: Mic peak: 577[0m
+[0;33mW (224781) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (224781) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (225921) WAKE: Mic peak: 336[0m
+[0;33mW (227201) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (227201) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (229121) WAKE: Mic peak: 366[0m
+[0;33mW (229621) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (229621) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (232051) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (232051) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (232311) WAKE: Mic peak: 464[0m
+[0;33mW (234471) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (234471) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (235521) WAKE: Mic peak: 315[0m
+[0;33mW (236891) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (236891) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (238721) WAKE: Mic peak: 241[0m
+[0;33mW (239321) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (239321) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (241741) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (241741) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (241911) WAKE: Mic peak: 277[0m
+[0;33mW (244171) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (244171) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (245121) WAKE: Mic peak: 485[0m
+[0;32mI (245401) NETWORK: NETWORK_TIME_SYNCED_BIT cleared before=0x0 after=0x0[0m
+[0;33mW (245401) WIFI: Lost IP address[0m
+[0;33mW (246591) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (246591) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (248321) WAKE: Mic peak: 628[0m
+[0;33mW (249011) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (249011) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (251441) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (251441) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (251511) WAKE: Mic peak: 943[0m
+[0;33mW (253861) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (253861) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (254721) WAKE: Mic peak: 344[0m
+[0;33mW (256291) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (256291) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (257921) WAKE: Mic peak: 346[0m
+[0;33mW (258711) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (258711) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (261111) WAKE: Mic peak: 447[0m
+[0;33mW (261131) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (261131) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (263561) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (263561) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (264321) WAKE: Mic peak: 270[0m
+[0;33mW (265981) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (265981) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (267521) WAKE: Mic peak: 519[0m
+[0;33mW (268411) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (268411) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (270711) WAKE: Mic peak: 531[0m
+[0;33mW (270831) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (270831) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (273251) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (273251) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (273921) WAKE: Mic peak: 454[0m
+[0;33mW (275681) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (275681) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (277121) WAKE: Mic peak: 313[0m
+[0;33mW (278101) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (278101) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (280311) WAKE: Mic peak: 478[0m
+[0;33mW (280521) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (280531) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (282951) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (282951) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (283521) WAKE: Mic peak: 997[0m
+[0;33mW (285371) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (285371) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (286721) WAKE: Mic peak: 804[0m
+[0;33mW (287801) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (287801) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (289911) WAKE: Mic peak: 431[0m
+[0;33mW (290221) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (290221) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (292641) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (292641) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (293121) WAKE: Mic peak: 664[0m
+[0;33mW (295071) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (295071) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (296321) WAKE: Mic peak: 389[0m
+[0;33mW (297491) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (297491) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (299511) WAKE: Mic peak: 266[0m
+[0;33mW (299921) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (299921) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (302341) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (302341) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (302721) WAKE: Mic peak: 295[0m
+[0;33mW (304761) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (304761) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (305921) WAKE: Mic peak: 191[0m
+[0;33mW (307191) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (307191) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (309111) WAKE: Mic peak: 487[0m
+[0;33mW (309611) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (309611) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (312031) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (312031) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (312321) WAKE: Mic peak: 301[0m
+[0;33mW (314461) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (314461) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (315521) WAKE: Mic peak: 411[0m
+[0;33mW (316881) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (316881) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (318711) WAKE: Mic peak: 295[0m
+[0;33mW (319311) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (319311) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (321731) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (321731) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (321921) WAKE: Mic peak: 343[0m
+[0;33mW (324151) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (324151) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (325121) WAKE: Mic peak: 229[0m
+[0;33mW (326581) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (326581) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (328311) WAKE: Mic peak: 238[0m
+[0;33mW (329001) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (329001) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (331421) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (331431) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (331521) WAKE: Mic peak: 284[0m
+[0;33mW (333851) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (333851) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (334721) WAKE: Mic peak: 253[0m
+[0;33mW (336271) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (336271) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (337911) WAKE: Mic peak: 338[0m
+[0;33mW (338701) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (338701) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (341121) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (341121) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (341121) WAKE: Mic peak: 616[0m
+[0;33mW (343541) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (343541) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (344321) WAKE: Mic peak: 432[0m
+[0;33mW (345971) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (345971) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (347511) WAKE: Mic peak: 330[0m
+[0;33mW (348391) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (348391) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (350721) WAKE: Mic peak: 511[0m
+[0;33mW (350811) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (350811) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (353241) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (353241) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (353921) WAKE: Mic peak: 569[0m
+[0;33mW (355661) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (355661) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (357111) WAKE: Mic peak: 1043[0m
+[0;33mW (358091) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (358091) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (360321) WAKE: Mic peak: 392[0m
+[0;33mW (360511) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (360511) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (362931) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (362931) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (363521) WAKE: Mic peak: 343[0m
+[0;33mW (365361) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (365361) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (366591) NETWORK: NETWORK_TIME_SYNCED_BIT cleared before=0x0 after=0x0[0m
+[0;33mW (366591) WIFI: Lost IP address[0m
+[0;32mI (366711) WAKE: Mic peak: 356[0m
+[0;33mW (367781) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (367781) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (369921) WAKE: Mic peak: 286[0m
+[0;33mW (370201) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (370211) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (372631) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (372631) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (373121) WAKE: Mic peak: 253[0m
+[0;33mW (375051) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (375051) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (376311) WAKE: Mic peak: 370[0m
+[0;33mW (377481) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (377481) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (379521) WAKE: Mic peak: 216[0m
+[0;33mW (379901) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (379901) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (382321) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (382321) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (382721) WAKE: Mic peak: 517[0m
+[0;33mW (384751) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (384751) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (385911) WAKE: Mic peak: 270[0m
+[0;33mW (387171) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (387171) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (389121) WAKE: Mic peak: 278[0m
+[0;33mW (389601) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (389601) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (392021) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (392021) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (392321) WAKE: Mic peak: 266[0m
+[0;33mW (394441) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (394441) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (395511) WAKE: Mic peak: 306[0m
+[0;33mW (396871) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (396871) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (398721) WAKE: Mic peak: 504[0m
+[0;33mW (399291) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (399291) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (401711) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (401711) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (401921) WAKE: Mic peak: 328[0m
+[0;33mW (404141) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (404141) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (405111) WAKE: Mic peak: 284[0m
+[0;33mW (406561) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (406561) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (408321) WAKE: Mic peak: 355[0m
+[0;33mW (408981) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (408991) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (411411) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (411411) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (411521) WAKE: Mic peak: 337[0m
+[0;33mW (413831) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (413831) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (414711) WAKE: Mic peak: 372[0m
+[0;33mW (416261) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (416261) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (417921) WAKE: Mic peak: 298[0m
+[0;33mW (418681) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (418681) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (421101) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (421101) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (421121) WAKE: Mic peak: 293[0m
+[0;33mW (423531) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (423531) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (424311) WAKE: Mic peak: 339[0m
+[0;33mW (425951) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (425951) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (427521) WAKE: Mic peak: 300[0m
+[0;33mW (428381) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (428381) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (430721) WAKE: Mic peak: 436[0m
+[0;33mW (430801) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (430801) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (433221) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (433221) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (433911) WAKE: Mic peak: 528[0m
+[0;33mW (435651) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (435651) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (437121) WAKE: Mic peak: 271[0m
+[0;33mW (438071) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (438071) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (440321) WAKE: Mic peak: 299[0m
+[0;33mW (440491) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (440501) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (442921) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (442921) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (443511) WAKE: Mic peak: 328[0m
+[0;33mW (445341) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (445341) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (446721) WAKE: Mic peak: 259[0m
+[0;33mW (447771) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (447771) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (449921) WAKE: Mic peak: 404[0m
+[0;33mW (450191) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (450191) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (452611) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (452611) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (453111) WAKE: Mic peak: 182[0m
+[0;33mW (455041) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (455041) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (456321) WAKE: Mic peak: 220[0m
+[0;33mW (457461) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (457461) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (459521) WAKE: Mic peak: 509[0m
+[0;33mW (459891) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (459891) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (462311) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (462311) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (462711) WAKE: Mic peak: 357[0m
+[0;33mW (464731) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (464731) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (465921) WAKE: Mic peak: 601[0m
+[0;33mW (467161) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (467161) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (469121) WAKE: Mic peak: 287[0m
+[0;33mW (469581) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (469581) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (472001) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (472001) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (472311) WAKE: Mic peak: 142[0m
+[0;33mW (474431) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (474431) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (475521) WAKE: Mic peak: 327[0m
+[0;33mW (476851) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (476851) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (478721) WAKE: Mic peak: 464[0m
+[0;33mW (479281) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (479281) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (481701) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (481701) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (481911) WAKE: Mic peak: 516[0m
+[0;33mW (484121) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (484121) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (485121) WAKE: Mic peak: 295[0m
+[0;33mW (486551) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (486551) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (487781) NETWORK: NETWORK_TIME_SYNCED_BIT cleared before=0x0 after=0x0[0m
+[0;33mW (487781) WIFI: Lost IP address[0m
+[0;32mI (488321) WAKE: Mic peak: 225[0m
+[0;33mW (488971) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (488971) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (491401) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (491401) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (491511) WAKE: Mic peak: 353[0m
+[0;33mW (493821) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (493821) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (494721) WAKE: Mic peak: 240[0m
+[0;33mW (496241) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (496241) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (497921) WAKE: Mic peak: 231[0m
+[0;33mW (498671) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (498671) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (501091) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (501091) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (501111) WAKE: Mic peak: 229[0m
+[0;33mW (503521) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (503521) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (504321) WAKE: Mic peak: 203[0m
+[0;33mW (505941) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (505941) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (507521) WAKE: Mic peak: 355[0m
+[0;33mW (508361) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (508361) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (510711) WAKE: Mic peak: 253[0m
+[0;33mW (510791) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (510791) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (513211) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (513211) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (513921) WAKE: Mic peak: 548[0m
+[0;33mW (515631) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (515631) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (517121) WAKE: Mic peak: 604[0m
+[0;33mW (518061) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (518061) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (520311) WAKE: Mic peak: 1335[0m
+[0;33mW (520481) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (520481) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (522901) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (522901) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (523521) WAKE: Mic peak: 208[0m
+[0;33mW (525331) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (525331) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (526721) WAKE: Mic peak: 202[0m
+[0;33mW (527751) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (527751) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (529911) WAKE: Mic peak: 183[0m
+[0;33mW (530181) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (530181) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (532601) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (532601) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (533121) WAKE: Mic peak: 356[0m
+[0;33mW (535021) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (535021) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (536321) WAKE: Mic peak: 325[0m
+[0;33mW (537451) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (537451) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (539511) WAKE: Mic peak: 199[0m
+[0;33mW (539871) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (539871) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (542301) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (542301) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (542721) WAKE: Mic peak: 554[0m
+[0;33mW (544721) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (544721) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (545921) WAKE: Mic peak: 430[0m
+[0;33mW (547141) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (547141) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (549111) WAKE: Mic peak: 287[0m
+[0;33mW (549571) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (549571) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (551991) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (551991) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (552321) WAKE: Mic peak: 346[0m
+[0;33mW (554411) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (554411) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (555521) WAKE: Mic peak: 525[0m
+[0;33mW (556841) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (556841) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (558711) WAKE: Mic peak: 299[0m
+[0;33mW (559261) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (559261) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (561691) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (561691) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (561921) WAKE: Mic peak: 471[0m
+[0;33mW (564111) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (564111) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (565121) WAKE: Mic peak: 434[0m
+[0;33mW (566531) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (566531) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (568311) WAKE: Mic peak: 471[0m
+[0;33mW (568961) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (568961) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (571381) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (571381) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (571521) WAKE: Mic peak: 683[0m
+[0;33mW (573811) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (573811) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (574721) WAKE: Mic peak: 235[0m
+[0;33mW (576231) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (576231) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (577911) WAKE: Mic peak: 566[0m
+[0;33mW (578651) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (578651) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (581081) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (581081) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (581121) WAKE: Mic peak: 242[0m
+[0;33mW (583501) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (583501) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (584321) WAKE: Mic peak: 243[0m
+[0;33mW (585921) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (585921) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (587511) WAKE: Mic peak: 279[0m
+[0;33mW (588351) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (588351) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (590721) WAKE: Mic peak: 255[0m
+[0;33mW (590771) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (590771) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (593201) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (593201) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (593921) WAKE: Mic peak: 292[0m
+[0;33mW (595621) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (595621) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (597111) WAKE: Mic peak: 365[0m
+[0;33mW (598041) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (598041) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (600321) WAKE: Mic peak: 554[0m
+[0;33mW (600471) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (600471) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (602891) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (602891) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (603521) WAKE: Mic peak: 396[0m
+[0;33mW (605321) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (605321) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (606711) WAKE: Mic peak: 357[0m
+[0;33mW (607741) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (607741) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (608971) NETWORK: NETWORK_TIME_SYNCED_BIT cleared before=0x0 after=0x0[0m
+[0;33mW (608971) WIFI: Lost IP address[0m
+[0;32mI (609921) WAKE: Mic peak: 391[0m
+[0;33mW (610161) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (610161) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (612591) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (612591) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (613121) WAKE: Mic peak: 276[0m
+[0;33mW (615011) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (615011) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (616311) WAKE: Mic peak: 387[0m
+[0;33mW (617431) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (617441) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (619521) WAKE: Mic peak: 323[0m
+[0;33mW (619861) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (619861) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (622281) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (622281) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (622721) WAKE: Mic peak: 383[0m
+[0;33mW (624711) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (624711) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (625911) WAKE: Mic peak: 357[0m
+[0;33mW (627131) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (627131) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (629121) WAKE: Mic peak: 1084[0m
+[0;33mW (629551) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (629551) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (631981) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (631981) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (632321) WAKE: Mic peak: 421[0m
+[0;33mW (634401) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (634401) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (635511) WAKE: Mic peak: 344[0m
+[0;33mW (636831) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (636831) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (638721) WAKE: Mic peak: 807[0m
+[0;33mW (639251) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (639251) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (641671) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (641671) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (641921) WAKE: Mic peak: 641[0m
+[0;33mW (644101) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (644101) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (645111) WAKE: Mic peak: 291[0m
+[0;33mW (646521) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (646521) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (648321) WAKE: Mic peak: 320[0m
+[0;33mW (648941) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (648951) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (651371) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (651371) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (651521) WAKE: Mic peak: 216[0m
+[0;33mW (653791) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (653791) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (654711) WAKE: Mic peak: 450[0m
+[0;33mW (656221) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (656221) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (657921) WAKE: Mic peak: 199[0m
+[0;33mW (658641) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (658641) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (661061) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (661061) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (661121) WAKE: Mic peak: 295[0m
+[0;33mW (663491) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (663491) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (664311) WAKE: Mic peak: 453[0m
+[0;33mW (665911) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (665911) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (667521) WAKE: Mic peak: 400[0m
+[0;33mW (668341) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (668341) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (670721) WAKE: Mic peak: 491[0m
+[0;33mW (670761) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (670761) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (673181) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (673181) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (673911) WAKE: Mic peak: 339[0m
+[0;33mW (675611) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (675611) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (677121) WAKE: Mic peak: 341[0m
+[0;33mW (678031) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (678031) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (680321) WAKE: Mic peak: 322[0m
+[0;33mW (680451) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (680451) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (682881) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (682881) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (683511) WAKE: Mic peak: 457[0m
+[0;33mW (685301) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (685301) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (686721) WAKE: Mic peak: 310[0m
+[0;33mW (687731) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (687731) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (689921) WAKE: Mic peak: 407[0m
+[0;33mW (690151) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (690151) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (692571) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (692571) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (693111) WAKE: Mic peak: 317[0m
+[0;33mW (695001) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (695001) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (696321) WAKE: Mic peak: 367[0m
+[0;33mW (697421) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (697421) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (699521) WAKE: Mic peak: 369[0m
+[0;33mW (699841) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (699851) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (702271) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (702271) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (702711) WAKE: Mic peak: 367[0m
+[0;33mW (704691) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (704691) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (705921) WAKE: Mic peak: 556[0m
+[0;33mW (707121) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (707121) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (709121) WAKE: Mic peak: 316[0m
+[0;33mW (709541) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (709541) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (711961) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (711961) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (712311) WAKE: Mic peak: 261[0m
+[0;33mW (714391) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (714391) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (715521) WAKE: Mic peak: 571[0m
+[0;33mW (716811) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (716811) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (718721) WAKE: Mic peak: 392[0m
+[0;33mW (719231) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (719241) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (721661) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (721661) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (721911) WAKE: Mic peak: 345[0m
+[0;33mW (724081) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (724081) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (725121) WAKE: Mic peak: 179[0m
+[0;33mW (726511) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (726511) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (728321) WAKE: Mic peak: 220[0m
+[0;33mW (728931) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (728931) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (730161) NETWORK: NETWORK_TIME_SYNCED_BIT cleared before=0x0 after=0x0[0m
+[0;33mW (730161) WIFI: Lost IP address[0m
+[0;33mW (731351) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (731361) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (731511) WAKE: Mic peak: 237[0m
+[0;33mW (733781) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (733781) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (734721) WAKE: Mic peak: 256[0m
+[0;33mW (736201) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (736201) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (737921) WAKE: Mic peak: 273[0m
+[0;33mW (738631) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (738631) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (741051) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (741051) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (741111) WAKE: Mic peak: 229[0m
+[0;33mW (743471) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (743471) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (744321) WAKE: Mic peak: 562[0m
+[0;33mW (745901) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (745901) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (747521) WAKE: Mic peak: 292[0m
+[0;33mW (748321) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (748321) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (750711) WAKE: Mic peak: 315[0m
+[0;33mW (750741) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (750741) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (753171) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (753171) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (753921) WAKE: Mic peak: 265[0m
+[0;33mW (755591) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (755591) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (757121) WAKE: Mic peak: 198[0m
+[0;33mW (758021) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (758021) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (760311) WAKE: Mic peak: 338[0m
+[0;33mW (760441) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (760441) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (762861) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (762861) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (763521) WAKE: Mic peak: 374[0m
+[0;33mW (765291) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (765291) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (766721) WAKE: Mic peak: 664[0m
+[0;33mW (767711) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (767711) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (769911) WAKE: Mic peak: 329[0m
+[0;33mW (770131) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (770131) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (772561) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (772561) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (773121) WAKE: Mic peak: 273[0m
+[0;33mW (774981) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (774981) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (776321) WAKE: Mic peak: 274[0m
+[0;33mW (777411) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (777411) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (779511) WAKE: Mic peak: 261[0m
+[0;33mW (779831) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (779831) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (782251) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (782251) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (782721) WAKE: Mic peak: 240[0m
+[0;33mW (784681) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (784681) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (785921) WAKE: Mic peak: 275[0m
+[0;33mW (787101) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (787101) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (789111) WAKE: Mic peak: 429[0m
+[0;33mW (789521) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (789531) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (791951) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (791951) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (792321) WAKE: Mic peak: 330[0m
+[0;33mW (794371) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (794371) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (795521) WAKE: Mic peak: 233[0m
+[0;33mW (796801) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (796801) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (798711) WAKE: Mic peak: 368[0m
+[0;33mW (799221) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (799221) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (801641) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (801641) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (801921) WAKE: Mic peak: 250[0m
+[0;33mW (804071) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (804071) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (805121) WAKE: Mic peak: 213[0m
+[0;33mW (806491) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (806491) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (808311) WAKE: Mic peak: 838[0m
+[0;33mW (808921) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (808921) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (811341) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (811341) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (811521) WAKE: Mic peak: 614[0m
+[0;33mW (813761) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (813761) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (814721) WAKE: Mic peak: 482[0m
+[0;33mW (816191) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (816191) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (817911) WAKE: Mic peak: 608[0m
+[0;33mW (818611) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (818611) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (821031) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (821031) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (821121) WAKE: Mic peak: 228[0m
+[0;33mW (823461) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (823461) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (824321) WAKE: Mic peak: 1113[0m
+[0;33mW (825881) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (825881) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (827511) WAKE: Mic peak: 362[0m
+[0;33mW (828311) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (828311) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (830721) WAKE: Mic peak: 345[0m
+[0;33mW (830731) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (830731) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (833151) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (833151) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (833921) WAKE: Mic peak: 433[0m
+[0;33mW (835581) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (835581) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (837111) WAKE: Mic peak: 247[0m
+[0;33mW (838001) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (838001) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (840321) WAKE: Mic peak: 281[0m
+[0;33mW (840421) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (840421) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (842851) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (842851) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (843521) WAKE: Mic peak: 469[0m
+[0;33mW (845271) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (845271) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (846711) WAKE: Mic peak: 391[0m
+[0;33mW (847701) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (847701) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (849921) WAKE: Mic peak: 614[0m
+[0;33mW (850121) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (850121) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (851351) NETWORK: NETWORK_TIME_SYNCED_BIT cleared before=0x0 after=0x0[0m
+[0;33mW (851351) WIFI: Lost IP address[0m
+[0;33mW (852541) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (852541) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (853121) WAKE: Mic peak: 570[0m
+[0;33mW (854971) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (854971) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (856311) WAKE: Mic peak: 282[0m
+[0;33mW (857391) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (857391) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (859521) WAKE: Mic peak: 499[0m
+[0;33mW (859821) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (859821) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (862241) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (862241) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (862721) WAKE: Mic peak: 348[0m
+[0;33mW (864661) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (864661) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (865911) WAKE: Mic peak: 619[0m
+[0;33mW (867091) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (867091) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (869121) WAKE: Mic peak: 284[0m
+[0;33mW (869511) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (869511) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (871941) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (871941) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (872321) WAKE: Mic peak: 250[0m
+[0;33mW (874361) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (874361) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (875511) WAKE: Mic peak: 290[0m
+[0;33mW (876781) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (876781) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (878721) WAKE: Mic peak: 322[0m
+[0;33mW (879211) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (879211) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (881631) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (881631) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (881921) WAKE: Mic peak: 370[0m
+[0;33mW (884051) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (884051) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (885111) WAKE: Mic peak: 286[0m
+[0;33mW (886481) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (886481) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (888321) WAKE: Mic peak: 405[0m
+[0;33mW (888901) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (888901) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (891331) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (891331) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (891521) WAKE: Mic peak: 560[0m
+[0;33mW (893751) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (893751) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (894711) WAKE: Mic peak: 472[0m
+[0;33mW (896171) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (896171) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (897921) WAKE: Mic peak: 364[0m
+[0;33mW (898601) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (898601) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (901021) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (901021) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (901121) WAKE: Mic peak: 327[0m
+[0;33mW (903451) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (903451) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (904311) WAKE: Mic peak: 438[0m
+[0;33mW (905871) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (905871) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (907521) WAKE: Mic peak: 308[0m
+[0;33mW (908291) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (908291) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (910721) WAKE: Mic peak: 246[0m
+[0;33mW (910721) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (910721) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (913141) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (913141) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (913911) WAKE: Mic peak: 221[0m
+[0;33mW (915571) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (915571) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (917121) WAKE: Mic peak: 368[0m
+[0;33mW (917991) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (917991) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (920321) WAKE: Mic peak: 380[0m
+[0;33mW (920411) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (920421) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (922841) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (922841) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (923511) WAKE: Mic peak: 239[0m
+[0;33mW (925261) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (925261) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (926721) WAKE: Mic peak: 315[0m
+[0;33mW (927691) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (927691) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (929921) WAKE: Mic peak: 323[0m
+[0;33mW (930111) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (930111) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (932531) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (932531) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (933111) WAKE: Mic peak: 278[0m
+[0;33mW (934961) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (934961) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (936321) WAKE: Mic peak: 266[0m
+[0;33mW (937381) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (937381) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (939521) WAKE: Mic peak: 287[0m
+[0;33mW (939811) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (939811) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (942231) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (942231) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (942711) WAKE: Mic peak: 339[0m
+[0;33mW (944651) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (944651) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (945921) WAKE: Mic peak: 416[0m
+[0;33mW (947081) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (947081) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (949121) WAKE: Mic peak: 364[0m
+[0;33mW (949501) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (949501) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (951931) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (951931) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (952311) WAKE: Mic peak: 253[0m
+[0;33mW (954351) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (954351) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (955521) WAKE: Mic peak: 414[0m
+[0;33mW (956771) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (956771) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (958721) WAKE: Mic peak: 204[0m
+[0;33mW (959201) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (959201) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (961621) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (961621) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (961911) WAKE: Mic peak: 744[0m
+[0;33mW (964051) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (964051) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (965121) WAKE: Mic peak: 455[0m
+[0;33mW (966471) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (966471) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (968321) WAKE: Mic peak: 373[0m
+[0;33mW (968891) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (968891) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (971321) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (971321) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (971511) WAKE: Mic peak: 252[0m
+[0;32mI (972541) NETWORK: NETWORK_TIME_SYNCED_BIT cleared before=0x0 after=0x0[0m
+[0;33mW (972541) WIFI: Lost IP address[0m
+[0;33mW (973741) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (973741) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (974721) WAKE: Mic peak: 386[0m
+[0;33mW (976161) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (976161) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (977921) WAKE: Mic peak: 536[0m
+[0;33mW (978591) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (978591) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (981011) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (981011) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (981111) WAKE: Mic peak: 198[0m
+[0;33mW (983441) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (983441) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (984321) WAKE: Mic peak: 308[0m
+[0;33mW (985861) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (985861) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (987521) WAKE: Mic peak: 185[0m
+[0;33mW (988281) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (988281) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (990711) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (990711) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (990711) WAKE: Mic peak: 180[0m
+[0;33mW (993131) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (993131) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (993921) WAKE: Mic peak: 190[0m
+[0;33mW (995551) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (995551) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (997121) WAKE: Mic peak: 454[0m
+[0;33mW (997981) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (997981) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (1000311) WAKE: Mic peak: 370[0m
+[0;33mW (1000401) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1000401) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (1002831) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1002831) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (1003521) WAKE: Mic peak: 238[0m
+[0;33mW (1005251) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1005251) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (1006721) WAKE: Mic peak: 345[0m
+[0;33mW (1007671) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1007671) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (1009911) WAKE: Mic peak: 473[0m
+[0;33mW (1010101) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1010101) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (1012521) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1012521) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (1013121) WAKE: Mic peak: 417[0m
+[0;33mW (1014951) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1014951) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (1016321) WAKE: Mic peak: 306[0m
+[0;33mW (1017371) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1017371) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (1019511) WAKE: Mic peak: 315[0m
+[0;33mW (1019791) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1019791) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (1022221) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1022221) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (1022721) WAKE: Mic peak: 556[0m
+[0;33mW (1024641) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1024641) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (1025921) WAKE: Mic peak: 220[0m
+[0;33mW (1027071) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1027071) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (1029111) WAKE: Mic peak: 450[0m
+[0;33mW (1029491) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1029491) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (1031911) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1031911) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (1032321) WAKE: Mic peak: 492[0m
+[0;33mW (1034341) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1034341) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (1035521) WAKE: Mic peak: 268[0m
+[0;33mW (1036761) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1036761) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (1038711) WAKE: Mic peak: 323[0m
+[0;33mW (1039181) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1039191) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;33mW (1041611) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1041611) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (1041921) WAKE: Mic peak: 369[0m
+[0;33mW (1044031) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1044031) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m
+[0;32mI (1045121) WAKE: Mic peak: 217[0m
+[0;33mW (1046461) WIFI: Disconnected from AP, reason=201 (NO_AP_FOUND). Retrying connection...[0m
+[0;33mW (1046461) WIFI: No AP found for SSID "Jagurawi". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.[0m

@@ -1,0 +1,32 @@
+Step 1 hardware verification log (sanitized)
+Timestamp: 2026-08-09 15:08:44 +07:00
+Project: D:/BMO/all_bmo/esp
+Artifact: D:/BMO/all_bmo/esp/build-step1/all_bmo.bin
+Artifact size: 1,236,720 bytes
+Artifact SHA-256: A38F03C2DCCC7971C85F13A0C48D63A01E81E10B6C7E468CFD6204D7BFDFB82A
+
+Hardware detection:
+- Present serial ports: COM10, COM11, COM3, COM4, COM5, COM6; all are Bluetooth virtual serial ports.
+- Historical device: USB-Enhanced-SERIAL CH343 (COM7), VID_1A86/PID_55D3; Windows reports CM_PROB_PHANTOM / Present=False.
+- Present ESP/Espressif/USB-serial device: none detected.
+
+Flash:
+- Not executed. esptool chip probe on COM7 was refused because the port does not exist/present.
+- No firmware write occurred.
+
+Serial monitor:
+- Not started because no physical ESP serial port was present.
+- No boot log was captured.
+
+Evidence:
+- Wi-Fi IP: NOT OBSERVED
+- SNTP/time valid: NOT OBSERVED
+- API init after valid time: NOT OBSERVED
+- Production WSS connect: NOT OBSERVED
+- ESP authenticate sent: NOT OBSERVED
+- authenticated event: NOT OBSERVED
+- Backend state idle: NOT OBSERVED
+- TLS/authentication error: NOT OBSERVED (firmware was not booted)
+
+Result: READY_FOR_VERIFY / BLOCKED by missing physical board/serial port.
+Next action: connect/power the ESP board over USB, confirm its physical serial port, then flash this existing artifact and run the public-network serial monitor.

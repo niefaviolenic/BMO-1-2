@@ -1,0 +1,4 @@
+Command: ninja all
+[1/1281] Generating project_elf_src_esp32s3.c
+[2/1281] Preprocessing linker script C:/esp/v6.0.1/esp-idf/components/esp_system/ld/esp32s3/sections.ld.in -> D:/BMO/all_bmo/esp/build/esp-idf/esp_system/ld/sections.ld.in
+[3/1281] Preprocessing linker script C:/esp/v6.0.1/esp-idf/components/esp_system/ld/esp32s3/memory.ld.in -> D:/BMO/all_bmo/esp/build/esp-idf/esp_system/ld/memory.ld

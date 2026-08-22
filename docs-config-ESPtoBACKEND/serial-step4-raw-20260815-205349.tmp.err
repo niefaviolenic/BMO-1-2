@@ -1,0 +1,7 @@
+[0;33m--- Warning: GDB cannot open serial ports accessed as COMx[0m
+[0;33m--- Using \\.\COM7 instead...[0m
+[0;33m--- esp-idf-monitor 1.9.0 on \\.\COM7 115200[0m
+[0;33m--- Quit: Ctrl+] | Menu: Ctrl+T | Help: Ctrl+T followed by Ctrl+H[0m
+[1;31mxtensa-esp32s3-elf-addr2line -fiaC -e D:\BMO\all_bmo\esp\build\bootloader\bootloader.elf 0x403c8700: [WinError 2] The system cannot find the file specified[0m
+[1;31mxtensa-esp32s3-elf-addr2line -fiaC -e D:\BMO\all_bmo\esp\build\bootloader\bootloader.elf 0x403cb700: [WinError 2] The system cannot find the file specified[0m
+[1;31mxtensa-esp32s3-elf-addr2line -fiaC -e D:\BMO\all_bmo\esp\build\bootloader\bootloader.elf 0x403c8908: [WinError 2] The system cannot find the file specified[0m

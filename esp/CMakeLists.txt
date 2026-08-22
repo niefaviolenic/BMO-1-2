@@ -1,0 +1,53 @@
+cmake_minimum_required(VERSION 3.16)
+
+set(BMO_PRODUCTION_ENV_FILE "D:/BMO/private/bmo-production.env")
+if(NOT EXISTS "${BMO_PRODUCTION_ENV_FILE}")
+    message(FATAL_ERROR "Production credential file is missing: ${BMO_PRODUCTION_ENV_FILE}")
+endif()
+
+file(STRINGS "${BMO_PRODUCTION_ENV_FILE}" BMO_PRODUCTION_ENV_LINES)
+set(BMO_DEVICE_ID_FROM_ENV "")
+set(BMO_DEVICE_TOKEN_FROM_ENV "")
+set(BMO_DEVICE_ID_COUNT 0)
+set(BMO_DEVICE_TOKEN_COUNT 0)
+
+foreach(BMO_ENV_LINE IN LISTS BMO_PRODUCTION_ENV_LINES)
+    string(REGEX MATCH "^[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*=[ \t]*(.*)$" BMO_ENV_MATCH "${BMO_ENV_LINE}")
+    if(BMO_ENV_MATCH)
+        set(BMO_ENV_KEY "${CMAKE_MATCH_1}")
+        set(BMO_ENV_VALUE "${CMAKE_MATCH_2}")
+        string(STRIP "${BMO_ENV_VALUE}" BMO_ENV_VALUE)
+        string(REGEX REPLACE "^\"(.*)\"$" "\\1" BMO_ENV_VALUE "${BMO_ENV_VALUE}")
+        string(REGEX REPLACE "^'(.*)'$" "\\1" BMO_ENV_VALUE "${BMO_ENV_VALUE}")
+
+        if(BMO_ENV_KEY STREQUAL "DEVICE_ID")
+            math(EXPR BMO_DEVICE_ID_COUNT "${BMO_DEVICE_ID_COUNT} + 1")
+            set(BMO_DEVICE_ID_FROM_ENV "${BMO_ENV_VALUE}")
+        elseif(BMO_ENV_KEY STREQUAL "DEVICE_TOKEN")
+            math(EXPR BMO_DEVICE_TOKEN_COUNT "${BMO_DEVICE_TOKEN_COUNT} + 1")
+            set(BMO_DEVICE_TOKEN_FROM_ENV "${BMO_ENV_VALUE}")
+        endif()
+    endif()
+endforeach()
+
+if(NOT BMO_DEVICE_ID_COUNT EQUAL 1 OR NOT BMO_DEVICE_ID_FROM_ENV STREQUAL "bmo-001")
+    message(FATAL_ERROR "Production credential file must contain exactly DEVICE_ID=bmo-001")
+endif()
+if(NOT BMO_DEVICE_TOKEN_COUNT EQUAL 1 OR BMO_DEVICE_TOKEN_FROM_ENV STREQUAL "")
+    message(FATAL_ERROR "Production credential file must contain exactly one non-empty DEVICE_TOKEN")
+endif()
+if(BMO_DEVICE_TOKEN_FROM_ENV MATCHES "[ \t\r\n\\\"]")
+    message(FATAL_ERROR "Production DEVICE_TOKEN contains unsupported whitespace or quoting")
+endif()
+
+string(REPLACE "\\" "\\\\" BMO_DEVICE_TOKEN_ESCAPED "${BMO_DEVICE_TOKEN_FROM_ENV}")
+string(REPLACE "\"" "\\\"" BMO_DEVICE_TOKEN_ESCAPED "${BMO_DEVICE_TOKEN_ESCAPED}")
+set(BMO_CREDENTIAL_INCLUDE_DIR "${CMAKE_BINARY_DIR}/generated")
+set(BMO_CREDENTIAL_HEADER "${BMO_CREDENTIAL_INCLUDE_DIR}/bmo_credentials.h")
+file(MAKE_DIRECTORY "${BMO_CREDENTIAL_INCLUDE_DIR}")
+file(GENERATE
+    OUTPUT "${BMO_CREDENTIAL_HEADER}"
+    CONTENT "#pragma once\n#define BMO_DEVICE_ID \"bmo-001\"\n#define BMO_DEVICE_TOKEN \"${BMO_DEVICE_TOKEN_ESCAPED}\"\n")
+
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+project(all_bmo)

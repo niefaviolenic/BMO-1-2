@@ -1,0 +1,70 @@
+SERIAL_CAPTURE=gate3
+PORT=COM7
+BAUD=115200
+SECRETS=REDACTED
+CAPTURE_ACTIVE=YES time=2026-08-14T15:44:53.0433619+07:00
+I (779460) WAKE: Mic peak: 82
+I (782650) WAKE: Mic peak: 74
+I (784550) WAKE: Hi Joy detected
+I (784550) STATE: State changed to 1
+I (784550) DISPLAY: display_face()
+I (784620) STATE: Entering RECORDING state
+I (784620) WAKE: Recording started
+I (786080) DISPLAY: Face : 0
+I (786080) WAKE: Wake detected, starting recording
+I (789820) WAKE: Mic peak: 50
+I (791040) WAKE: Recording finished: silence detected
+I (791040) WAKE: WAV header written: 40448 samples
+E (791070) API: Local WAV validation failed reason=fmt_values bytes=80940
+I (791070) STATE: State changed to 4
+I (791070) DISPLAY: display_face()
+I (792700) DISPLAY: Face : 5
+I (792700) DISPLAY: display_face()
+I (793020) WAKE: Mic peak: 63
+I (794330) DISPLAY: Face : 5
+I (794330) AUDIO: Play error tone sequence
+I (794920) API: Voice Error: Oh no. BMO could not answer. Please try again. Code: INVALID_AUDIO
+I (796230) WAKE: Mic peak: 71
+I (796920) STATE: State changed to 0
+I (796920) DISPLAY: display_face()
+I (798450) DISPLAY: Face : 0
+I (798450) DISPLAY: display_face()
+I (799420) WAKE: Mic peak: 76
+I (799990) DISPLAY: Face : 0
+I (799990) STATE: State changed to 0
+I (799990) DISPLAY: display_face()
+I (801520) DISPLAY: Face : 0
+I (802620) WAKE: Mic peak: 58
+I (805830) WAKE: Mic peak: 170
+I (809020) WAKE: Mic peak: 466
+I (810810) WAKE: Hi Joy detected
+I (810810) STATE: State changed to 1
+I (810810) DISPLAY: display_face()
+I (810820) STATE: Entering RECORDING state
+I (810820) WAKE: Recording started
+I (812340) DISPLAY: Face : 0
+I (812340) WAKE: Wake detected, starting recording
+I (816160) WAKE: Mic peak: 1035
+I (819210) WAKE: Recording finished: silence detected
+I (819210) WAKE: WAV header written: 71168 samples
+E (819220) API: Local WAV validation failed reason=fmt_values bytes=142380
+I (819220) STATE: State changed to 4
+I (819220) DISPLAY: display_face()
+I (819370) WAKE: Mic peak: 68
+I (820850) DISPLAY: Face : 5
+I (820850) DISPLAY: display_face()
+I (822480) DISPLAY: Face : 5
+I (822480) AUDIO: Play error tone sequence
+I (822570) WAKE: Mic peak: 86
+I (823080) API: Voice Error: Oh no. BMO could not answer. Please try again. Code: INVALID_AUDIO
+I (825080) STATE: State changed to 0
+I (825080) DISPLAY: display_face()
+I (825760) WAKE: Mic peak: 218
+I (826620) DISPLAY: Face : 0
+I (826620) DISPLAY: display_face()
+I (828150) DISPLAY: Face : 0
+I (828150) STATE: State changed to 0
+I (828150) DISPLAY: display_face()
+I (828970) WAKE: Mic peak: 217
+I (829690) DISPLAY: Face : 0
+I (832170) WAKE: Mic peak: 101

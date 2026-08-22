@@ -1,0 +1,42 @@
+# Secrets and local environment
+**/.env
+**/.env.*
+!**/.env.example
+!**/*.env.example
+!**/*.example
+
+# Dependencies and language caches
+**/node_modules/
+**/.pnpm-store/
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+
+# Build and test output
+**/build/
+**/dist/
+**/coverage/
+**/temp/
+**/temp-audio/
+**/src/generated/
+
+# Local model and runtime assets
+**/hf-cache/
+**/torch-cache/
+**/*.pth
+**/*.pt
+**/*.ckpt
+**/*.onnx
+**/*.safetensors
+
+# Logs and local backups
+**/*.log
+**/*.bak
+**/*.backup
+**/*.old
+**/*.orig
+**/*~

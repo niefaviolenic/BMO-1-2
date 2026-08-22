@@ -1,0 +1,23 @@
+Official WiFi credential revision build (sanitized)
+Date: 2026-08-15 (Asia/Jakarta)
+
+Scope preflight:
+- Exactly one BMO_WIFI_SSID definition and one BMO_WIFI_PASS definition were present in esp/main/wifi.cpp.
+- No device credential references were found in wifi.cpp.
+- Credential values are intentionally omitted.
+- Source was stable before build; source SHA-256: 71E36C0AC8B21E22C0A218974E1D9919479049A21777EA77F5CED935EECE1576.
+
+Command:
+cmd.exe /d /c call "C:\esp\v6.0.1\esp-idf\export.bat" && set "PYTHONUTF8=1" && set "PYTHONIOENCODING=utf-8" && "C:\Users\violenic\.espressif\python_env\idf6.0_py3.13_env\Scripts\python.exe" "C:\esp\v6.0.1\esp-idf\tools\idf.py" -B "D:\BMO\all_bmo\esp\build" build
+
+Build exit code: 0
+Result: Project build complete
+ESP-IDF size check: PASS; all_bmo.bin binary size 0x131aa0 bytes; smallest app partition has 40% free.
+EDR/CreateProcess/PermissionDenied/Access-is-denied error: not observed.
+No fullclean, direct Ninja, Ninja dry-run, incremental verification, CMake reconfigure, or second build was performed.
+
+New application artifacts:
+- build/all_bmo.bin | size 1252000 bytes | timestamp 2026-08-15T21:10:16.9557204+07:00 | SHA-256 D6850DD396045A4208BD22A30E0A756259CEABF14AE5AD6540F10134850D0841
+- build/all_bmo.elf | size 12588132 bytes | timestamp 2026-08-15T21:10:16.3008034+07:00 | SHA-256 38BB3889B1DD0DD77C96437D1F019D524D90C45411EC2297F465A63B0D14FD8D
+
+Both application artifacts are newer than all files under esp/main. All flash_args references are present.
