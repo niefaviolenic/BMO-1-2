@@ -58,3 +58,19 @@ Scope: shared playback task only. No push was performed.
 ## Explicitly preserved scope
 
 No pairing/display/Wi-Fi/sdkconfig/backend behavior was changed as part of this task. Existing dirty changes in those areas, plus `build/**` and `managed_components/**`, remain outside the focused commit.
+
+## Change — Development pairing UI suppression
+
+Goal: Add one explicit development-only compile-time flag that suppresses only LCD rendering of the six-digit pairing code while keeping the pairing protocol and lifecycle active.
+
+Files/functions affected: root `CMakeLists.txt` (the `BMO_DEV_SUPPRESS_PAIRING_UI` cache option and generated `bmo_dev_config.h`); `esp/main/api.cpp` (`process_pairing_actions()` and the generated-config include); `esp/tests/test_pairing_ui_suppression_contract.py` (focused contracts).
+
+Behavior before: every accepted `PAIRING_ACTION_SHOW_UI` action called `display_set_pairing_code()`; there was no project-level switch for development firmware to suppress that rendering.
+
+Behavior after: the default `OFF` configuration preserves the existing display call. When `BMO_DEV_SUPPRESS_PAIRING_UI=ON`, the `SHOW_UI` action is consumed without calling the LCD renderer; pairing code validation/storage, expiry, recovery/reissue, completion cleanup, pairing-mode request, reconnect, and re-authentication paths remain active.
+
+Reason: allow development firmware to exercise pairing internally without exposing the code on the LCD, without changing the protocol, credentials, renderer, orientation, or playback/proactive implementation.
+
+Regression risk: a preprocessor guard in the action processor could accidentally suppress protocol actions or alter production behavior if the default is wrong. Mitigations are an explicit default-off generated macro, focused source contracts, default and suppression-mode builds, and the full existing test suite.
+
+Verification evidence: focused suppression contracts pass; full `python -m unittest discover -s tests -v` passed 56/56; `idf.py -D BMO_DEV_SUPPRESS_PAIRING_UI=ON build` passed with generated macro `1`; final default `idf.py build` passed with generated macro `0` and CMake cache `OFF`. COM12 dev image flash passed, and serial monitoring observed stable boot, WSS authentication, and internal `pairing_code` receipt without logging the code. LCD visual output was not directly observable in this setup, so no visual claim is made; no pairing completion was claimed without a backend claim.

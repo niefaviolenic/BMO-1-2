@@ -1,5 +1,6 @@
 #include "api.h"
 #include "bmo_credentials.h"
+#include "bmo_dev_config.h"
 #include "state.h"
 #include "audio.h"
 #include "playback.h"
@@ -1090,10 +1091,12 @@ static void process_pairing_actions() {
     if (actions == PAIRING_ACTION_NONE)
         return;
 
-    const PairingSnapshot snapshot = pairing_get_snapshot();
     if ((actions & PAIRING_ACTION_SHOW_UI) != 0) {
+#if !BMO_DEV_SUPPRESS_PAIRING_UI
+        const PairingSnapshot snapshot = pairing_get_snapshot();
         if (!display_set_pairing_code(snapshot.code))
             ESP_LOGW(TAG, "Pairing display update failed");
+#endif
     }
     if ((actions & PAIRING_ACTION_CLEAR_UI) != 0) {
         display_clear_pairing_code();
