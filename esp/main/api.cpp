@@ -2,6 +2,7 @@
 #include "bmo_credentials.h"
 #include "state.h"
 #include "audio.h"
+#include "playback.h"
 #include "display.h"
 #include "pairing.h"
 #include "wakeword.h"
@@ -82,7 +83,7 @@ enum BMOPlaybackResult {
 
 static volatile BMOPlaybackState playback_state = BMO_PLAYBACK_IDLE;
 static char current_request_id[37] = {0};
-static char play_audio_url[256] = {0};
+static PlaybackJob current_playback_job = {};
 static char backend_state[BMO_BACKEND_STATE_MAX_LEN] = "idle";
 static char backend_active_request_id[37] = {0};
 static TickType_t audio_deadline_tick = 0;
@@ -470,12 +471,6 @@ static bool json_object_has_exact_fields(const cJSON *root,
     return seen_fields == field_count;
 }
 
-static bool is_valid_audio_url(const char *url)
-{
-    static const char prefix[] = "https://" BMO_BACKEND_HOST "/audio/";
-    return url != NULL && strncmp(url, prefix, sizeof(prefix) - 1) == 0;
-}
-
 static void set_audio_deadline(uint32_t expires_in_seconds)
 {
     uint64_t ttl_ticks = ((uint64_t)expires_in_seconds * 1000ULL +
@@ -491,7 +486,8 @@ static void set_audio_deadline(uint32_t expires_in_seconds)
 
 static bool audio_deadline_expired(void)
 {
-    if (audio_deadline_tick == 0)
+    if (audio_deadline_tick == 0 ||
+        playback_is_expired(esp_timer_get_time() / 1000))
         return true;
 
     return (int32_t)(xTaskGetTickCount() - audio_deadline_tick) >= 0;
@@ -500,6 +496,28 @@ static bool audio_deadline_expired(void)
 static void reset_audio_deadline(void)
 {
     audio_deadline_tick = 0;
+}
+
+static void clear_current_playback_job()
+{
+    memset(&current_playback_job, 0, sizeof(current_playback_job));
+}
+
+static PlaybackTerminalResult playback_terminal_result(BMOPlaybackResult result)
+{
+    switch (result)
+    {
+        case BMO_PLAYBACK_SUCCESS:
+            return PlaybackTerminalResult::DONE;
+        case BMO_PLAYBACK_EXPIRED:
+            return PlaybackTerminalResult::EXPIRED;
+        case BMO_PLAYBACK_DOWNLOAD_FAILED:
+        case BMO_PLAYBACK_DECODE_FAILED:
+        case BMO_PLAYBACK_PLAYBACK_FAILED:
+        case BMO_PLAYBACK_REQUEST_FAILED:
+        default:
+            return PlaybackTerminalResult::FAILED;
+    }
 }
 
 static bool request_is_known(const char *request_id)
@@ -531,7 +549,7 @@ static bool adopt_recovered_request(const char *request_id)
     {
         strncpy(current_request_id, request_id, sizeof(current_request_id) - 1);
         current_request_id[sizeof(current_request_id) - 1] = '\0';
-        play_audio_url[0] = '\0';
+        clear_current_playback_job();
         reset_audio_deadline();
         playback_state = BMO_PLAYBACK_WAITING;
     }
@@ -658,7 +676,7 @@ static void mark_request_result_sent(const char *request_id)
         backend_state[sizeof(backend_state) - 1] = '\0';
         ESP_LOGI(TAG, "Playback result sent; local active request cleared");
     }
-    play_audio_url[0] = '\0';
+    clear_current_playback_job();
     reset_audio_deadline();
 }
 
@@ -732,8 +750,9 @@ static void queue_request_failed(const char *request_id, const char *code)
     pending_request_failed_code[sizeof(pending_request_failed_code) - 1] = '\0';
     pending_request_failed = true;
     playback_state = BMO_PLAYBACK_CANCELLED;
+    playback_cancel();
     backend_active_request_id[0] = '\0';
-    play_audio_url[0] = '\0';
+    clear_current_playback_job();
     reset_audio_deadline();
     strncpy(backend_state, "idle", sizeof(backend_state) - 1);
     backend_state[sizeof(backend_state) - 1] = '\0';
@@ -754,7 +773,8 @@ static bool process_pending_request_failed(void)
     pending_request_failed_code[0] = '\0';
     if (strcmp(current_request_id, request_id) == 0)
         current_request_id[0] = '\0';
-    play_audio_url[0] = '\0';
+    playback_cancel();
+    clear_current_playback_job();
     reset_audio_deadline();
     playback_state = BMO_PLAYBACK_CANCELLED;
     handle_request_failed(code);
@@ -904,6 +924,7 @@ static void handle_ws_message(const char *payload, int len) {
         cJSON *url_node = cJSON_GetObjectItem(root, "audio_url");
         cJSON *format_node = cJSON_GetObjectItem(root, "format");
         cJSON *expires_node = cJSON_GetObjectItem(root, "expires_in_seconds");
+        PlaybackJob voice_job = {};
         uint32_t expires_in_seconds = 0;
         bool expires_value_valid = expires_node != NULL && cJSON_IsNumber(expires_node) &&
             expires_node->valuedouble > 0 &&
@@ -919,8 +940,8 @@ static void handle_ws_message(const char *payload, int len) {
             format_node != NULL && cJSON_IsString(format_node) &&
             strcmp(format_node->valuestring, "mp3") == 0 &&
             expires_value_valid &&
-            strlen(url_node->valuestring) < sizeof(play_audio_url) &&
-            is_valid_audio_url(url_node->valuestring) &&
+            strlen(url_node->valuestring) < sizeof(voice_job.audio_url) &&
+            playback_url_is_valid(url_node->valuestring) &&
             request_is_known(req_id_node->valuestring) &&
             adopt_recovered_request(req_id_node->valuestring);
 
@@ -939,16 +960,28 @@ static void handle_ws_message(const char *payload, int len) {
                 ESP_LOGI(TAG, "Ignore duplicate audio_ready for request");
             }
             else {
-                strncpy(play_audio_url, url_node->valuestring, sizeof(play_audio_url) - 1);
-                play_audio_url[sizeof(play_audio_url) - 1] = '\0';
-                set_audio_deadline(expires_in_seconds);
-                playback_state = BMO_PLAYBACK_DOWNLOADING;
-                ESP_LOGI(TAG, "Accepted audio_ready request_id=%s format=mp3 expires_in_seconds=%lu url_host=%s",
-                         req_id_node->valuestring, (unsigned long)expires_in_seconds,
-                         BMO_BACKEND_HOST);
-                if (getState() == BMOState::IDLE) {
-                    recovery_request_pending = true;
-                    setState(BMOState::THINKING);
+                voice_job.origin = PlaybackOrigin::VOICE_RESPONSE;
+                strncpy(voice_job.correlation_id, req_id_node->valuestring,
+                        sizeof(voice_job.correlation_id) - 1);
+                strncpy(voice_job.audio_url, url_node->valuestring,
+                        sizeof(voice_job.audio_url) - 1);
+                voice_job.expires_in_seconds = expires_in_seconds;
+                strncpy(voice_job.source, "VOICE", sizeof(voice_job.source) - 1);
+
+                if (playback_admit_voice_job(
+                        &voice_job, esp_timer_get_time() / 1000) != PlaybackAdmission::ACCEPTED) {
+                    ESP_LOGI(TAG, "Ignore audio_ready while another playback owns the audio path");
+                } else {
+                    current_playback_job = voice_job;
+                    set_audio_deadline(expires_in_seconds);
+                    playback_state = BMO_PLAYBACK_DOWNLOADING;
+                    ESP_LOGI(TAG, "Accepted audio_ready request_id=%s format=mp3 expires_in_seconds=%lu url_host=%s",
+                             req_id_node->valuestring, (unsigned long)expires_in_seconds,
+                             BMO_BACKEND_HOST);
+                    if (getState() == BMOState::IDLE) {
+                        recovery_request_pending = true;
+                        setState(BMOState::THINKING);
+                    }
                 }
             }
         }
@@ -1159,6 +1192,7 @@ static void ws_monitor_task(void *param) {
 
 void api_init() {
     ESP_LOGI(TAG, "API init started");
+    playback_init();
     pairing_init();
     ws_pairing_reconnect_pending = false;
     ws_connection_replacement_suppressed = false;
@@ -1225,9 +1259,11 @@ static bool is_audio_mpeg_content_type(const char *content_type)
     return *content_type == '\0' || *content_type == ';';
 }
 
-// Progressive MP3 Streaming & Playback
-static BMOPlaybackResult download_and_play_mp3(const char *url) {
-    if (url == NULL || audio_deadline_expired())
+// Shared MP3 downloader/decoder/player. Transport validation and voice
+// correlation happen before this physical playback path is entered.
+static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
+    if (job == NULL || audio_deadline_expired() ||
+        playback_is_expired(esp_timer_get_time() / 1000))
     {
         ESP_LOGW(TAG, "MP3 download skipped: audio URL expired");
         return BMO_PLAYBACK_EXPIRED;
@@ -1236,7 +1272,7 @@ static BMOPlaybackResult download_and_play_mp3(const char *url) {
     ESP_LOGI(TAG, "Initializing HTTP GET stream for MP3 host=%s", BMO_BACKEND_HOST);
     
     esp_http_client_config_t config = {};
-    config.url = url;
+    config.url = job->audio_url;
     config.method = HTTP_METHOD_GET;
     config.timeout_ms = 10000;
     config.crt_bundle_attach = esp_crt_bundle_attach;
@@ -1327,6 +1363,12 @@ static BMOPlaybackResult download_and_play_mp3(const char *url) {
     BMOPlaybackResult result = BMO_PLAYBACK_DOWNLOAD_FAILED;
     
     while (true) {
+        if (audio_deadline_expired() ||
+            playback_is_expired(esp_timer_get_time() / 1000)) {
+            result = BMO_PLAYBACK_EXPIRED;
+            break;
+        }
+
         if (playback_state == BMO_PLAYBACK_CANCELLED) {
             result = pending_request_failed
                 ? BMO_PLAYBACK_REQUEST_FAILED
@@ -1429,6 +1471,7 @@ static BMOPlaybackResult download_and_play_mp3(const char *url) {
                 playback_started = true;
                 playback_wall_start_us = esp_timer_get_time();
                 last_progress_log_us = playback_wall_start_us;
+                playback_mark_started();
                 playback_state = BMO_PLAYBACK_PLAYING;
                 setState(BMOState::SPEAKING);
                 display_face(FACE_HAPPY);
@@ -1729,7 +1772,7 @@ static void clear_upload_request(const char *request_id, BMOPlaybackState termin
     backend_state[0] = '\0';
     strncpy(backend_state, "idle", sizeof(backend_state) - 1);
     backend_state[sizeof(backend_state) - 1] = '\0';
-    play_audio_url[0] = '\0';
+    clear_current_playback_job();
     reset_audio_deadline();
     playback_state = terminal_state;
 }
@@ -2167,7 +2210,7 @@ void api_upload_audio_and_process() {
             }
 
             download_attempts++;
-            play_result = download_and_play_mp3(play_audio_url);
+            play_result = download_and_play_mp3(&current_playback_job);
             if (play_result == BMO_PLAYBACK_SUCCESS ||
                 play_result == BMO_PLAYBACK_EXPIRED ||
                 play_result == BMO_PLAYBACK_DECODE_FAILED ||
@@ -2190,12 +2233,14 @@ void api_upload_audio_and_process() {
         }
 
         if (play_result == BMO_PLAYBACK_EXPIRED) {
+            playback_mark_terminal(playback_terminal_result(play_result));
             clear_upload_request(current_request_id, BMO_PLAYBACK_CANCELLED);
             handle_request_failed("AUDIO_EXPIRED");
             return;
         }
 
         if (play_result == BMO_PLAYBACK_SUCCESS) {
+            playback_mark_terminal(playback_terminal_result(play_result));
             if (send_playback_done(current_request_id)) {
                 playback_state = BMO_PLAYBACK_DONE;
                 mark_request_result_sent(current_request_id);
@@ -2206,6 +2251,7 @@ void api_upload_audio_and_process() {
             setState(BMOState::IDLE);
             display_face(FACE_HAPPY);
         } else {
+            playback_mark_terminal(playback_terminal_result(play_result));
             const char *failure_reason = play_result == BMO_PLAYBACK_DECODE_FAILED
                 ? "DECODE_FAILED"
                 : play_result == BMO_PLAYBACK_PLAYBACK_FAILED
