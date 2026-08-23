@@ -31,6 +31,12 @@ void display_face(Face face);
 
 void display_set_mode(DisplayMode mode);
 
+bool display_set_pairing_code(const char code[7]);
+
+void display_clear_pairing_code();
+
+bool display_pairing_code_is_visible();
+
 void display_test_pattern();
 
 #endif

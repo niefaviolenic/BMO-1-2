@@ -31,7 +31,6 @@ void setState(BMOState state)
             break;
         case BMOState::RECORDING:
             // Recording adalah state internal, display tetap IDLE (Hardware Contract v1.0.5)
-            display_set_mode(DisplayMode::IDLE);
             break;
         case BMOState::THINKING:
             display_set_mode(DisplayMode::THINKING);

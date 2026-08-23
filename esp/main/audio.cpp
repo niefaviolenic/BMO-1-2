@@ -6,6 +6,7 @@
 #include "driver/i2s_std.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 
 static const char *TAG = "AUDIO";
@@ -399,30 +400,56 @@ bool audio_set_sample_rate(uint32_t sample_rate)
     if (current_sample_rate == sample_rate)
         return true;
 
+    int64_t change_start_us = esp_timer_get_time();
     ESP_LOGI(TAG, "Changing speaker sample rate to %lu Hz", (unsigned long)sample_rate);
+
+    int64_t stage_start_us = esp_timer_get_time();
     esp_err_t err = i2s_channel_disable(speaker_tx_handle);
+    int64_t disable_us = esp_timer_get_time() - stage_start_us;
     if (err != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to disable I2S for rate change: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG,
+                 "Failed to disable I2S for rate change: %s elapsed_us=%lld",
+                 esp_err_to_name(err),
+                 (long long)disable_us);
         return false;
     }
 
     i2s_std_clk_config_t clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate);
+    stage_start_us = esp_timer_get_time();
     err = i2s_channel_reconfig_std_clock(speaker_tx_handle, &clk_cfg);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to reconfig I2S clock: %s", esp_err_to_name(err));
+    int64_t reconfig_us = esp_timer_get_time() - stage_start_us;
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG,
+                 "Failed to reconfig I2S clock: %s disable_us=%lld reconfig_us=%lld",
+                 esp_err_to_name(err),
+                 (long long)disable_us,
+                 (long long)reconfig_us);
         (void)i2s_channel_enable(speaker_tx_handle);
         return false;
     }
 
+    stage_start_us = esp_timer_get_time();
     err = i2s_channel_enable(speaker_tx_handle);
+    int64_t enable_us = esp_timer_get_time() - stage_start_us;
     if (err != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to enable I2S after rate change: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG,
+                 "Failed to enable I2S after rate change: %s enable_us=%lld",
+                 esp_err_to_name(err),
+                 (long long)enable_us);
         return false;
     }
 
     current_sample_rate = sample_rate;
+    ESP_LOGI(TAG,
+             "Speaker sample rate ready: rate=%lu disable_us=%lld reconfig_us=%lld enable_us=%lld total_us=%lld",
+             (unsigned long)sample_rate,
+             (long long)disable_us,
+             (long long)reconfig_us,
+             (long long)enable_us,
+             (long long)(esp_timer_get_time() - change_start_us));
     return true;
 }
 
@@ -432,14 +459,20 @@ bool audio_play_raw(const int16_t *samples, size_t sample_count, int channels, i
         (channels != 1 && channels != 2) || (channels == 2 && (sample_count % 2) != 0))
         return false;
 
+    int64_t call_start_us = esp_timer_get_time();
+    int64_t write_total_us = 0;
+    int64_t write_max_us = 0;
+    size_t write_chunks = 0;
+    size_t pcm_frames = channels == 1 ? sample_count : sample_count / 2;
+    uint64_t media_us = ((uint64_t)pcm_frames * 1000000ULL) / (uint32_t)sample_rate;
+
     if (!audio_set_sample_rate((uint32_t)sample_rate))
         return false;
 
     int16_t stereo_buf[SPEAKER_OUTPUT_CHUNK_FRAMES * 2];
-    size_t i = 0;
 
     if (channels == 1) {
-        // Mono input
+        size_t i = 0;
         while (i < sample_count) {
             size_t chunk_samples = sample_count - i;
             if (chunk_samples > SPEAKER_OUTPUT_CHUNK_FRAMES)
@@ -455,21 +488,34 @@ bool audio_play_raw(const int16_t *samples, size_t sample_count, int channels, i
                 stereo_buf[j * 2 + 1] = sample;
             }
 
+            const size_t expected_bytes = chunk_samples * 2 * sizeof(int16_t);
             size_t bytes_written = 0;
+            int64_t write_start_us = esp_timer_get_time();
             esp_err_t err = i2s_channel_write(
                 speaker_tx_handle,
                 stereo_buf,
-                chunk_samples * 2 * sizeof(int16_t),
+                expected_bytes,
                 &bytes_written,
                 500);
+            int64_t write_us = esp_timer_get_time() - write_start_us;
+            write_total_us += write_us;
+            if (write_us > write_max_us)
+                write_max_us = write_us;
+            write_chunks++;
 
-            if (err != ESP_OK || bytes_written != chunk_samples * 2 * sizeof(int16_t))
+            if (err != ESP_OK || bytes_written != expected_bytes) {
+                ESP_LOGE(TAG,
+                         "Raw playback write failed: err=%s bytes=%u/%u chunk=%u",
+                         esp_err_to_name(err),
+                         (unsigned)bytes_written,
+                         (unsigned)expected_bytes,
+                         (unsigned)write_chunks);
                 return false;
+            }
 
             i += chunk_samples;
         }
-    } else if (channels == 2) {
-        // Stereo input (sample_count is total sample elements, so pairs * 2)
+    } else {
         size_t total_frames = sample_count / 2;
         size_t frame_idx = 0;
         while (frame_idx < total_frames) {
@@ -490,19 +536,47 @@ bool audio_play_raw(const int16_t *samples, size_t sample_count, int channels, i
                 stereo_buf[j * 2 + 1] = right;
             }
 
+            const size_t expected_bytes = chunk_frames * 2 * sizeof(int16_t);
             size_t bytes_written = 0;
+            int64_t write_start_us = esp_timer_get_time();
             esp_err_t err = i2s_channel_write(
                 speaker_tx_handle,
                 stereo_buf,
-                chunk_frames * 2 * sizeof(int16_t),
+                expected_bytes,
                 &bytes_written,
                 500);
+            int64_t write_us = esp_timer_get_time() - write_start_us;
+            write_total_us += write_us;
+            if (write_us > write_max_us)
+                write_max_us = write_us;
+            write_chunks++;
 
-            if (err != ESP_OK || bytes_written != chunk_frames * 2 * sizeof(int16_t))
+            if (err != ESP_OK || bytes_written != expected_bytes) {
+                ESP_LOGE(TAG,
+                         "Raw playback write failed: err=%s bytes=%u/%u chunk=%u",
+                         esp_err_to_name(err),
+                         (unsigned)bytes_written,
+                         (unsigned)expected_bytes,
+                         (unsigned)write_chunks);
                 return false;
+            }
 
             frame_idx += chunk_frames;
         }
+    }
+
+    int64_t elapsed_us = esp_timer_get_time() - call_start_us;
+    if (elapsed_us > (int64_t)media_us * 2 + 50000LL) {
+        ESP_LOGW(TAG,
+                 "Slow raw playback: frames=%u channels=%d rate=%d chunks=%u media_us=%llu elapsed_us=%lld write_total_us=%lld write_max_us=%lld",
+                 (unsigned)pcm_frames,
+                 channels,
+                 sample_rate,
+                 (unsigned)write_chunks,
+                 (unsigned long long)media_us,
+                 (long long)elapsed_us,
+                 (long long)write_total_us,
+                 (long long)write_max_us);
     }
 
     return true;

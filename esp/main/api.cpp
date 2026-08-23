@@ -3,6 +3,7 @@
 #include "state.h"
 #include "audio.h"
 #include "display.h"
+#include "pairing.h"
 #include "wakeword.h"
 #include "network.h"
 
@@ -14,6 +15,7 @@
 
 #include "esp_log.h"
 #include "esp_random.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -21,6 +23,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <time.h>
 
 static const char *TAG = "API";
 
@@ -97,6 +100,7 @@ static uint32_t ws_lifecycle_sequence = 0;
 static TickType_t ws_lifecycle_first_tick = 0;
 static TickType_t ws_lifecycle_last_tick = 0;
 static bool ws_reconnect_pending = false;
+static bool ws_pairing_reconnect_pending = false;
 static bool ws_connection_replacement_suppressed = false;
 
 enum BMOWsLifecycleState {
@@ -249,6 +253,7 @@ static void mark_ws_down(const char *source)
     ws_authenticated = false;
     ws_auth_pending = false;
     ws_auth_deadline = 0;
+    pairing_on_disconnected();
     network_set_backend_connected(false);
     log_ws_lifecycle_event("state_down_after", source, NULL);
 }
@@ -423,6 +428,48 @@ static bool is_valid_backend_state(const cJSON *node)
             strcmp(node->valuestring, "audio_ready") == 0);
 }
 
+static const char *const PAIRING_CODE_FIELDS[] = {
+    "event",
+    "code",
+    "expires_at",
+};
+
+static const char *const PAIRING_COMPLETED_FIELDS[] = {
+    "event",
+    "status",
+};
+
+static bool json_object_has_exact_fields(const cJSON *root,
+                                         const char *const *fields,
+                                         size_t field_count)
+{
+    if (root == NULL || !cJSON_IsObject(root))
+        return false;
+
+    size_t seen_fields = 0;
+    for (const cJSON *item = root->child; item != NULL; item = item->next)
+    {
+        if (item->string == NULL)
+            return false;
+
+        bool field_is_allowed = false;
+        for (size_t index = 0; index < field_count; ++index)
+        {
+            if (strcmp(item->string, fields[index]) == 0)
+            {
+                field_is_allowed = true;
+                break;
+            }
+        }
+        if (!field_is_allowed)
+            return false;
+
+        ++seen_fields;
+    }
+
+    return seen_fields == field_count;
+}
+
 static bool is_valid_audio_url(const char *url)
 {
     static const char prefix[] = "https://" BMO_BACKEND_HOST "/audio/";
@@ -574,6 +621,22 @@ static bool send_authenticate() {
     return sent;
 }
 
+static bool send_pairing_mode_request() {
+    cJSON *root = cJSON_CreateObject();
+    if (root == NULL)
+        return false;
+    cJSON_AddStringToObject(root, "event", "pairing_mode_request");
+    char *json_str = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (json_str == NULL)
+        return false;
+
+    bool sent = ws_send_text(json_str, true);
+    free(json_str);
+    return sent;
+}
+
 static void clear_pending_playback_event()
 {
     pending_playback_event = BMO_PENDING_PLAYBACK_NONE;
@@ -583,13 +646,17 @@ static void clear_pending_playback_event()
 
 static void mark_request_result_sent(const char *request_id)
 {
-    if (strcmp(current_request_id, request_id) == 0)
+    const bool matches_current = strcmp(current_request_id, request_id) == 0;
+    const bool matches_backend = strcmp(backend_active_request_id, request_id) == 0;
+
+    if (matches_current)
         current_request_id[0] = '\0';
-    if (strcmp(backend_active_request_id, request_id) == 0)
+    if (matches_backend)
     {
         backend_active_request_id[0] = '\0';
         strncpy(backend_state, "idle", sizeof(backend_state) - 1);
         backend_state[sizeof(backend_state) - 1] = '\0';
+        ESP_LOGI(TAG, "Playback result sent; local active request cleared");
     }
     play_audio_url[0] = '\0';
     reset_audio_deadline();
@@ -770,6 +837,7 @@ static void handle_ws_message(const char *payload, int len) {
         }
 
         (void)flush_pending_playback_event();
+        pairing_on_authenticated(esp_timer_get_time() / 1000);
         log_ws_stack_high_water("authenticated");
     }
     else if (strcmp(event, "authentication_failed") == 0) {
@@ -790,6 +858,29 @@ static void handle_ws_message(const char *payload, int len) {
     }
     else if (!ws_authenticated) {
         ESP_LOGW(TAG, "Ignoring WS event before valid authentication");
+    }
+    else if (strcmp(event, "pairing_code") == 0) {
+        cJSON *code_node = cJSON_GetObjectItem(root, "code");
+        cJSON *expires_node = cJSON_GetObjectItem(root, "expires_at");
+        bool valid_pairing_code =
+            json_object_has_exact_fields(
+                root, PAIRING_CODE_FIELDS,
+                sizeof(PAIRING_CODE_FIELDS) / sizeof(PAIRING_CODE_FIELDS[0])) &&
+            code_node != NULL && cJSON_IsString(code_node) &&
+            expires_node != NULL && cJSON_IsString(expires_node);
+        if (valid_pairing_code)
+            (void)pairing_on_code(code_node->valuestring, expires_node->valuestring, time(NULL));
+    }
+    else if (strcmp(event, "pairing_completed") == 0) {
+        cJSON *status_node = cJSON_GetObjectItem(root, "status");
+        bool valid_pairing_completion =
+            json_object_has_exact_fields(
+                root, PAIRING_COMPLETED_FIELDS,
+                sizeof(PAIRING_COMPLETED_FIELDS) / sizeof(PAIRING_COMPLETED_FIELDS[0])) &&
+            status_node != NULL && cJSON_IsString(status_node) &&
+            strcmp(status_node->valuestring, "ok") == 0;
+        if (valid_pairing_completion)
+            pairing_on_completed();
     }
     else if (strcmp(event, "display_status") == 0) {
         cJSON *req_id_node = cJSON_GetObjectItem(root, "request_id");
@@ -906,6 +997,7 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
             ws_auth_deadline = xTaskGetTickCount() + pdMS_TO_TICKS(WS_AUTH_TIMEOUT_MS);
             ws_lifecycle_state = BMO_WS_LIFECYCLE_CONNECTED;
             ws_reconnect_pending = false;
+            (void)pairing_on_socket_connected();
             log_ws_lifecycle_event("event_connected", "websocket_event", data);
             network_set_backend_connected(false);
             if (!send_authenticate()) {
@@ -960,9 +1052,33 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
     }
 }
 
+static void process_pairing_actions() {
+    const uint8_t actions = pairing_poll(time(NULL), esp_timer_get_time() / 1000);
+    if (actions == PAIRING_ACTION_NONE)
+        return;
+
+    const PairingSnapshot snapshot = pairing_get_snapshot();
+    if ((actions & PAIRING_ACTION_SHOW_UI) != 0) {
+        if (!display_set_pairing_code(snapshot.code))
+            ESP_LOGW(TAG, "Pairing display update failed");
+    }
+    if ((actions & PAIRING_ACTION_CLEAR_UI) != 0) {
+        display_clear_pairing_code();
+    }
+    if ((actions & PAIRING_ACTION_SEND_REQUEST) != 0) {
+        if (!send_pairing_mode_request())
+            ESP_LOGW(TAG, "Pairing mode request send failed");
+    }
+    if ((actions & PAIRING_ACTION_RECONNECT) != 0) {
+        ws_pairing_reconnect_pending = true;
+    }
+}
+
 // Background WS Monitor/Reconnect task
 static void ws_monitor_task(void *param) {
     while (true) {
+        process_pairing_actions();
+
         if (!network_has_ip() || !network_has_valid_time()) {
             stop_ws_if_started("monitor_network_not_ready");
             vTaskDelay(pdMS_TO_TICKS(1000));
@@ -971,6 +1087,7 @@ static void ws_monitor_task(void *param) {
 
         if (ws_connection_replacement_suppressed) {
             ws_reconnect_pending = false;
+            ws_pairing_reconnect_pending = false;
             if (ws_client_started)
                 stop_ws_if_started("monitor_connection_replaced");
             vTaskDelay(pdMS_TO_TICKS(1000));
@@ -978,9 +1095,25 @@ static void ws_monitor_task(void *param) {
         }
 
         if (ws_authentication_blocked) {
+            ws_pairing_reconnect_pending = false;
             stop_ws_if_started("monitor_authentication_blocked");
             vTaskDelay(pdMS_TO_TICKS(1000));
             continue;
+        }
+
+        if (ws_pairing_reconnect_pending) {
+            ws_pairing_reconnect_pending = false;
+            ws_reconnect_pending = false;
+            stop_ws_if_started("pairing_completed");
+            ws_reconnect_pending = false;
+
+            if (!ws_client_started) {
+                esp_err_t err = start_ws_if_network_ready("pairing_reconnect");
+                if (err != ESP_OK)
+                    ws_reconnect_pending = ws_reconnect_allowed();
+            } else {
+                ws_pairing_reconnect_pending = true;
+            }
         }
 
         if (ws_connected && ws_auth_pending && !ws_authenticated &&
@@ -1026,6 +1159,8 @@ static void ws_monitor_task(void *param) {
 
 void api_init() {
     ESP_LOGI(TAG, "API init started");
+    pairing_init();
+    ws_pairing_reconnect_pending = false;
     ws_connection_replacement_suppressed = false;
     network_set_backend_connected(false);
 
@@ -1124,7 +1259,7 @@ static BMOPlaybackResult download_and_play_mp3(const char *url) {
     int64_t content_length = esp_http_client_fetch_headers(http_client);
     int status_code = esp_http_client_get_status_code(http_client);
     char *content_type = NULL;
-    esp_err_t content_type_result = esp_http_client_get_header(
+    esp_err_t content_type_result = esp_http_client_get_response_header(
         http_client, "Content-Type", &content_type);
     bool content_type_valid = content_type_result == ESP_OK &&
         is_audio_mpeg_content_type(content_type);
@@ -1174,6 +1309,10 @@ static BMOPlaybackResult download_and_play_mp3(const char *url) {
     bool read_failed = false;
     uint32_t resync_bytes = 0;
     uint64_t received_bytes = 0;
+    uint32_t decoded_frames = 0;
+    uint64_t decoded_media_us = 0;
+    int64_t playback_wall_start_us = 0;
+    int64_t last_progress_log_us = 0;
     
     short *out_pcm = (short *)malloc(1152 * 2 * sizeof(short)); // Helix frame capacity
     if (out_pcm == NULL) {
@@ -1288,6 +1427,8 @@ static BMOPlaybackResult download_and_play_mp3(const char *url) {
             
             if (!playback_started) {
                 playback_started = true;
+                playback_wall_start_us = esp_timer_get_time();
+                last_progress_log_us = playback_wall_start_us;
                 playback_state = BMO_PLAYBACK_PLAYING;
                 setState(BMOState::SPEAKING);
                 display_face(FACE_HAPPY);
@@ -1298,6 +1439,24 @@ static BMOPlaybackResult download_and_play_mp3(const char *url) {
             if (!audio_play_raw(out_pcm, frameInfo.outputSamps, frameInfo.nChans, frameInfo.samprate)) {
                 result = BMO_PLAYBACK_PLAYBACK_FAILED;
                 break;
+            }
+
+            decoded_frames++;
+            uint32_t pcm_frames = (uint32_t)frameInfo.outputSamps / (uint32_t)frameInfo.nChans;
+            decoded_media_us += ((uint64_t)pcm_frames * 1000000ULL) /
+                                (uint32_t)frameInfo.samprate;
+
+            int64_t now_us = esp_timer_get_time();
+            if (now_us - last_progress_log_us >= 1000000LL) {
+                ESP_LOGI(TAG,
+                         "MP3 playback progress: frames=%lu media_ms=%llu wall_ms=%lld received=%llu/%lld bytes_left=%d",
+                         (unsigned long)decoded_frames,
+                         (unsigned long long)(decoded_media_us / 1000ULL),
+                         (long long)((now_us - playback_wall_start_us) / 1000LL),
+                         (unsigned long long)received_bytes,
+                         (long long)content_length,
+                         bytes_left);
+                last_progress_log_us = now_us;
             }
         }
         else if (err_decode == ERR_MP3_INDATA_UNDERFLOW) {
@@ -1345,6 +1504,19 @@ static BMOPlaybackResult download_and_play_mp3(const char *url) {
         }
     }
     
+    int64_t playback_wall_ms = playback_wall_start_us > 0
+        ? (esp_timer_get_time() - playback_wall_start_us) / 1000LL
+        : 0;
+    ESP_LOGI(TAG,
+             "MP3 playback end: result=%d frames=%lu media_ms=%llu wall_ms=%lld received=%llu/%lld bytes_left=%d",
+             (int)result,
+             (unsigned long)decoded_frames,
+             (unsigned long long)(decoded_media_us / 1000ULL),
+             (long long)playback_wall_ms,
+             (unsigned long long)received_bytes,
+             (long long)content_length,
+             bytes_left);
+
     // Clean up
     free(out_pcm);
     free(mp3_stream_buf);

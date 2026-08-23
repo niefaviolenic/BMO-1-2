@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "network.cpp" "state.cpp" "api.cpp" "wifi.cpp" "button.cpp" "wakeword.cpp" "audio.cpp" "display.cpp" "main.cpp"
+    SRCS "network.cpp" "state.cpp" "api.cpp" "wifi.cpp" "button.cpp" "wakeword.cpp" "audio.cpp" "display.cpp" "pairing.cpp" "main.cpp"
     INCLUDE_DIRS "."
     PRIV_INCLUDE_DIRS "${BMO_CREDENTIAL_INCLUDE_DIR}"
     REQUIRES

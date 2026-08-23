@@ -67,6 +67,30 @@ static bool display_on = false;
 static constexpr int FACE_CX = LCD_H_RES / 2;
 static constexpr int FACE_CY = LCD_V_RES / 2;
 
+static DisplayMode current_display_mode = DisplayMode::IDLE;
+static bool pairing_code_active = false;
+static char pairing_code[7] = {};
+
+static constexpr int PAIRING_DIGIT_WIDTH = 35;
+static constexpr int PAIRING_DIGIT_HEIGHT = 73;
+static constexpr int PAIRING_DIGIT_GAP = 7;
+static constexpr int PAIRING_SEGMENT_THICKNESS = 7;
+static constexpr int PAIRING_TOTAL_WIDTH =
+    6 * PAIRING_DIGIT_WIDTH + 5 * PAIRING_DIGIT_GAP;
+static constexpr int PAIRING_START_X =
+    (LCD_H_RES - PAIRING_TOTAL_WIDTH) / 2;
+static constexpr int PAIRING_START_Y =
+    (LCD_V_RES - PAIRING_DIGIT_HEIGHT) / 2;
+
+static_assert(
+    PAIRING_START_X >= 32 &&
+        PAIRING_START_X + PAIRING_TOTAL_WIDTH <= LCD_H_RES - 32,
+    "Pairing row must fit inside the user-horizontal face axis");
+static_assert(
+    PAIRING_START_Y >= 32 &&
+        PAIRING_START_Y + PAIRING_DIGIT_HEIGHT <= LCD_V_RES - 32,
+    "Pairing digit must fit inside the user-vertical face axis");
+
 //--------------------------------------------------
 
 static constexpr uint16_t rgb565(
@@ -454,6 +478,116 @@ static void draw_screen_base()
 
 //--------------------------------------------------
 
+static constexpr uint8_t SEGMENT_A = 1U << 0;
+static constexpr uint8_t SEGMENT_B = 1U << 1;
+static constexpr uint8_t SEGMENT_C = 1U << 2;
+static constexpr uint8_t SEGMENT_D = 1U << 3;
+static constexpr uint8_t SEGMENT_E = 1U << 4;
+static constexpr uint8_t SEGMENT_F = 1U << 5;
+static constexpr uint8_t SEGMENT_G = 1U << 6;
+
+static constexpr uint8_t DIGIT_SEGMENTS[10] = {
+    SEGMENT_A | SEGMENT_B | SEGMENT_C | SEGMENT_D | SEGMENT_E | SEGMENT_F,
+    SEGMENT_B | SEGMENT_C,
+    SEGMENT_A | SEGMENT_B | SEGMENT_D | SEGMENT_E | SEGMENT_G,
+    SEGMENT_A | SEGMENT_B | SEGMENT_C | SEGMENT_D | SEGMENT_G,
+    SEGMENT_B | SEGMENT_C | SEGMENT_F | SEGMENT_G,
+    SEGMENT_A | SEGMENT_C | SEGMENT_D | SEGMENT_F | SEGMENT_G,
+    SEGMENT_A | SEGMENT_C | SEGMENT_D | SEGMENT_E | SEGMENT_F | SEGMENT_G,
+    SEGMENT_A | SEGMENT_B | SEGMENT_C,
+    SEGMENT_A | SEGMENT_B | SEGMENT_C | SEGMENT_D | SEGMENT_E | SEGMENT_F | SEGMENT_G,
+    SEGMENT_A | SEGMENT_B | SEGMENT_C | SEGMENT_D | SEGMENT_F | SEGMENT_G,
+};
+
+static void pairing_fill_physical_rect(
+    int physical_x,
+    int physical_y,
+    int physical_width,
+    int physical_height,
+    uint16_t color)
+{
+    const int logical_x =
+        LCD_H_RES - physical_y - physical_height;
+    const int logical_y =
+        LCD_V_RES - physical_x - physical_width;
+
+    fill_rect(
+        logical_x,
+        logical_y,
+        physical_height,
+        physical_width,
+        color);
+}
+
+static void pairing_fill_user_rect(
+    int user_x,
+    int user_y,
+    int user_width,
+    int user_height,
+    uint16_t color)
+{
+    pairing_fill_physical_rect(
+        user_y,
+        user_x,
+        user_height,
+        user_width,
+        color);
+}
+
+static void draw_pairing_digit(
+    int x,
+    int y,
+    uint8_t digit)
+{
+    if(digit > 9)
+        return;
+
+    const uint8_t segments = DIGIT_SEGMENTS[digit];
+    const int vertical_height =
+        (PAIRING_DIGIT_HEIGHT - 3 * PAIRING_SEGMENT_THICKNESS) / 2;
+    const int middle_y =
+        y + (PAIRING_DIGIT_HEIGHT - PAIRING_SEGMENT_THICKNESS) / 2;
+    const int lower_vertical_y =
+        middle_y + PAIRING_SEGMENT_THICKNESS;
+    const int right_x =
+        x + PAIRING_DIGIT_WIDTH - PAIRING_SEGMENT_THICKNESS;
+    const int horizontal_width =
+        PAIRING_DIGIT_WIDTH - 2 * PAIRING_SEGMENT_THICKNESS;
+
+    if(segments & SEGMENT_A)
+        pairing_fill_user_rect(x + PAIRING_SEGMENT_THICKNESS, y, horizontal_width, PAIRING_SEGMENT_THICKNESS, COLOR_BLACK);
+    if(segments & SEGMENT_B)
+        pairing_fill_user_rect(right_x, y + PAIRING_SEGMENT_THICKNESS, PAIRING_SEGMENT_THICKNESS, vertical_height, COLOR_BLACK);
+    if(segments & SEGMENT_C)
+        pairing_fill_user_rect(right_x, lower_vertical_y, PAIRING_SEGMENT_THICKNESS, vertical_height, COLOR_BLACK);
+    if(segments & SEGMENT_D)
+        pairing_fill_user_rect(x + PAIRING_SEGMENT_THICKNESS, y + PAIRING_DIGIT_HEIGHT - PAIRING_SEGMENT_THICKNESS, horizontal_width, PAIRING_SEGMENT_THICKNESS, COLOR_BLACK);
+    if(segments & SEGMENT_E)
+        pairing_fill_user_rect(x, lower_vertical_y, PAIRING_SEGMENT_THICKNESS, vertical_height, COLOR_BLACK);
+    if(segments & SEGMENT_F)
+        pairing_fill_user_rect(x, y + PAIRING_SEGMENT_THICKNESS, PAIRING_SEGMENT_THICKNESS, vertical_height, COLOR_BLACK);
+    if(segments & SEGMENT_G)
+        pairing_fill_user_rect(x + PAIRING_SEGMENT_THICKNESS, middle_y, horizontal_width, PAIRING_SEGMENT_THICKNESS, COLOR_BLACK);
+}
+
+static void draw_pairing_overlay_locked()
+{
+    display_wake();
+    draw_screen_base();
+
+    for(int index = 0; index < 6; ++index)
+    {
+        const int x =
+            PAIRING_START_X + index * (PAIRING_DIGIT_WIDTH + PAIRING_DIGIT_GAP);
+        draw_pairing_digit(
+            x,
+            PAIRING_START_Y,
+            static_cast<uint8_t>(pairing_code[index] - '0'));
+    }
+}
+
+//--------------------------------------------------
+
 static void clear_face_panel()
 {
     fill_round_rect(32, 32, 256, 176, 18, COLOR_FACE);
@@ -725,6 +859,89 @@ static void face_confused()
 
 //--------------------------------------------------
 
+static void draw_face_locked(
+    Face face)
+{
+    display_wake();
+    draw_screen_base();
+
+    switch(face)
+    {
+        case FACE_HAPPY:
+            face_happy();
+            break;
+
+        case FACE_CUTE:
+            face_cute();
+            break;
+
+        case FACE_EXCITED:
+            face_excited();
+            break;
+
+        case FACE_SLEEPY:
+            face_sleepy();
+            break;
+
+        case FACE_ANGRY:
+            face_angry();
+            break;
+
+        case FACE_SAD:
+            face_sad();
+            break;
+
+        case FACE_WINK:
+            face_wink();
+            break;
+
+        case FACE_SURPRISED:
+            face_surprised();
+            break;
+
+        case FACE_LOVE:
+            face_love();
+            break;
+
+        case FACE_CONFUSED:
+            face_confused();
+            break;
+
+        default:
+            face_excited();
+            break;
+    }
+
+    ESP_LOGI(TAG, "Face : %d", (int)face);
+}
+
+//--------------------------------------------------
+
+static bool is_six_digit_pairing_code(
+    const char *code)
+{
+    if(code == NULL || strlen(code) != 6)
+        return false;
+
+    for(int index = 0; index < 6; ++index)
+    {
+        if(code[index] < '0' || code[index] > '9')
+            return false;
+    }
+    return true;
+}
+
+//--------------------------------------------------
+
+static void secure_clear_pairing_code_locked()
+{
+    volatile char *cursor = pairing_code;
+    for(size_t index = 0; index < sizeof(pairing_code); ++index)
+        cursor[index] = '\0';
+}
+
+//--------------------------------------------------
+
 void display_init()
 {
     ESP_LOGI(TAG, "Initialize ILI9341 landscape");
@@ -908,76 +1125,117 @@ void display_face(
         return;
     }
 
-    display_wake();
-    draw_screen_base();
-
-    switch(face)
+    if(current_display_mode == DisplayMode::IDLE && pairing_code_active)
     {
-        case FACE_HAPPY:
-            face_happy();
-            break;
-
-        case FACE_CUTE:
-            face_cute();
-            break;
-
-        case FACE_EXCITED:
-            face_excited();
-            break;
-
-        case FACE_SLEEPY:
-            face_sleepy();
-            break;
-
-        case FACE_ANGRY:
-            face_angry();
-            break;
-
-        case FACE_SAD:
-            face_sad();
-            break;
-
-        case FACE_WINK:
-            face_wink();
-            break;
-
-        case FACE_SURPRISED:
-            face_surprised();
-            break;
-
-        case FACE_LOVE:
-            face_love();
-            break;
-
-        case FACE_CONFUSED:
-            face_confused();
-            break;
-
-        default:
-            face_excited();
-            break;
+        draw_pairing_overlay_locked();
     }
-
-    ESP_LOGI(TAG, "Face : %d", (int)face);
+    else
+    {
+        draw_face_locked(face);
+    }
 
     unlock_display();
 }
 
 void display_set_mode(DisplayMode mode)
 {
-    switch (mode)
+    if(!lock_display(pdMS_TO_TICKS(1000)))
+        return;
+
+    current_display_mode = mode;
+
+    if(!display_ready)
+    {
+        unlock_display();
+        return;
+    }
+
+    if(mode == DisplayMode::IDLE && pairing_code_active)
+    {
+        draw_pairing_overlay_locked();
+        unlock_display();
+        return;
+    }
+
+    switch(mode)
     {
         case DisplayMode::IDLE:
-            display_face(FACE_HAPPY);
+            draw_face_locked(FACE_HAPPY);
             break;
         case DisplayMode::THINKING:
-            display_face(FACE_CONFUSED);
+            draw_face_locked(FACE_CONFUSED);
             break;
         case DisplayMode::SPEAKING:
-            display_face(FACE_HAPPY);
+            draw_face_locked(FACE_HAPPY);
             break;
         case DisplayMode::ERROR:
-            display_face(FACE_SAD);
+            draw_face_locked(FACE_SAD);
             break;
     }
+
+    unlock_display();
+}
+
+bool display_set_pairing_code(
+    const char code[7])
+{
+    if(!is_six_digit_pairing_code(code))
+        return false;
+
+    if(!lock_display(pdMS_TO_TICKS(1000)))
+        return false;
+
+    if(pairing_code_active && memcmp(pairing_code, code, sizeof(pairing_code)) == 0)
+    {
+        unlock_display();
+        return true;
+    }
+
+    secure_clear_pairing_code_locked();
+    memcpy(pairing_code, code, 6);
+    pairing_code[6] = '\0';
+    pairing_code_active = true;
+
+    if(display_ready && current_display_mode == DisplayMode::IDLE)
+        draw_pairing_overlay_locked();
+
+    unlock_display();
+    return true;
+}
+
+void display_clear_pairing_code()
+{
+    if(!lock_display(pdMS_TO_TICKS(1000)))
+        return;
+
+    if(!pairing_code_active)
+    {
+        secure_clear_pairing_code_locked();
+        unlock_display();
+        return;
+    }
+
+    const bool redraw_idle_face =
+        display_ready && current_display_mode == DisplayMode::IDLE;
+    secure_clear_pairing_code_locked();
+    pairing_code_active = false;
+
+    if(redraw_idle_face)
+        draw_face_locked(FACE_HAPPY);
+
+    unlock_display();
+}
+
+bool display_pairing_code_is_visible()
+{
+    if(!lock_display(pdMS_TO_TICKS(100)))
+        return false;
+
+    const bool visible =
+        display_ready &&
+        display_on &&
+        pairing_code_active &&
+        current_display_mode == DisplayMode::IDLE;
+    unlock_display();
+    return visible;
 }

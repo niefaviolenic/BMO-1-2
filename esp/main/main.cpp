@@ -46,9 +46,21 @@ extern "C" void app_main()
     network_init();
 
     display_init();
-    display_sleep();
+    ESP_LOGI(TAG, "OUTPUT_DIAG LCD begin: red,yellow,blue,white,happy");
+    TickType_t lcd_diag_start = xTaskGetTickCount();
+    display_test_pattern();
+    display_face(FACE_HAPPY);
+    ESP_LOGI(TAG, "OUTPUT_DIAG LCD end: elapsed_ms=%lu",
+             (unsigned long)((xTaskGetTickCount() - lcd_diag_start) * portTICK_PERIOD_MS));
 
     audio_init();
+    audio_setVolume(0);
+    ESP_LOGI(TAG, "OUTPUT_DIAG speaker begin: volume=%d", audio_getVolume());
+    TickType_t speaker_diag_start = xTaskGetTickCount();
+    audio_playHello();
+    ESP_LOGI(TAG, "OUTPUT_DIAG speaker end: elapsed_ms=%lu",
+             (unsigned long)((xTaskGetTickCount() - speaker_diag_start) * portTICK_PERIOD_MS));
+
     button_init();
     
     // Inisialisasi koneksi WiFi
