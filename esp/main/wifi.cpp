@@ -110,8 +110,8 @@ static void start_time_sync_after_ip()
 }
 
 // Ganti dengan SSID dan Password WiFi kamu
-#define BMO_WIFI_SSID "Jagurawi"
-#define BMO_WIFI_PASS "loanakbengkel?"
+#define BMO_WIFI_SSID "pesatu"
+#define BMO_WIFI_PASS "kutungguaku"
 
 static const char *wifi_disconnect_reason_to_string(uint8_t reason)
 {

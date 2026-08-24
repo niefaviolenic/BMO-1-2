@@ -66,15 +66,52 @@ static bool display_on = false;
 
 static constexpr int FACE_CX = LCD_H_RES / 2;
 static constexpr int FACE_CY = LCD_V_RES / 2;
+static constexpr int TOUCH_FACE_COUNT =
+    static_cast<int>(FACE_CONFUSED) + 1;
 
 static DisplayMode current_display_mode = DisplayMode::IDLE;
+static Face current_touch_face = FACE_HAPPY;
 static bool pairing_code_active = false;
 static char pairing_code[7] = {};
 
+static const char *face_name(Face face)
+{
+    switch(face)
+    {
+        case FACE_HAPPY: return "HAPPY";
+        case FACE_CUTE: return "CUTE";
+        case FACE_EXCITED: return "EXCITED";
+        case FACE_SLEEPY: return "SLEEPY";
+        case FACE_ANGRY: return "ANGRY";
+        case FACE_SAD: return "SAD";
+        case FACE_WINK: return "WINK";
+        case FACE_SURPRISED: return "SURPRISED";
+        case FACE_LOVE: return "LOVE";
+        case FACE_CONFUSED: return "CONFUSED";
+        default: return "UNKNOWN";
+    }
+}
+
+static const char *display_mode_name(DisplayMode mode)
+{
+    switch(mode)
+    {
+        case DisplayMode::IDLE: return "IDLE";
+        case DisplayMode::LISTENING: return "LISTENING";
+        case DisplayMode::THINKING: return "THINKING";
+        case DisplayMode::SPEAKING: return "SPEAKING";
+        case DisplayMode::ERROR: return "ERROR";
+        default: return "UNKNOWN";
+    }
+}
+
+static constexpr int PAIRING_GLYPH_COLUMNS = 5;
+static constexpr int PAIRING_GLYPH_ROWS = 7;
+static constexpr int PAIRING_GLYPH_SCALE_X = 7;
+static constexpr int PAIRING_GLYPH_SCALE_Y = 9;
 static constexpr int PAIRING_DIGIT_WIDTH = 35;
-static constexpr int PAIRING_DIGIT_HEIGHT = 73;
+static constexpr int PAIRING_DIGIT_HEIGHT = 63;
 static constexpr int PAIRING_DIGIT_GAP = 7;
-static constexpr int PAIRING_SEGMENT_THICKNESS = 7;
 static constexpr int PAIRING_TOTAL_WIDTH =
     6 * PAIRING_DIGIT_WIDTH + 5 * PAIRING_DIGIT_GAP;
 static constexpr int PAIRING_START_X =
@@ -478,59 +515,38 @@ static void draw_screen_base()
 
 //--------------------------------------------------
 
-static constexpr uint8_t SEGMENT_A = 1U << 0;
-static constexpr uint8_t SEGMENT_B = 1U << 1;
-static constexpr uint8_t SEGMENT_C = 1U << 2;
-static constexpr uint8_t SEGMENT_D = 1U << 3;
-static constexpr uint8_t SEGMENT_E = 1U << 4;
-static constexpr uint8_t SEGMENT_F = 1U << 5;
-static constexpr uint8_t SEGMENT_G = 1U << 6;
-
-static constexpr uint8_t DIGIT_SEGMENTS[10] = {
-    SEGMENT_A | SEGMENT_B | SEGMENT_C | SEGMENT_D | SEGMENT_E | SEGMENT_F,
-    SEGMENT_B | SEGMENT_C,
-    SEGMENT_A | SEGMENT_B | SEGMENT_D | SEGMENT_E | SEGMENT_G,
-    SEGMENT_A | SEGMENT_B | SEGMENT_C | SEGMENT_D | SEGMENT_G,
-    SEGMENT_B | SEGMENT_C | SEGMENT_F | SEGMENT_G,
-    SEGMENT_A | SEGMENT_C | SEGMENT_D | SEGMENT_F | SEGMENT_G,
-    SEGMENT_A | SEGMENT_C | SEGMENT_D | SEGMENT_E | SEGMENT_F | SEGMENT_G,
-    SEGMENT_A | SEGMENT_B | SEGMENT_C,
-    SEGMENT_A | SEGMENT_B | SEGMENT_C | SEGMENT_D | SEGMENT_E | SEGMENT_F | SEGMENT_G,
-    SEGMENT_A | SEGMENT_B | SEGMENT_C | SEGMENT_D | SEGMENT_F | SEGMENT_G,
+// Five-by-seven sans-serif-style bitmap glyphs. Each row uses its low five
+// bits, with the leftmost glyph column in bit 4. They are intentionally
+// rendered as ordinary block glyphs instead of seven-segment strokes.
+static constexpr uint8_t PAIRING_NUMERIC_GLYPHS[10][PAIRING_GLYPH_ROWS] = {
+    {0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E},
+    {0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E},
+    {0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F},
+    {0x1E, 0x01, 0x01, 0x0E, 0x01, 0x01, 0x1E},
+    {0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02},
+    {0x1F, 0x10, 0x10, 0x1E, 0x01, 0x01, 0x1E},
+    {0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E},
+    {0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08},
+    {0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E},
+    {0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C},
 };
 
-static void pairing_fill_physical_rect(
-    int physical_x,
-    int physical_y,
-    int physical_width,
-    int physical_height,
+static void pairing_fill_x_mirrored_rect(
+    int x,
+    int y,
+    int width,
+    int height,
     uint16_t color)
 {
-    const int logical_x =
-        LCD_H_RES - physical_y - physical_height;
-    const int logical_y =
-        LCD_V_RES - physical_x - physical_width;
+    const int compensated_x =
+        LCD_H_RES - x - width;
+    const int compensated_y = y;
 
     fill_rect(
-        logical_x,
-        logical_y,
-        physical_height,
-        physical_width,
-        color);
-}
-
-static void pairing_fill_user_rect(
-    int user_x,
-    int user_y,
-    int user_width,
-    int user_height,
-    uint16_t color)
-{
-    pairing_fill_physical_rect(
-        user_y,
-        user_x,
-        user_height,
-        user_width,
+        compensated_x,
+        compensated_y,
+        width,
+        height,
         color);
 }
 
@@ -542,32 +558,23 @@ static void draw_pairing_digit(
     if(digit > 9)
         return;
 
-    const uint8_t segments = DIGIT_SEGMENTS[digit];
-    const int vertical_height =
-        (PAIRING_DIGIT_HEIGHT - 3 * PAIRING_SEGMENT_THICKNESS) / 2;
-    const int middle_y =
-        y + (PAIRING_DIGIT_HEIGHT - PAIRING_SEGMENT_THICKNESS) / 2;
-    const int lower_vertical_y =
-        middle_y + PAIRING_SEGMENT_THICKNESS;
-    const int right_x =
-        x + PAIRING_DIGIT_WIDTH - PAIRING_SEGMENT_THICKNESS;
-    const int horizontal_width =
-        PAIRING_DIGIT_WIDTH - 2 * PAIRING_SEGMENT_THICKNESS;
+    for(int row = 0; row < PAIRING_GLYPH_ROWS; ++row)
+    {
+        const uint8_t bits = PAIRING_NUMERIC_GLYPHS[digit][row];
 
-    if(segments & SEGMENT_A)
-        pairing_fill_user_rect(x + PAIRING_SEGMENT_THICKNESS, y, horizontal_width, PAIRING_SEGMENT_THICKNESS, COLOR_BLACK);
-    if(segments & SEGMENT_B)
-        pairing_fill_user_rect(right_x, y + PAIRING_SEGMENT_THICKNESS, PAIRING_SEGMENT_THICKNESS, vertical_height, COLOR_BLACK);
-    if(segments & SEGMENT_C)
-        pairing_fill_user_rect(right_x, lower_vertical_y, PAIRING_SEGMENT_THICKNESS, vertical_height, COLOR_BLACK);
-    if(segments & SEGMENT_D)
-        pairing_fill_user_rect(x + PAIRING_SEGMENT_THICKNESS, y + PAIRING_DIGIT_HEIGHT - PAIRING_SEGMENT_THICKNESS, horizontal_width, PAIRING_SEGMENT_THICKNESS, COLOR_BLACK);
-    if(segments & SEGMENT_E)
-        pairing_fill_user_rect(x, lower_vertical_y, PAIRING_SEGMENT_THICKNESS, vertical_height, COLOR_BLACK);
-    if(segments & SEGMENT_F)
-        pairing_fill_user_rect(x, y + PAIRING_SEGMENT_THICKNESS, PAIRING_SEGMENT_THICKNESS, vertical_height, COLOR_BLACK);
-    if(segments & SEGMENT_G)
-        pairing_fill_user_rect(x + PAIRING_SEGMENT_THICKNESS, middle_y, horizontal_width, PAIRING_SEGMENT_THICKNESS, COLOR_BLACK);
+        for(int column = 0; column < PAIRING_GLYPH_COLUMNS; ++column)
+        {
+            if((bits & (1U << (PAIRING_GLYPH_COLUMNS - 1 - column))) != 0)
+            {
+                pairing_fill_x_mirrored_rect(
+                    x + column * PAIRING_GLYPH_SCALE_X,
+                    y + row * PAIRING_GLYPH_SCALE_Y,
+                    PAIRING_GLYPH_SCALE_X,
+                    PAIRING_GLYPH_SCALE_Y,
+                    COLOR_BLACK);
+            }
+        }
+    }
 }
 
 static void draw_pairing_overlay_locked()
@@ -712,6 +719,19 @@ static void mouth_flat()
 
 //--------------------------------------------------
 
+static void draw_microphone_indicator()
+{
+    const int x = FACE_CX + 82;
+    const int y = FACE_CY + 28;
+
+    fill_round_rect(x - 7, y, 14, 24, 7, COLOR_BLUE);
+    thick_line(x - 15, y + 24, x + 15, y + 24, COLOR_BLUE, 3);
+    thick_line(x, y + 24, x, y + 35, COLOR_BLUE, 3);
+    fill_round_rect(x - 8, y + 34, 16, 4, 2, COLOR_BLUE);
+}
+
+//--------------------------------------------------
+
 static void face_happy()
 {
     clear_face_panel();
@@ -734,6 +754,22 @@ static void face_cute()
 
     mouth_tiny();
     cheek_lines();
+}
+
+//--------------------------------------------------
+
+static void face_listening()
+{
+    clear_face_panel();
+
+    eye_big_cute(FACE_CX - 55, FACE_CY - 35);
+    eye_big_cute(FACE_CX + 55, FACE_CY - 35);
+
+    thick_line(FACE_CX - 78, FACE_CY - 68, FACE_CX - 34, FACE_CY - 60, COLOR_BLACK, 3);
+    thick_line(FACE_CX + 34, FACE_CY - 60, FACE_CX + 78, FACE_CY - 68, COLOR_BLACK, 3);
+
+    mouth_open_small();
+    draw_microphone_indicator();
 }
 
 //--------------------------------------------------
@@ -912,7 +948,7 @@ static void draw_face_locked(
             break;
     }
 
-    ESP_LOGI(TAG, "Face : %d", (int)face);
+    ESP_LOGI(TAG, "Face actually rendered: %s(%d)", face_name(face), (int)face);
 }
 
 //--------------------------------------------------
@@ -1137,12 +1173,64 @@ void display_face(
     unlock_display();
 }
 
+Face display_next_touch_face()
+{
+    Face next_face = current_touch_face;
+
+    if(!lock_display(pdMS_TO_TICKS(1000)))
+        return next_face;
+
+    const Face previous_face = current_touch_face;
+    const int next_face_index =
+        (static_cast<int>(current_touch_face) + 1) % TOUCH_FACE_COUNT;
+    current_touch_face = static_cast<Face>(next_face_index);
+    next_face = current_touch_face;
+
+    if(display_ready && current_display_mode == DisplayMode::IDLE)
+    {
+        if(pairing_code_active)
+            draw_pairing_overlay_locked();
+        else
+            draw_face_locked(current_touch_face);
+    }
+
+    ESP_LOGI(
+        TAG,
+        "Idle face advance: before=%s(%d) after=%s(%d) render_requested=%d mode=%s",
+        face_name(previous_face),
+        (int)previous_face,
+        face_name(current_touch_face),
+        (int)current_touch_face,
+        display_ready && current_display_mode == DisplayMode::IDLE ? 1 : 0,
+        display_mode_name(current_display_mode));
+
+    unlock_display();
+    return next_face;
+}
+
+Face display_get_idle_face()
+{
+    Face face = current_touch_face;
+
+    if(!lock_display(pdMS_TO_TICKS(1000)))
+        return face;
+
+    face = current_touch_face;
+    unlock_display();
+    return face;
+}
+
 void display_set_mode(DisplayMode mode)
 {
     if(!lock_display(pdMS_TO_TICKS(1000)))
         return;
 
     current_display_mode = mode;
+    ESP_LOGI(
+        TAG,
+        "Display mode=%s(%d)",
+        display_mode_name(mode),
+        (int)mode);
 
     if(!display_ready)
     {
@@ -1160,7 +1248,13 @@ void display_set_mode(DisplayMode mode)
     switch(mode)
     {
         case DisplayMode::IDLE:
-            draw_face_locked(FACE_HAPPY);
+            draw_face_locked(current_touch_face);
+            break;
+        case DisplayMode::LISTENING:
+            display_wake();
+            draw_screen_base();
+            face_listening();
+            ESP_LOGI(TAG, "Face actually rendered: LISTENING");
             break;
         case DisplayMode::THINKING:
             draw_face_locked(FACE_CONFUSED);
@@ -1221,7 +1315,7 @@ void display_clear_pairing_code()
     pairing_code_active = false;
 
     if(redraw_idle_face)
-        draw_face_locked(FACE_HAPPY);
+        draw_face_locked(current_touch_face);
 
     unlock_display();
 }

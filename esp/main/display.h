@@ -18,6 +18,7 @@ enum Face
 enum class DisplayMode
 {
     IDLE,
+    LISTENING,
     THINKING,
     SPEAKING,
     ERROR
@@ -28,6 +29,10 @@ void display_init();
 void display_sleep();
 
 void display_face(Face face);
+
+// Touch follows the Face declaration order and wraps after FACE_CONFUSED.
+Face display_next_touch_face();
+Face display_get_idle_face();
 
 void display_set_mode(DisplayMode mode);
 

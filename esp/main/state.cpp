@@ -17,14 +17,21 @@ static constexpr uint32_t RECORDING_STATE_WATCHDOG_MS = 65000;
 BMOState currentState = BMOState::IDLE;
 static portMUX_TYPE state_mux = portMUX_INITIALIZER_UNLOCKED;
 
-void setState(BMOState state)
+static const char *state_name(BMOState state)
 {
-    portENTER_CRITICAL(&state_mux);
-    currentState = state;
-    portEXIT_CRITICAL(&state_mux);
+    switch(state)
+    {
+        case BMOState::IDLE: return "IDLE";
+        case BMOState::RECORDING: return "RECORDING";
+        case BMOState::THINKING: return "THINKING";
+        case BMOState::SPEAKING: return "SPEAKING";
+        case BMOState::ERROR_STATE: return "ERROR";
+        default: return "UNKNOWN";
+    }
+}
 
-    ESP_LOGI(TAG, "State changed to %d", (int)state);
-
+static void apply_state_display(BMOState state)
+{
     switch (state) {
         case BMOState::IDLE:
             display_set_mode(DisplayMode::IDLE);
@@ -42,6 +49,61 @@ void setState(BMOState state)
             display_set_mode(DisplayMode::ERROR);
             break;
     }
+}
+
+void setState(BMOState state)
+{
+    BMOState previous_state;
+
+    portENTER_CRITICAL(&state_mux);
+    previous_state = currentState;
+    currentState = state;
+    portEXIT_CRITICAL(&state_mux);
+
+    if(previous_state != state)
+    {
+        ESP_LOGI(
+            TAG,
+            "State: %s -> %s",
+            state_name(previous_state),
+            state_name(state));
+    }
+    apply_state_display(state);
+}
+
+bool trySetState(BMOState expected, BMOState next)
+{
+    bool changed = false;
+    BMOState actual_state;
+
+    portENTER_CRITICAL(&state_mux);
+    actual_state = currentState;
+    if(actual_state == expected)
+    {
+        currentState = next;
+        changed = true;
+    }
+    portEXIT_CRITICAL(&state_mux);
+
+    if(!changed)
+    {
+        ESP_LOGW(
+            TAG,
+            "State transition rejected: expected=%s actual=%s next=%s",
+            state_name(expected),
+            state_name(actual_state),
+            state_name(next));
+        return false;
+    }
+
+    ESP_LOGI(
+        TAG,
+        "State: %s -> %s",
+        state_name(expected),
+        state_name(next));
+    apply_state_display(next);
+
+    return true;
 }
 
 BMOState getState()
@@ -93,6 +155,10 @@ static void bmo_state_machine_task(void *pvParameters)
 
                     vTaskDelay(pdMS_TO_TICKS(50));
                 }
+
+                // Recording is terminal now; release the local listening UI
+                // before any backend request can take over with thinking.
+                display_set_mode(DisplayMode::IDLE);
 
                 RecordingStatus recording_status =
                     get_recording_status();

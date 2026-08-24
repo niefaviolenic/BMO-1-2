@@ -17,7 +17,7 @@ enum class RecordingStatus : uint8_t
 };
 
 void wakeword_init();
-void wakeword_task();
+bool wakeword_task();
 
 bool start_recording();
 bool is_recording();

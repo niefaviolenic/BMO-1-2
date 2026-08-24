@@ -20,15 +20,50 @@
 
 #define VOLUME_STEP 5
 #define BUTTON_REPEAT_US 180000LL
-#define TOUCH_COOLDOWN_US 500000LL
+#define TOUCH_DEBOUNCE_US 30000LL
 
 static const char *TAG="BUTTON";
 
 static int64_t last_up_us = 0;
 static int64_t last_down_us = 0;
-static int64_t last_touch_us = 0;
 
-static bool last_touch_level = false;
+enum class TouchLifecycleState
+{
+    TOUCH_ARMED,
+    TOUCH_CONSUMED,
+    TOUCH_BOOT_HIGH_LOCKOUT
+};
+
+static TouchLifecycleState touch_state =
+    TouchLifecycleState::TOUCH_ARMED;
+static bool touch_candidate_level = false;
+static bool touch_stable_level = false;
+static int64_t touch_candidate_since_us = 0;
+static int64_t last_touch_diag_us = 0;
+
+static const char *touch_lifecycle_name(TouchLifecycleState state)
+{
+    switch(state)
+    {
+        case TouchLifecycleState::TOUCH_ARMED: return "ARMED";
+        case TouchLifecycleState::TOUCH_CONSUMED: return "CONSUMED";
+        case TouchLifecycleState::TOUCH_BOOT_HIGH_LOCKOUT: return "BOOT_HIGH_LOCKOUT";
+        default: return "UNKNOWN";
+    }
+}
+
+static const char *bmo_state_name(BMOState state)
+{
+    switch(state)
+    {
+        case BMOState::IDLE: return "IDLE";
+        case BMOState::RECORDING: return "RECORDING";
+        case BMOState::THINKING: return "THINKING";
+        case BMOState::SPEAKING: return "SPEAKING";
+        case BMOState::ERROR_STATE: return "ERROR";
+        default: return "UNKNOWN";
+    }
+}
 
 //--------------------------------------------------
 
@@ -60,6 +95,25 @@ void button_init()
     ESP_ERROR_CHECK(
         gpio_config(
             &button_config));
+
+    const int64_t now = esp_timer_get_time();
+    const bool touch_level = gpio_get_level(TOUCH_PIN) == 1;
+
+    // Synchronize with the physical level at boot. A HIGH input is treated
+    // as already consumed until a complete stable release is observed.
+    touch_candidate_level = touch_level;
+    touch_stable_level = touch_level;
+    touch_candidate_since_us = now;
+    touch_state = touch_level ?
+        TouchLifecycleState::TOUCH_BOOT_HIGH_LOCKOUT :
+        TouchLifecycleState::TOUCH_ARMED;
+
+    ESP_LOGI(
+        TAG,
+        "Touch init: raw=%d stable=%d lifecycle=%s",
+        touch_level ? 1 : 0,
+        touch_stable_level ? 1 : 0,
+        touch_lifecycle_name(touch_state));
 
     ESP_LOGI(
         TAG,
@@ -108,21 +162,93 @@ void button_update()
     bool touch_level =
         gpio_get_level(TOUCH_PIN) == 1;
 
-    if(touch_level &&
-       !last_touch_level &&
-       now - last_touch_us > TOUCH_COOLDOWN_US)
+    if(now - last_touch_diag_us >= 2000000LL)
     {
-        last_touch_us = now;
+        last_touch_diag_us = now;
+        ESP_LOGI(
+            TAG,
+            "Touch sample: raw=%d candidate=%d stable=%d lifecycle=%s state=%s",
+            touch_level ? 1 : 0,
+            touch_candidate_level ? 1 : 0,
+            touch_stable_level ? 1 : 0,
+            touch_lifecycle_name(touch_state),
+            bmo_state_name(getState()));
+    }
+
+    if(touch_level != touch_candidate_level)
+    {
+        const bool previous_level = touch_candidate_level;
+        touch_candidate_level = touch_level;
+        touch_candidate_since_us = now;
 
         ESP_LOGI(
             TAG,
-            "Touch detected");
-
-        if (getState() == BMOState::IDLE)
-        {
-            wakeword_task();
-        }
+            "Touch raw transition: old=%d new=%d",
+            previous_level ? 1 : 0,
+            touch_level ? 1 : 0);
     }
 
-    last_touch_level = touch_level;
+    if(touch_candidate_level != touch_stable_level &&
+       now - touch_candidate_since_us >= TOUCH_DEBOUNCE_US)
+    {
+        touch_stable_level = touch_candidate_level;
+
+        ESP_LOGI(
+            TAG,
+            "Touch stable: level=%d",
+            touch_stable_level ? 1 : 0);
+
+        if(touch_stable_level)
+        {
+            if(touch_state == TouchLifecycleState::TOUCH_ARMED)
+            {
+                touch_state = TouchLifecycleState::TOUCH_CONSUMED;
+                ESP_LOGI(
+                    TAG,
+                    "Touch lifecycle: %s",
+                    touch_lifecycle_name(touch_state));
+
+                if(getState() == BMOState::IDLE)
+                {
+                    const BMOState state_before = getState();
+                    if(wakeword_task())
+                    {
+                        const Face face_before = display_get_idle_face();
+                        const Face face_after = display_next_touch_face();
+
+                        ESP_LOGI(
+                            TAG,
+                            "Touch accepted: BMO state before=%s Face before=%d Face after=%d Face render requested=%d",
+                            bmo_state_name(state_before),
+                            (int)face_before,
+                            (int)face_after,
+                            1);
+                    }
+                    else
+                    {
+                        ESP_LOGW(
+                            TAG,
+                            "Touch rejected: state admission failed before face advance");
+                    }
+                }
+                else
+                {
+                    ESP_LOGW(
+                        TAG,
+                        "Touch rejected: state=%s (not IDLE)",
+                        bmo_state_name(getState()));
+                }
+            }
+        }
+        else
+        {
+            // Only a stable LOW release re-arms the physical input. This is
+            // also the boot-high lockout exit path.
+            touch_state = TouchLifecycleState::TOUCH_ARMED;
+            ESP_LOGI(
+                TAG,
+                "Touch lifecycle: %s",
+                touch_lifecycle_name(touch_state));
+        }
+    }
 }

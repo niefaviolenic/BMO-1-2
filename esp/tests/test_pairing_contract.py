@@ -132,6 +132,33 @@ class PairingControllerTest(unittest.TestCase):
         ):
             self.assertNotIn(forbidden_operation, source)
 
+    def test_pairing_code_validation_accepts_only_six_numeric_digits(self) -> None:
+        source = self.read_required(PAIRING_SOURCE)
+        validator = function_body(
+            source,
+            r"bool\s+is_six_digit_code\s*\([^)]*\)",
+        )
+
+        self.assertIn("strlen(code) != 6", validator)
+        self.assertIn("is_ascii_digit(code[index])", validator)
+
+        digit_validator = function_body(
+            source,
+            r"bool\s+is_ascii_digit\s*\([^)]*\)",
+        )
+        self.assertRegex(digit_validator, r"value\s*>=\s*'0'")
+        self.assertRegex(digit_validator, r"value\s*<=\s*'9'")
+
+    def test_pairing_code_is_stored_and_consumed_in_backend_order(self) -> None:
+        source = self.read_required(PAIRING_SOURCE)
+        code_handler = function_body(
+            source,
+            r"bool\s+pairing_on_code\s*\([^)]*\)",
+        )
+
+        self.assertIn("std::memcpy(s_controller.snapshot.code, code, 6)", code_handler)
+        self.assertNotRegex(code_handler, r"reverse|strrev|code\[5\s*-\s*index\]")
+
     def test_all_state_transitions_and_firmware_timers_are_implemented(self) -> None:
         source = self.read_required(PAIRING_SOURCE)
 
@@ -175,6 +202,52 @@ class PairingDisplayOverlayTest(unittest.TestCase):
         self.assertIsNotNone(match, f"integer constant is missing: {name}")
         return int(match.group(1))
 
+    def read_pairing_glyphs(self, source: str) -> tuple[tuple[int, ...], ...]:
+        match = re.search(
+            r"PAIRING_NUMERIC_GLYPHS\s*\[\s*10\s*\]\s*"
+            r"\[\s*PAIRING_GLYPH_ROWS\s*\]\s*=\s*\{(?P<body>.*?)\};",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(match, "pairing glyph table is missing")
+        rows = re.findall(r"\{([^{}]*)\}", match.group("body"))
+        self.assertEqual(len(rows), 10, "pairing glyph table must contain ten digits")
+
+        return tuple(
+            tuple(int(value, 0) for value in re.findall(r"0[xX][0-9A-Fa-f]+|\d+", row))
+            for row in rows
+        )
+
+    def expected_pairing_glyphs(self) -> tuple[tuple[str, ...], ...]:
+        return (
+            ("01110", "10001", "10011", "10101", "11001", "10001", "01110"),
+            ("00100", "01100", "00100", "00100", "00100", "00100", "01110"),
+            ("01110", "10001", "00001", "00010", "00100", "01000", "11111"),
+            ("11110", "00001", "00001", "01110", "00001", "00001", "11110"),
+            ("00010", "00110", "01010", "10010", "11111", "00010", "00010"),
+            ("11111", "10000", "10000", "11110", "00001", "00001", "11110"),
+            ("00110", "01000", "10000", "11110", "10001", "10001", "01110"),
+            ("11111", "00001", "00010", "00100", "01000", "01000", "01000"),
+            ("01110", "10001", "10001", "01110", "10001", "10001", "01110"),
+            ("01110", "10001", "10001", "01111", "00001", "00010", "01100"),
+        )
+
+    def rasterize_pairing_glyph(
+        self,
+        glyph: tuple[int, ...],
+        columns: int,
+        scale_x: int,
+        scale_y: int,
+    ) -> tuple[str, ...]:
+        matrix: list[str] = []
+        for bits in glyph:
+            row = "".join(
+                ("#" if (bits & (1 << (columns - 1 - column))) != 0 else ".") * scale_x
+                for column in range(columns)
+            )
+            matrix.extend([row] * scale_y)
+        return tuple(matrix)
+
     def test_display_exposes_pairing_overlay_api(self) -> None:
         header = self.read_required(DISPLAY_HEADER)
 
@@ -190,13 +263,125 @@ class PairingDisplayOverlayTest(unittest.TestCase):
 
         self.assertIn("pairing_code[7]", source)
         self.assertIn("pairing_code_active", source)
-        self.assertRegex(source, r"DIGIT_SEGMENTS\s*\[\s*10\s*\]")
+        self.assertRegex(source, r"PAIRING_NUMERIC_GLYPHS\s*\[\s*10\s*\]")
         self.assertIn("draw_pairing_digit", source)
         self.assertIn("draw_pairing_overlay_locked", source)
         self.assertRegex(source, r"for\s*\([^;]*;[^;]*<\s*6\s*;")
         self.assertIn("PAIRING_TOTAL_WIDTH", source)
         self.assertRegex(source, r"static_assert\s*\([^;]*LCD_H_RES")
         self.assertRegex(source, r"static_assert\s*\([^;]*LCD_V_RES")
+
+    def test_pairing_renderer_uses_conventional_numeric_glyphs(self) -> None:
+        source = self.read_required(DISPLAY_SOURCE)
+
+        for forbidden in (
+            "SEGMENT_A",
+            "SEGMENT_B",
+            "SEGMENT_C",
+            "SEGMENT_D",
+            "SEGMENT_E",
+            "SEGMENT_F",
+            "SEGMENT_G",
+            "DIGIT_SEGMENTS",
+            "PAIRING_SEGMENT_THICKNESS",
+            "pairing_fill_physical_rect",
+            "pairing_fill_user_rect",
+        ):
+            self.assertNotIn(forbidden, source)
+
+        digit = function_body(
+            source,
+            r"static\s+void\s+draw_pairing_digit\s*\([^)]*\)",
+        )
+        self.assertIn("PAIRING_NUMERIC_GLYPHS", digit)
+        self.assertIn("pairing_fill_x_mirrored_rect", digit)
+
+    def test_pairing_glyph_table_matches_exact_upright_logical_matrices(self) -> None:
+        source = self.read_required(DISPLAY_SOURCE)
+        columns = self.read_integer_constant(source, "PAIRING_GLYPH_COLUMNS")
+        rows = self.read_integer_constant(source, "PAIRING_GLYPH_ROWS")
+        self.assertEqual(columns, 5)
+        self.assertEqual(rows, 7)
+
+        actual = self.read_pairing_glyphs(source)
+        expected = self.expected_pairing_glyphs()
+        self.assertEqual(
+            tuple(
+                tuple(format(value, f"0{columns}b") for value in glyph)
+                for glyph in actual
+            ),
+            expected,
+        )
+
+    def test_pairing_sequence_123564_has_exact_pre_transform_matrices(self) -> None:
+        source = self.read_required(DISPLAY_SOURCE)
+        columns = self.read_integer_constant(source, "PAIRING_GLYPH_COLUMNS")
+        glyphs = self.read_pairing_glyphs(source)
+        expected = self.expected_pairing_glyphs()
+
+        actual_sequence = tuple(
+            tuple(format(value, f"0{columns}b") for value in glyphs[int(digit)])
+            for digit in "123564"
+        )
+        expected_sequence = tuple(expected[int(digit)] for digit in "123564")
+        self.assertEqual(actual_sequence, expected_sequence)
+
+    def test_pairing_raster_matrices_are_exact_for_all_digits_and_123564(self) -> None:
+        source = self.read_required(DISPLAY_SOURCE)
+        columns = self.read_integer_constant(source, "PAIRING_GLYPH_COLUMNS")
+        scale_x = self.read_integer_constant(source, "PAIRING_GLYPH_SCALE_X")
+        scale_y = self.read_integer_constant(source, "PAIRING_GLYPH_SCALE_Y")
+        actual_glyphs = self.read_pairing_glyphs(source)
+        expected_glyphs = tuple(
+            tuple(int(row, 2) for row in glyph)
+            for glyph in self.expected_pairing_glyphs()
+        )
+
+        actual_matrices = tuple(
+            self.rasterize_pairing_glyph(glyph, columns, scale_x, scale_y)
+            for glyph in actual_glyphs
+        )
+        expected_matrices = tuple(
+            self.rasterize_pairing_glyph(glyph, columns, scale_x, scale_y)
+            for glyph in expected_glyphs
+        )
+
+        self.assertEqual(actual_matrices, expected_matrices)
+        for matrix in actual_matrices:
+            self.assertEqual(len(matrix), 63)
+            self.assertTrue(all(len(row) == 35 for row in matrix))
+
+        self.assertEqual(
+            tuple(actual_matrices[int(digit)] for digit in "123564"),
+            tuple(expected_matrices[int(digit)] for digit in "123564"),
+        )
+
+    def test_pairing_rasterization_preserves_matrix_row_column_order_and_scale(self) -> None:
+        source = self.read_required(DISPLAY_SOURCE)
+        columns = self.read_integer_constant(source, "PAIRING_GLYPH_COLUMNS")
+        rows = self.read_integer_constant(source, "PAIRING_GLYPH_ROWS")
+        scale_x = self.read_integer_constant(source, "PAIRING_GLYPH_SCALE_X")
+        scale_y = self.read_integer_constant(source, "PAIRING_GLYPH_SCALE_Y")
+        digit_width = self.read_integer_constant(source, "PAIRING_DIGIT_WIDTH")
+        digit_height = self.read_integer_constant(source, "PAIRING_DIGIT_HEIGHT")
+
+        self.assertEqual(digit_width, columns * scale_x)
+        self.assertEqual(digit_height, rows * scale_y)
+
+        digit = function_body(
+            source,
+            r"static\s+void\s+draw_pairing_digit\s*\([^)]*\)",
+        )
+        self.assertRegex(digit, r"for\s*\(int\s+row\s*=\s*0\s*;\s*row\s*<\s*PAIRING_GLYPH_ROWS")
+        self.assertRegex(digit, r"for\s*\(int\s+column\s*=\s*0\s*;\s*column\s*<\s*PAIRING_GLYPH_COLUMNS")
+        self.assertIn(
+            "1U << (PAIRING_GLYPH_COLUMNS - 1 - column)",
+            digit,
+        )
+        self.assertIn("x + column * PAIRING_GLYPH_SCALE_X", digit)
+        self.assertIn("y + row * PAIRING_GLYPH_SCALE_Y", digit)
+        self.assertIn("PAIRING_GLYPH_SCALE_X", digit)
+        self.assertIn("PAIRING_GLYPH_SCALE_Y", digit)
 
     def test_pairing_digits_have_readable_aspect_ratio(self) -> None:
         source = self.read_required(DISPLAY_SOURCE)
@@ -206,60 +391,29 @@ class PairingDisplayOverlayTest(unittest.TestCase):
         self.assertGreaterEqual(
             digit_width * 100,
             digit_height * 45,
-            "pairing digits are too narrow for reliable seven-segment recognition",
+            "pairing digits are too narrow for reliable numeric recognition",
         )
 
-    def test_pairing_digit_gap_is_not_smaller_than_segment_stroke(self) -> None:
+    def test_pairing_digit_gap_is_clear(self) -> None:
         source = self.read_required(DISPLAY_SOURCE)
         digit_gap = self.read_integer_constant(source, "PAIRING_DIGIT_GAP")
-        segment_thickness = self.read_integer_constant(
-            source,
-            "PAIRING_SEGMENT_THICKNESS",
-        )
 
-        self.assertGreaterEqual(
-            digit_gap,
-            segment_thickness,
-            "adjacent pairing digits are visually crowded",
-        )
+        self.assertGreaterEqual(digit_gap, 5, "adjacent pairing digits are visually crowded")
 
     def test_pairing_digits_are_large_enough_for_physical_readability(self) -> None:
         source = self.read_required(DISPLAY_SOURCE)
         digit_width = self.read_integer_constant(source, "PAIRING_DIGIT_WIDTH")
         digit_height = self.read_integer_constant(source, "PAIRING_DIGIT_HEIGHT")
-        segment_thickness = self.read_integer_constant(
-            source,
-            "PAIRING_SEGMENT_THICKNESS",
-        )
 
         self.assertGreaterEqual(
             digit_width,
-            35,
+            32,
             "pairing glyph width is too small for physical reading",
         )
         self.assertGreaterEqual(
             digit_height,
-            72,
+            56,
             "pairing glyph height is too small for physical reading",
-        )
-        self.assertGreaterEqual(
-            segment_thickness,
-            7,
-            "pairing segment stroke is too thin for physical reading",
-        )
-
-    def test_pairing_vertical_segments_use_the_full_digit_height(self) -> None:
-        source = self.read_required(DISPLAY_SOURCE)
-        digit_height = self.read_integer_constant(source, "PAIRING_DIGIT_HEIGHT")
-        segment_thickness = self.read_integer_constant(
-            source,
-            "PAIRING_SEGMENT_THICKNESS",
-        )
-
-        self.assertEqual(
-            (digit_height - 3 * segment_thickness) % 2,
-            0,
-            "seven-segment height leaves an unintended blank scanline",
         )
 
     def test_pairing_renderer_keeps_the_existing_panel_transform(self) -> None:
@@ -271,47 +425,48 @@ class PairingDisplayOverlayTest(unittest.TestCase):
         self.assertRegex(source, r"#define\s+LCD_MIRROR_X\s+true\b")
         self.assertRegex(source, r"#define\s+LCD_MIRROR_Y\s+false\b")
 
-    def test_pairing_renderer_compensates_the_physical_panel_transform(self) -> None:
+    def test_pairing_renderer_uses_x_only_panel_mapping(self) -> None:
         source = self.read_required(DISPLAY_SOURCE)
         mapper = function_body(
             source,
-            r"static\s+void\s+pairing_fill_physical_rect\s*\([^)]*\)",
+            r"static\s+void\s+pairing_fill_x_mirrored_rect\s*\([^)]*\)",
         )
-
-        self.assertIn(
-            "LCD_H_RES - physical_y - physical_height",
-            mapper,
-        )
-        self.assertIn(
-            "LCD_V_RES - physical_x - physical_width",
-            mapper,
-        )
-        self.assertRegex(
-            mapper,
-            r"fill_rect\s*\(\s*logical_x\s*,\s*logical_y\s*,"
-            r"\s*physical_height\s*,\s*physical_width\s*,\s*color\s*\)",
-        )
-
-        user_mapper = function_body(
-            source,
-            r"static\s+void\s+pairing_fill_user_rect\s*\([^)]*\)",
-        )
-        self.assertRegex(
-            user_mapper,
-            r"pairing_fill_physical_rect\s*\(\s*user_y\s*,\s*user_x\s*,"
-            r"\s*user_height\s*,\s*user_width\s*,\s*color\s*\)",
-        )
-
         digit = function_body(
             source,
             r"static\s+void\s+draw_pairing_digit\s*\([^)]*\)",
         )
-        self.assertEqual(
-            digit.count("pairing_fill_user_rect("),
-            7,
-            "all seven segments must use the user-axis pairing transform",
+
+        self.assertIn("LCD_H_RES - x - width", mapper)
+        self.assertIn("compensated_x", mapper)
+        self.assertRegex(
+            mapper,
+            r"fill_rect\s*\(\s*compensated_x\s*,\s*compensated_y\s*,\s*width\s*,\s*height\s*,\s*color\s*\)",
         )
+        self.assertNotIn("LCD_V_RES", mapper)
+        self.assertNotIn("swap", mapper.lower())
+        self.assertIn("pairing_fill_x_mirrored_rect", digit)
         self.assertNotRegex(digit, r"(?<!pairing_)fill_rect\s*\(")
+
+    def test_pairing_panel_mapping_preserves_y_and_mirrors_only_x(self) -> None:
+        source = self.read_required(DISPLAY_SOURCE)
+        mapper = function_body(
+            source,
+            r"static\s+void\s+pairing_fill_x_mirrored_rect\s*\([^)]*\)",
+        )
+
+        self.assertRegex(mapper, r"const\s+int\s+compensated_x\s*=\s*LCD_H_RES\s*-\s*x\s*-\s*width")
+        self.assertRegex(mapper, r"const\s+int\s+compensated_y\s*=\s*y")
+        self.assertRegex(
+            mapper,
+            r"fill_rect\s*\(\s*compensated_x\s*,\s*compensated_y\s*,\s*width\s*,\s*height\s*,\s*color\s*\)",
+        )
+
+        def map_rect(x: int, y: int, width: int, height: int) -> tuple[int, int, int, int]:
+            return (320 - x - width, y, width, height)
+
+        self.assertEqual(map_rect(37, 88, 7, 9), (276, 88, 7, 9))
+        self.assertEqual(map_rect(247, 88, 7, 9), (66, 88, 7, 9))
+        self.assertEqual(map_rect(100, 120, 35, 63), (185, 120, 35, 63))
 
     def test_pairing_code_is_a_single_user_horizontal_row_inside_the_face(self) -> None:
         source = self.read_required(DISPLAY_SOURCE)
@@ -368,6 +523,23 @@ class PairingDisplayOverlayTest(unittest.TestCase):
             r"PAIRING_START_X\s*\+\s*index\s*\*\s*\(PAIRING_DIGIT_WIDTH\s*\+\s*PAIRING_DIGIT_GAP\)",
         )
         self.assertIn("PAIRING_START_Y", overlay)
+
+    def test_pairing_overlay_iterates_code_left_to_right_without_reordering(self) -> None:
+        source = self.read_required(DISPLAY_SOURCE)
+        overlay = function_body(
+            source,
+            r"static\s+void\s+draw_pairing_overlay_locked\s*\([^)]*\)",
+        )
+
+        self.assertRegex(
+            overlay,
+            r"for\s*\(\s*int\s+index\s*=\s*0\s*;\s*index\s*<\s*6\s*;\s*\+\+index\s*\)",
+        )
+        self.assertRegex(
+            overlay,
+            r"draw_pairing_digit\s*\(\s*x\s*,\s*PAIRING_START_Y\s*,\s*"
+            r"static_cast<uint8_t>\(pairing_code\[index\]\s*-\s*'0'\)\s*\)",
+        )
 
     def test_set_replace_clear_paths_are_locked_and_clear_local_buffer(self) -> None:
         source = self.read_required(DISPLAY_SOURCE)
@@ -440,16 +612,23 @@ class PairingDisplayOverlayTest(unittest.TestCase):
             self.assertNotIn("vTaskDelay", body)
             self.assertNotIn("malloc", body)
 
-    def test_recording_keeps_existing_no_redraw_behavior(self) -> None:
+    def test_recording_releases_local_listening_before_upload(self) -> None:
         source = self.read_required(STATE_SOURCE)
+        task = function_body(
+            source,
+            r"static\s+void\s+bmo_state_machine_task\s*\([^)]*\)",
+        )
         recording_case = re.search(
             r"case\s+BMOState::RECORDING\s*:(?P<body>.*?)case\s+BMOState::THINKING\s*:",
-            source,
+            task,
             re.DOTALL,
         )
 
         self.assertIsNotNone(recording_case, "RECORDING display branch not found")
-        self.assertNotIn("display_", recording_case.group("body"))
+        body = recording_case.group("body")
+        release = body.index("display_set_mode(DisplayMode::IDLE)")
+        upload = body.index("api_upload_audio_and_process()")
+        self.assertLess(release, upload)
 
 
 class PairingWebSocketIntegrationTest(unittest.TestCase):

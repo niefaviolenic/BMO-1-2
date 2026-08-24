@@ -537,9 +537,11 @@ static void wakeword_listener_task(
                         TAG,
                         "Hi Joy detected");
 
-                    wakeword_task();
-                    wakeword_cooldown_until =
-                        now + pdMS_TO_TICKS(WAKEWORD_COOLDOWN_MS);
+                    if(wakeword_task())
+                    {
+                        wakeword_cooldown_until =
+                            now + pdMS_TO_TICKS(WAKEWORD_COOLDOWN_MS);
+                    }
                 }
             }
         }
@@ -808,10 +810,13 @@ void wakeword_init()
 
 #include "esp_heap_caps.h"
 
-void wakeword_task()
+bool wakeword_task()
 {
-    setState(BMOState::RECORDING);
+    if(!trySetState(BMOState::IDLE, BMOState::RECORDING))
+        return false;
+
     ESP_LOGI(TAG, "Voice capture requested");
+    return true;
 }
 
 //--------------------------------------------------

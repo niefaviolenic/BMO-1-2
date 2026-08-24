@@ -727,7 +727,6 @@ static bool flush_pending_playback_event()
 // Handle request_failed locally (e.g. error message sound and face display)
 static void handle_request_failed(const char *code) {
     setState(BMOState::ERROR_STATE);
-    display_face(FACE_SAD);
     audio_play_error();
     
     if (strcmp(code, "NO_SPEECH") == 0) {
@@ -738,7 +737,6 @@ static void handle_request_failed(const char *code) {
     
     vTaskDelay(pdMS_TO_TICKS(2000));
     setState(BMOState::IDLE);
-    display_face(FACE_HAPPY);
 }
 
 static void queue_request_failed(const char *request_id, const char *code)
@@ -853,7 +851,6 @@ static void handle_ws_message(const char *payload, int len) {
             if (getState() == BMOState::IDLE) {
                 recovery_request_pending = true;
                 setState(BMOState::THINKING);
-                display_face(FACE_CONFUSED);
             }
         }
 
@@ -913,7 +910,9 @@ static void handle_ws_message(const char *payload, int len) {
             adopt_recovered_request(req_id_node->valuestring) && !request_is_terminal()) {
             strncpy(backend_state, "thinking", sizeof(backend_state) - 1);
             backend_state[sizeof(backend_state) - 1] = '\0';
-            display_face(FACE_CONFUSED);
+            // Backend owns the thinking transition; listening remains local
+            // firmware state and is never sent over WebSocket.
+            display_set_mode(DisplayMode::THINKING);
             if (getState() == BMOState::IDLE) {
                 recovery_request_pending = true;
                 setState(BMOState::THINKING);
@@ -1477,7 +1476,6 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
                 playback_mark_started();
                 playback_state = BMO_PLAYBACK_PLAYING;
                 setState(BMOState::SPEAKING);
-                display_face(FACE_HAPPY);
                 ESP_LOGI(TAG, "MP3 Playback started: rate=%d, channels=%d", frameInfo.samprate, frameInfo.nChans);
             }
             
@@ -1952,7 +1950,6 @@ static BMOUploadResult upload_wav_voice(const char *uuid, int16_t *record_buf, s
             if (!duplicate_failure)
             {
                 setState(BMOState::IDLE);
-                display_face(FACE_HAPPY);
             }
             result = BMO_UPLOAD_TERMINAL_DUPLICATE;
         }
@@ -2044,7 +2041,6 @@ void api_upload_audio_and_process() {
         if (record_buf == NULL || sample_count <= WAV_HEADER_SAMPLES) {
             ESP_LOGW(TAG, "Record buffer is empty, skipping API processing");
             setState(BMOState::IDLE);
-            display_face(FACE_HAPPY);
             return;
         }
 
@@ -2252,7 +2248,6 @@ void api_upload_audio_and_process() {
             }
 
             setState(BMOState::IDLE);
-            display_face(FACE_HAPPY);
         } else {
             playback_mark_terminal(playback_terminal_result(play_result));
             const char *failure_reason = play_result == BMO_PLAYBACK_DECODE_FAILED
@@ -2268,11 +2263,9 @@ void api_upload_audio_and_process() {
             }
 
             setState(BMOState::ERROR_STATE);
-            display_face(FACE_SAD);
             audio_play_error();
             vTaskDelay(pdMS_TO_TICKS(2000));
             setState(BMOState::IDLE);
-            display_face(FACE_HAPPY);
         }
     }
 }

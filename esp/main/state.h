@@ -13,6 +13,7 @@ enum class BMOState
 extern BMOState currentState;
 
 void setState(BMOState state);
+bool trySetState(BMOState expected, BMOState next);
 BMOState getState();
 
 void bmo_state_machine_init();
