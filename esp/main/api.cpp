@@ -1261,6 +1261,30 @@ static bool is_audio_mpeg_content_type(const char *content_type)
     return *content_type == '\0' || *content_type == ';';
 }
 
+// IDF 6 only exposes esp_http_client_get_response_header when response-header
+// caching is enabled. Capture Content-Type from the portable header event so
+// the MP3 stream keeps the same validation without changing global Kconfig.
+static esp_err_t mp3_http_event_handler(esp_http_client_event_t *event)
+{
+    if (event == NULL || event->event_id != HTTP_EVENT_ON_HEADER ||
+        event->header_key == NULL || event->header_value == NULL ||
+        event->user_data == NULL)
+    {
+        return ESP_OK;
+    }
+
+    if (strcmp(event->header_key, "Content-Type") != 0 &&
+        strcmp(event->header_key, "content-type") != 0)
+    {
+        return ESP_OK;
+    }
+
+    char *content_type = static_cast<char *>(event->user_data);
+    strncpy(content_type, event->header_value, 63);
+    content_type[63] = '\0';
+    return ESP_OK;
+}
+
 // Shared MP3 downloader/decoder/player. Transport validation and voice
 // correlation happen before this physical playback path is entered.
 static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
@@ -1273,10 +1297,13 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
 
     ESP_LOGI(TAG, "Initializing HTTP GET stream for MP3 host=%s", BMO_BACKEND_HOST);
     
+    char content_type[64] = {};
     esp_http_client_config_t config = {};
     config.url = job->audio_url;
     config.method = HTTP_METHOD_GET;
     config.timeout_ms = 10000;
+    config.event_handler = mp3_http_event_handler;
+    config.user_data = content_type;
     config.crt_bundle_attach = esp_crt_bundle_attach;
     config.common_name = BMO_BACKEND_HOST;
     config.skip_cert_common_name_check = false;
@@ -1296,11 +1323,7 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
     
     int64_t content_length = esp_http_client_fetch_headers(http_client);
     int status_code = esp_http_client_get_status_code(http_client);
-    char *content_type = NULL;
-    esp_err_t content_type_result = esp_http_client_get_response_header(
-        http_client, "Content-Type", &content_type);
-    bool content_type_valid = content_type_result == ESP_OK &&
-        is_audio_mpeg_content_type(content_type);
+    bool content_type_valid = is_audio_mpeg_content_type(content_type);
     ESP_LOGI(TAG, "MP3 response status=%d content_type=%s content_length=%lld",
              status_code, content_type_valid ? "audio/mpeg" : "invalid",
              (long long)content_length);

@@ -1,34 +1,55 @@
 cmake_minimum_required(VERSION 3.16)
 
-set(BMO_PRODUCTION_ENV_FILE "D:/BMO/private/bmo-production.env")
-if(NOT EXISTS "${BMO_PRODUCTION_ENV_FILE}")
-    message(FATAL_ERROR "Production credential file is missing: ${BMO_PRODUCTION_ENV_FILE}")
-endif()
+option(
+    BMO_HARDWARE_DEMO
+    "Build a local-only hardware demo without production device credentials"
+    OFF)
 
-file(STRINGS "${BMO_PRODUCTION_ENV_FILE}" BMO_PRODUCTION_ENV_LINES)
+# Keep production credentials outside the repository, but allow each build
+# machine to provide its own secure path. The historical path remains the
+# default for the original workstation.
 set(BMO_DEVICE_ID_FROM_ENV "")
 set(BMO_DEVICE_TOKEN_FROM_ENV "")
 set(BMO_DEVICE_ID_COUNT 0)
 set(BMO_DEVICE_TOKEN_COUNT 0)
 
-foreach(BMO_ENV_LINE IN LISTS BMO_PRODUCTION_ENV_LINES)
-    string(REGEX MATCH "^[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*=[ \t]*(.*)$" BMO_ENV_MATCH "${BMO_ENV_LINE}")
-    if(BMO_ENV_MATCH)
-        set(BMO_ENV_KEY "${CMAKE_MATCH_1}")
-        set(BMO_ENV_VALUE "${CMAKE_MATCH_2}")
-        string(STRIP "${BMO_ENV_VALUE}" BMO_ENV_VALUE)
-        string(REGEX REPLACE "^\"(.*)\"$" "\\1" BMO_ENV_VALUE "${BMO_ENV_VALUE}")
-        string(REGEX REPLACE "^'(.*)'$" "\\1" BMO_ENV_VALUE "${BMO_ENV_VALUE}")
-
-        if(BMO_ENV_KEY STREQUAL "DEVICE_ID")
-            math(EXPR BMO_DEVICE_ID_COUNT "${BMO_DEVICE_ID_COUNT} + 1")
-            set(BMO_DEVICE_ID_FROM_ENV "${BMO_ENV_VALUE}")
-        elseif(BMO_ENV_KEY STREQUAL "DEVICE_TOKEN")
-            math(EXPR BMO_DEVICE_TOKEN_COUNT "${BMO_DEVICE_TOKEN_COUNT} + 1")
-            set(BMO_DEVICE_TOKEN_FROM_ENV "${BMO_ENV_VALUE}")
-        endif()
+if(BMO_HARDWARE_DEMO)
+    set(BMO_DEVICE_ID_FROM_ENV "bmo-001")
+    set(BMO_DEVICE_TOKEN_FROM_ENV "bmo-hardware-demo-no-auth")
+    set(BMO_DEVICE_ID_COUNT 1)
+    set(BMO_DEVICE_TOKEN_COUNT 1)
+    message(WARNING "BMO_HARDWARE_DEMO is enabled; this firmware cannot authenticate to production.")
+else()
+    if(DEFINED ENV{BMO_PRODUCTION_ENV_FILE} AND NOT "$ENV{BMO_PRODUCTION_ENV_FILE}" STREQUAL "")
+        file(TO_CMAKE_PATH "$ENV{BMO_PRODUCTION_ENV_FILE}" BMO_PRODUCTION_ENV_FILE)
+    else()
+        set(BMO_PRODUCTION_ENV_FILE "D:/BMO/private/bmo-production.env")
     endif()
-endforeach()
+
+    if(NOT EXISTS "${BMO_PRODUCTION_ENV_FILE}")
+        message(FATAL_ERROR "Production credential file is missing: ${BMO_PRODUCTION_ENV_FILE}")
+    endif()
+
+    file(STRINGS "${BMO_PRODUCTION_ENV_FILE}" BMO_PRODUCTION_ENV_LINES)
+    foreach(BMO_ENV_LINE IN LISTS BMO_PRODUCTION_ENV_LINES)
+        string(REGEX MATCH "^[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*=[ \t]*(.*)$" BMO_ENV_MATCH "${BMO_ENV_LINE}")
+        if(BMO_ENV_MATCH)
+            set(BMO_ENV_KEY "${CMAKE_MATCH_1}")
+            set(BMO_ENV_VALUE "${CMAKE_MATCH_2}")
+            string(STRIP "${BMO_ENV_VALUE}" BMO_ENV_VALUE)
+            string(REGEX REPLACE "^\"(.*)\"$" "\\1" BMO_ENV_VALUE "${BMO_ENV_VALUE}")
+            string(REGEX REPLACE "^'(.*)'$" "\\1" BMO_ENV_VALUE "${BMO_ENV_VALUE}")
+
+            if(BMO_ENV_KEY STREQUAL "DEVICE_ID")
+                math(EXPR BMO_DEVICE_ID_COUNT "${BMO_DEVICE_ID_COUNT} + 1")
+                set(BMO_DEVICE_ID_FROM_ENV "${BMO_ENV_VALUE}")
+            elseif(BMO_ENV_KEY STREQUAL "DEVICE_TOKEN")
+                math(EXPR BMO_DEVICE_TOKEN_COUNT "${BMO_DEVICE_TOKEN_COUNT} + 1")
+                set(BMO_DEVICE_TOKEN_FROM_ENV "${BMO_ENV_VALUE}")
+            endif()
+        endif()
+    endforeach()
+endif()
 
 if(NOT BMO_DEVICE_ID_COUNT EQUAL 1 OR NOT BMO_DEVICE_ID_FROM_ENV STREQUAL "bmo-001")
     message(FATAL_ERROR "Production credential file must contain exactly DEVICE_ID=bmo-001")

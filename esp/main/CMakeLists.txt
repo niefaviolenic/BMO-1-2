@@ -1,6 +1,17 @@
 idf_component_register(
     SRCS "network.cpp" "state.cpp" "api.cpp" "playback.cpp" "wifi.cpp" "button.cpp" "wakeword.cpp" "audio.cpp" "display.cpp" "pairing.cpp" "main.cpp"
     INCLUDE_DIRS "."
+    EMBED_FILES
+        "audio_wav/01.wav"
+        "audio_wav/02.wav"
+        "audio_wav/03.wav"
+        "audio_wav/04.wav"
+        "audio_wav/05.wav"
+        "audio_wav/06.wav"
+        "audio_wav/07.wav"
+        "audio_wav/08.wav"
+        "audio_wav/09.wav"
+        "audio_wav/10.wav"
     PRIV_INCLUDE_DIRS "${BMO_CREDENTIAL_INCLUDE_DIR}"
     REQUIRES
         driver

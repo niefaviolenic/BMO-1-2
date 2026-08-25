@@ -3,7 +3,6 @@
 #include "audio.h"
 #include "display.h"
 #include "state.h"
-#include "wakeword.h"
 
 #include "driver/gpio.h"
 #include "esp_err.h"
@@ -211,25 +210,22 @@ void button_update()
                 if(getState() == BMOState::IDLE)
                 {
                     const BMOState state_before = getState();
-                    if(wakeword_task())
-                    {
-                        const Face face_before = display_get_idle_face();
-                        const Face face_after = display_next_touch_face();
+                    const Face face_before = display_get_idle_face();
+                    const Face face_after = display_next_touch_face();
 
-                        ESP_LOGI(
-                            TAG,
-                            "Touch accepted: BMO state before=%s Face before=%d Face after=%d Face render requested=%d",
-                            bmo_state_name(state_before),
-                            (int)face_before,
-                            (int)face_after,
-                            1);
-                    }
-                    else
-                    {
-                        ESP_LOGW(
-                            TAG,
-                            "Touch rejected: state admission failed before face advance");
-                    }
+                    // Touch is an expression selector, not a voice-capture
+                    // trigger. Keep the cue local so it cannot create a
+                    // delayed backend response or overwrite the selected face.
+                    audio_setVolume(100);
+                    audio_playExpressionAudio((int)face_after);
+
+                    ESP_LOGI(
+                        TAG,
+                        "Touch accepted: BMO state before=%s Face before=%d Face after=%d Face render requested=%d expression_audio=1",
+                        bmo_state_name(state_before),
+                        (int)face_before,
+                        (int)face_after,
+                        1);
                 }
                 else
                 {

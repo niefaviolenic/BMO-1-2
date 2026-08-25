@@ -111,34 +111,23 @@ class TouchListeningContractTest(unittest.TestCase):
         self.assertIn("touch_level != touch_candidate_level", update)
         self.assertIn("touch_candidate_level != touch_stable_level", update)
         self.assertIn("display_next_touch_face", update)
-        self.assertIn("wakeword_task()", update)
+        self.assertIn("audio_playExpressionAudio", update)
+        self.assertIn("audio_setVolume(100)", update)
         self.assertIn("getState() == BMOState::IDLE", update)
 
-    def test_touch_action_is_one_shot_and_state_admission_is_atomic(self) -> None:
+    def test_touch_action_is_one_shot_and_expression_audio_follows_face_render(self) -> None:
         button = BUTTON_SOURCE.read_text(encoding="utf-8")
-        wakeword = WAKEWORD_SOURCE.read_text(encoding="utf-8")
-        state = STATE_SOURCE.read_text(encoding="utf-8")
         update = function_body(button, r"void\s+button_update\s*\([^)]*\)")
-        trigger = function_body(wakeword, r"bool\s+wakeword_task\s*\([^)]*\)")
 
         self.assertEqual(
             len(re.findall(r"\bdisplay_next_touch_face\s*\(\s*\)", update)),
             1,
         )
-        self.assertEqual(
-            len(re.findall(r"\bwakeword_task\s*\(\s*\)", update)),
-            1,
-        )
+        self.assertNotIn("wakeword_task()", update)
         self.assertIn("TOUCH_CONSUMED", update)
-        self.assertIn("trySetState", trigger)
-        self.assertIn("bool trySetState", state)
-
-        # Claim IDLE -> RECORDING before mutating the selected face. A racing
-        # wake-word/API transition must not consume a face without accepting
-        # the touch event.
         self.assertLess(
-            update.index("wakeword_task()"),
             update.index("display_next_touch_face"),
+            update.index("audio_playExpressionAudio"),
         )
 
     def test_touch_runtime_diagnostics_cover_the_full_handoff(self) -> None:
