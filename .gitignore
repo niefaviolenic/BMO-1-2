@@ -1,42 +1,97 @@
-# Secrets and local environment
+# ==============================================================================
+# OS and Editor Files
+# ==============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Editor directories and temporary files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# ==============================================================================
+# ESP-IDF and Build Output
+# ==============================================================================
+**/build/
+**/managed_components/
+**/dependencies.lock
+**/sdkconfig.old
+**/sdkconfig.ci
+**/*.bin
+**/*.elf
+**/*.map
+**/*.o
+**/*.obj
+**/*.d
+
+# ==============================================================================
+# Secrets and Credentials
+# ==============================================================================
 **/.env
 **/.env.*
 !**/.env.example
 !**/*.env.example
 !**/*.example
+**/bmo_credentials.h
+**/bmo_dev_config.h
+**/secrets.h
+**/credentials.h
 
-# Dependencies and language caches
-**/node_modules/
-**/.pnpm-store/
-**/.venv/
-**/venv/
+# ==============================================================================
+# Logs and Diagnostics
+# ==============================================================================
+*.log
+*.err
+**/*.log
+**/*.err
+# Whitelist test evidence and documentation logs in docs-config-ESPtoBACKEND
+!docs-config-ESPtoBACKEND/*.log
+!docs-config-ESPtoBACKEND/*.err
+!docs-config-ESPtoBACKEND/**/*.log
+!docs-config-ESPtoBACKEND/**/*.err
+!docs-config-ESPtoBACKEND/**
+
+# ==============================================================================
+# Python Caches, Virtualenvs, and Test Artifacts
+# ==============================================================================
 **/__pycache__/
 **/*.py[cod]
+*$py.class
 **/.pytest_cache/
 **/.mypy_cache/
 **/.ruff_cache/
+**/.coverage
+**/htmlcov/
+**/venv/
+**/.venv/
+**/env/
+**/.env/
 
-# Build and test output
-**/build/
-**/dist/
-**/coverage/
-**/temp/
-**/temp-audio/
-**/src/generated/
+# ==============================================================================
+# Node and Package Manager Caches
+# ==============================================================================
+**/node_modules/
+**/.pnpm-store/
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/v[0-9]*/
 
-# Local model and runtime assets
-**/hf-cache/
-**/torch-cache/
-**/*.pth
-**/*.pt
-**/*.ckpt
-**/*.onnx
-**/*.safetensors
-
-# Logs and local backups
-**/*.log
+# ==============================================================================
+# Temporary Files and Backups
+# ==============================================================================
 **/*.bak
 **/*.backup
 **/*.old
 **/*.orig
-**/*~
+**/*.tmp

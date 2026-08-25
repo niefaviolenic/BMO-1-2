@@ -1,2 +1,0 @@
-P9.1 implementation state: VERIFIED — PRODUCTION
-| P9.1 | scope | docs | VERIFIED — PRODUCTION | COMPLETED | evidence |
