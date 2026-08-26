@@ -23,20 +23,21 @@ File utama: `esp/main/api.cpp`.
 File utama: `esp/main/api.cpp`; decoder/output: `esp/main/audio.cpp`/`audio.h`.
 
 - Download melalui HTTPS dengan certificate bundle yang sama.
-- Terima hanya HTTP `200` dan content type audio MPEG yang kompatibel.
-- Jika `Content-Length` tersedia, pastikan byte diterima sama dengan nilai tersebut. EOF sebelum lengkap adalah `DOWNLOAD_FAILED`.
-- Jangan menganggap file sukses hanya karena status HTTP `200`.
+- Terima hanya HTTP `200` dan content type audio MPEG (`audio/mpeg`).
+- Mendukung direct streaming maupun Chunked Transfer Encoding (`Transfer-Encoding: chunked`).
+- Konfigurasi streaming buffer: cyclic stream buffer 32 KB (`MP3_STREAM_BUF_SIZE`), low-latency pre-buffer threshold 2 KB (`MP3_STREAM_PREBUFFER_BYTES`).
+- Lewati ID3v2 tag metadata pada chunk awal (`skip_id3_tag()`) tanpa merusak frame sync Helix MP3 decoder.
+- Jika `Content-Length` tersedia pada direct transfer, pastikan total byte diterima cocok. EOF sebelum lengkap adalah `DOWNLOAD_FAILED`.
 - HTTP `410` berarti `AUDIO_EXPIRED`: jangan retry URL lama. Tandai transaksi failed/expired dan ikuti event failure backend.
-- Timeout download dapat diulang terbatas bila transport gagal dan URL masih berada dalam expiry; jangan retry ketika expiry sudah habis.
-
+- Timeout download dapat diulang terbatas (maksimal 1x retry) bila transport gagal dan URL masih berada dalam batas `expires_in_seconds`; jangan retry ketika expiry sudah habis.
 ### Decode dan playback
 
-- Decoder harus mengembalikan status sukses/gagal, bukan hanya `void` yang mengabaikan error output.
+- Decoder menggunakan Helix MP3 Decoder native (`HMP3Decoder`) dengan frame capacity buffer 1152x2 sample.
+- Decoder mengembalikan status sukses/gagal secara granular (`BMOPlaybackResult`), bukan hanya `void`.
 - Bila MP3 corrupt atau decode gagal, kirim `audio_playback_failed` dengan `DECODE_FAILED`.
-- Bila speaker/I2S gagal atau playback tidak selesai, kirim `PLAYBACK_FAILED`.
+- Bila speaker/I2S gagal atau playback mengalami underrun/stalling, kirim `PLAYBACK_FAILED`.
 - Hanya setelah seluruh sample selesai diputar kirim `audio_playback_done`.
-- Pastikan callback WebSocket tidak diblokir oleh tone/error delay atau operasi playback panjang; minimum yang diperlukan adalah set flag/queue lalu proses dari loop/state task yang sudah ada.
-
+- Callback WebSocket dan FreeRTOS task diproteksi dengan arsitektur non-blocking / queue agar operasi playback tidak memblokir event loop.
 ### Pending acknowledgement
 
 - Jika playback selesai saat WSS offline, simpan satu hasil per request ID.

@@ -11,9 +11,14 @@ ESP mengirim raw WAV canonical ke `POST https://api.personalbmo.web.id/api/v1/vo
 - `X-Device-Id` dan `X-Device-Token`;
 - `X-Request-Id` UUID v4;
 - body tidak dibungkus JSON, multipart, base64, atau metadata tambahan.
+Rekaman yang dihasilkan `wakeword.cpp` sudah sesuai format canonical: PCM mono 16 kHz 16-bit dengan header WAV 44 byte. Parameter silence detection & VAD yang diimplementasikan di `wakeword.cpp`:
+- `SILENCE_THRESHOLD = 250` (Amplitudo PCM threshold);
+- `RECORD_SILENCE_DURATION_MS = 450 ms` (Jeda hening untuk mengakhiri rekaman);
+- `RECORD_MIN_SPEECH_DURATION_MS = 400 ms` (Grace period sebelum evaluasi hening aktif);
+- `RECORD_NO_SAMPLE_PROGRESS_TIMEOUT_MS = 3000 ms` (Watchdog sampel I2S);
+- `RECORD_DURATION_SEC = 60 detik` (Durasi rekaman maksimal).
 
-Rekaman yang dihasilkan `wakeword.cpp` sudah sesuai kandidat format: PCM mono 16 kHz 16-bit dengan header WAV 44 byte. Implementer tetap harus memverifikasi byte header dan ukuran aktual sebelum upload.
-
+Implementer memverifikasi byte header dan ukuran aktual sebelum upload melalui fungsi `validate_canonical_wav()`.
 ## Perubahan minimum
 
 ### Request construction

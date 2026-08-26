@@ -7,12 +7,11 @@ Status: planning only. Dokumen ini tidak mengubah firmware atau backend.
 Membawa firmware ESP yang ada ke kondisi dapat:
 
 1. tersambung ke `https://api.personalbmo.web.id` melalui HTTPS dan `wss://api.personalbmo.web.id/ws`;
-2. melakukan autentikasi device sesuai kontrak backend;
-3. mengirim WAV canonical untuk diproses;
-4. menerima event status dan URL MP3;
-5. mengunduh, memutar, lalu mengirim konfirmasi playback ke backend;
+2. melakukan autentikasi device dan protokol pairing 6-digit sesuai kontrak backend;
+3. mengirim WAV canonical (16kHz, 16-bit, Mono) untuk diproses;
+4. menerima event status, transkripsi STT, teks AI, dan URL streaming MP3 (16/24kHz);
+5. mengunduh (chunked/direct stream), men-decode native via Helix, memutar, lalu mengirim konfirmasi playback ke backend;
 6. pulih dari disconnect/reconnect tanpa membuat request atau playback menjadi tidak konsisten.
-
 Target operasional adalah koneksi dan satu siklus voice end-to-end berhasil hari ini. Backend production tetap menjadi source of truth; tidak ada perubahan backend dalam plan ini.
 
 ## Dokumen dalam plan
@@ -67,8 +66,9 @@ Tidak termasuk: perubahan backend, refactor arsitektur besar, redesign state mac
 Plan ini dianggap berhasil diimplementasikan bila satu ESP fisik dengan `device_id=bmo-001` dapat, dari jaringan publik:
 
 - membuka WSS dan menerima `authenticated` dengan `backend_state` yang valid;
-- merekam/mengirim WAV dan menerima HTTP `202` atau duplicate `200` yang valid;
-- menerima `display_status` lalu `audio_ready` untuk request yang sama;
-- mengunduh `audio/mpeg`, memutar sampai selesai, dan mengirim `audio_playback_done`;
+- mengelola siklus pairing (`pairing_code`, `pairing_completed`) atau autentikasi langsung;
+- merekam/mengirim WAV canonical (16kHz 16-bit Mono) dan menerima HTTP `202` atau duplicate `200` yang valid;
+- menerima `display_status` (termasuk transcript STT) lalu `audio_ready` (termasuk response text LLM) untuk request yang sama;
+- mengunduh `audio/mpeg` (direct/chunked), men-decode via Helix MP3 decoder, memutar sampai selesai, dan mengirim `audio_playback_done`;
 - kembali authenticated setelah disconnect dan tidak mengirim credential di URL/query/log;
-- melewati checklist acceptance pada `07-EXECUTION-CHECKLIST.md`.
+- melewati checklist acceptance pada `07-EXECUTION-CHECKLIST.md` serta 77/77 Python contract tests.

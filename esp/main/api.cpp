@@ -1353,10 +1353,11 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
     
     int64_t content_length = esp_http_client_fetch_headers(http_client);
     int status_code = esp_http_client_get_status_code(http_client);
+    bool is_chunked = (content_length < 0) || esp_http_client_is_chunked_response(http_client);
     bool content_type_valid = is_audio_mpeg_content_type(content_type);
-    ESP_LOGI(TAG, "MP3 response status=%d content_type=%s content_length=%lld",
+    ESP_LOGI(TAG, "MP3 response status=%d content_type=%s content_length=%lld chunked=%s",
              status_code, content_type_valid ? "audio/mpeg" : "invalid",
-             (long long)content_length);
+             (long long)content_length, is_chunked ? "yes" : "no");
     
     if (status_code == 410) {
         ESP_LOGW(TAG, "Audio expired (HTTP 410 Gone)");
@@ -1365,9 +1366,9 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
         return BMO_PLAYBACK_EXPIRED;
     }
     
-    if (status_code != 200 || !content_type_valid || content_length <= 0) {
-        ESP_LOGE(TAG, "MP3 download rejected status=%d content_type_valid=%d content_length=%lld",
-                 status_code, content_type_valid ? 1 : 0, (long long)content_length);
+    if (status_code != 200 || !content_type_valid || (!is_chunked && content_length <= 0)) {
+        ESP_LOGE(TAG, "MP3 download rejected status=%d content_type_valid=%d content_length=%lld chunked=%s",
+                 status_code, content_type_valid ? 1 : 0, (long long)content_length, is_chunked ? "yes" : "no");
         esp_http_client_close(http_client);
         esp_http_client_cleanup(http_client);
         return BMO_PLAYBACK_DOWNLOAD_FAILED;
@@ -1476,7 +1477,7 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
             } else {
                 last_receive_time_us = esp_timer_get_time();
                 received_bytes += (uint64_t)r;
-                if (received_bytes > (uint64_t)content_length) {
+                if (!is_chunked && (uint64_t)content_length > 0 && received_bytes > (uint64_t)content_length) {
                     ESP_LOGE(TAG, "MP3 body exceeded Content-Length expected=%lld received=%llu",
                              (long long)content_length,
                              (unsigned long long)received_bytes);
@@ -1495,7 +1496,7 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
             if (skip_id3_tag(http_client, read_ptr, bytes_left, &skipped,
                              &received_bytes) == 0) {
                 last_receive_time_us = esp_timer_get_time();
-                if (received_bytes > (uint64_t)content_length) {
+                if (!is_chunked && (uint64_t)content_length > 0 && received_bytes > (uint64_t)content_length) {
                     ESP_LOGE(TAG, "MP3 ID3 skip exceeded Content-Length");
                     read_failed = true;
                     result = BMO_PLAYBACK_DOWNLOAD_FAILED;
@@ -1608,18 +1609,31 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
     }
 
     if (result == BMO_PLAYBACK_DOWNLOAD_FAILED && !read_failed) {
-        bool complete_data = esp_http_client_is_complete_data_received(http_client);
-        ESP_LOGI(TAG, "MP3 download completeness=%s expected_bytes=%lld received_bytes=%llu",
-                 complete_data ? "yes" : "no", (long long)content_length,
-                 (unsigned long long)received_bytes);
-        if (!complete_data || received_bytes != (uint64_t)content_length) {
-            result = BMO_PLAYBACK_DOWNLOAD_FAILED;
-        }
-        else if (!playback_started || bytes_left != 0) {
-            result = BMO_PLAYBACK_DECODE_FAILED;
-        }
-        else {
-            result = BMO_PLAYBACK_SUCCESS;
+        if (is_chunked) {
+            ESP_LOGI(TAG, "MP3 chunked download completeness is_eof=%d received_bytes=%llu playback_started=%d frames=%lu bytes_left=%d",
+                     is_eof ? 1 : 0, (unsigned long long)received_bytes,
+                     playback_started ? 1 : 0, (unsigned long)decoded_frames, bytes_left);
+            if (playback_started && decoded_frames > 0 && is_eof) {
+                result = BMO_PLAYBACK_SUCCESS;
+            } else if (!playback_started || bytes_left != 0) {
+                result = BMO_PLAYBACK_DECODE_FAILED;
+            } else {
+                result = BMO_PLAYBACK_DOWNLOAD_FAILED;
+            }
+        } else {
+            bool complete_data = esp_http_client_is_complete_data_received(http_client);
+            ESP_LOGI(TAG, "MP3 download completeness=%s expected_bytes=%lld received_bytes=%llu",
+                     complete_data ? "yes" : "no", (long long)content_length,
+                     (unsigned long long)received_bytes);
+            if (!complete_data || received_bytes != (uint64_t)content_length) {
+                result = BMO_PLAYBACK_DOWNLOAD_FAILED;
+            }
+            else if (!playback_started || bytes_left != 0) {
+                result = BMO_PLAYBACK_DECODE_FAILED;
+            }
+            else {
+                result = BMO_PLAYBACK_SUCCESS;
+            }
         }
     }
     
@@ -2152,9 +2166,19 @@ void api_upload_audio_and_process() {
         }
 
         if (backend_active_request_id[0] != '\0') {
-            ESP_LOGW(TAG, "Backend already has an active request; refusing a second transaction");
-            handle_request_failed("DEVICE_BUSY");
-            return;
+            if (playback_state == BMO_PLAYBACK_IDLE ||
+                playback_state == BMO_PLAYBACK_FAILED ||
+                playback_state == BMO_PLAYBACK_DONE)
+            {
+                ESP_LOGI(TAG, "Overriding previous inactive request %s with new voice capture", backend_active_request_id);
+                backend_active_request_id[0] = '\0';
+            }
+            else
+            {
+                ESP_LOGW(TAG, "Backend already has an active request; refusing a second transaction");
+                handle_request_failed("DEVICE_BUSY");
+                return;
+            }
         }
 
         generate_uuid_v4(current_request_id);
@@ -2330,12 +2354,8 @@ void api_upload_audio_and_process() {
                 : play_result == BMO_PLAYBACK_PLAYBACK_FAILED
                     ? "PLAYBACK_FAILED"
                     : "DOWNLOAD_FAILED";
-            if (send_playback_failed(current_request_id, failure_reason)) {
-                playback_state = BMO_PLAYBACK_FAILED;
-                mark_request_result_sent(current_request_id);
-            } else {
-                queue_pending_playback_event(current_request_id, BMO_PENDING_PLAYBACK_FAILED, failure_reason);
-            }
+            queue_pending_playback_event(current_request_id, BMO_PENDING_PLAYBACK_FAILED, failure_reason);
+            flush_pending_playback_event();
 
             setState(BMOState::ERROR_STATE);
             audio_play_error();

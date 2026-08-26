@@ -136,6 +136,17 @@ class SharedPlaybackContractTest(unittest.TestCase):
         self.assertIn("https://api.personalbmo.web.id/audio/", playback)
         self.assertIn("PlaybackAdmission::EXPIRED", playback)
 
+    def test_mp3_downloader_supports_chunked_transfer(self) -> None:
+        api = self.read(API_SOURCE)
+        downloader = function_body(
+            api,
+            r"static\s+BMOPlaybackResult\s+download_and_play_mp3\s*\([^)]*\)",
+        )
+        self.assertIn("esp_http_client_is_chunked_response", downloader)
+        self.assertIn("!is_chunked && content_length <= 0", downloader)
+        self.assertIn("!is_chunked && (uint64_t)content_length > 0 && received_bytes > (uint64_t)content_length", downloader)
+        self.assertIn("playback_started && decoded_frames > 0 && is_eof", downloader)
+
 
 if __name__ == "__main__":
     unittest.main()
