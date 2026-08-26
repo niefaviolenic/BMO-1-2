@@ -625,9 +625,9 @@ static void wakeword_listener_task(
                     wakeword_chunk_size));
         }
 
-        BMOState current_state = getState();
+        JoyState current_state = getState();
 
-        if (current_state == BMOState::IDLE)
+        if (current_state == JoyState::IDLE)
         {
             // Maintain continuous rolling pre-roll buffer for seamless single-breath capture
             preroll_push_samples(sample_buffer, wakeword_chunk_size);
@@ -659,7 +659,7 @@ static void wakeword_listener_task(
                 }
             }
         }
-        else if (current_state == BMOState::RECORDING &&
+        else if (current_state == JoyState::RECORDING &&
                  get_recording_status() == RecordingStatus::ACTIVE)
         {
             // Calculate absolute peak amplitude for silence detection
@@ -969,7 +969,7 @@ void wakeword_init()
 
 bool wakeword_task()
 {
-    if(!trySetState(BMOState::IDLE, BMOState::RECORDING))
+    if(!trySetState(JoyState::IDLE, JoyState::RECORDING))
         return false;
 
     // Immediately start recording and commit pre-roll buffer to eliminate handoff gap

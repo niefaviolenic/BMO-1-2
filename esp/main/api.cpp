@@ -1,6 +1,6 @@
 #include "api.h"
-#include "bmo_credentials.h"
-#include "bmo_dev_config.h"
+#include "joy_credentials.h"
+#include "joy_dev_config.h"
 #include "state.h"
 #include "audio.h"
 #include "playback.h"
@@ -29,12 +29,12 @@
 
 static const char *TAG = "API";
 
-#define BMO_BACKEND_HOST "api.personalbmo.web.id"
-#define BMO_WS_URL      "wss://" BMO_BACKEND_HOST "/ws"
-#define BMO_UPLOAD_URL  "https://" BMO_BACKEND_HOST "/api/v1/voice"
+#define JOY_BACKEND_HOST "api.personalbmo.web.id"
+#define JOY_WS_URL      "wss://" JOY_BACKEND_HOST "/ws"
+#define JOY_UPLOAD_URL  "https://" JOY_BACKEND_HOST "/api/v1/voice"
 #define WS_AUTH_TIMEOUT_MS 5000
-#define BMO_BACKEND_STATE_MAX_LEN 16
-#define BMO_PLAYBACK_REASON_MAX_LEN 24
+#define JOY_BACKEND_STATE_MAX_LEN 16
+#define JOY_PLAYBACK_REASON_MAX_LEN 24
 #define MAX_WAV_BYTES 3145728U
 #define MAX_WAV_DURATION_SEC 60U
 #define WAV_SAMPLE_RATE 16000U
@@ -47,45 +47,45 @@ static const char *TAG = "API";
 #define UPLOAD_MAX_ATTEMPTS 3U
 #define TOTAL_PIPELINE_TIMEOUT_MS 300000U
 
-enum BMOUploadResult {
-    BMO_UPLOAD_ACCEPTED,
-    BMO_UPLOAD_RETRYABLE_TRANSPORT,
-    BMO_UPLOAD_RECONNECT_REQUIRED,
-    BMO_UPLOAD_TERMINAL_CREDENTIAL,
-    BMO_UPLOAD_TERMINAL_BUSY,
-    BMO_UPLOAD_TERMINAL_REQUEST_CONFLICT,
-    BMO_UPLOAD_TERMINAL_RECORDING,
-    BMO_UPLOAD_TERMINAL_REQUEST,
-    BMO_UPLOAD_TERMINAL_MALFORMED_RESPONSE,
-    BMO_UPLOAD_TERMINAL_DUPLICATE
+enum JoyUploadResult {
+    JOY_UPLOAD_ACCEPTED,
+    JOY_UPLOAD_RETRYABLE_TRANSPORT,
+    JOY_UPLOAD_RECONNECT_REQUIRED,
+    JOY_UPLOAD_TERMINAL_CREDENTIAL,
+    JOY_UPLOAD_TERMINAL_BUSY,
+    JOY_UPLOAD_TERMINAL_REQUEST_CONFLICT,
+    JOY_UPLOAD_TERMINAL_RECORDING,
+    JOY_UPLOAD_TERMINAL_REQUEST,
+    JOY_UPLOAD_TERMINAL_MALFORMED_RESPONSE,
+    JOY_UPLOAD_TERMINAL_DUPLICATE
 };
 
 // Playback & State variables
-enum BMOPlaybackState {
-    BMO_PLAYBACK_IDLE,
-    BMO_PLAYBACK_WAITING,
-    BMO_PLAYBACK_DOWNLOADING,
-    BMO_PLAYBACK_PLAYING,
-    BMO_PLAYBACK_DONE,
-    BMO_PLAYBACK_FAILED,
-    BMO_PLAYBACK_DONE_PENDING_SEND,
-    BMO_PLAYBACK_FAILED_PENDING_SEND,
-    BMO_PLAYBACK_CANCELLED
+enum JoyPlaybackState {
+    JOY_PLAYBACK_IDLE,
+    JOY_PLAYBACK_WAITING,
+    JOY_PLAYBACK_DOWNLOADING,
+    JOY_PLAYBACK_PLAYING,
+    JOY_PLAYBACK_DONE,
+    JOY_PLAYBACK_FAILED,
+    JOY_PLAYBACK_DONE_PENDING_SEND,
+    JOY_PLAYBACK_FAILED_PENDING_SEND,
+    JOY_PLAYBACK_CANCELLED
 };
 
-enum BMOPlaybackResult {
-    BMO_PLAYBACK_SUCCESS,
-    BMO_PLAYBACK_EXPIRED,
-    BMO_PLAYBACK_DOWNLOAD_FAILED,
-    BMO_PLAYBACK_DECODE_FAILED,
-    BMO_PLAYBACK_PLAYBACK_FAILED,
-    BMO_PLAYBACK_REQUEST_FAILED
+enum JoyPlaybackResult {
+    JOY_PLAYBACK_SUCCESS,
+    JOY_PLAYBACK_EXPIRED,
+    JOY_PLAYBACK_DOWNLOAD_FAILED,
+    JOY_PLAYBACK_DECODE_FAILED,
+    JOY_PLAYBACK_PLAYBACK_FAILED,
+    JOY_PLAYBACK_REQUEST_FAILED
 };
 
-static volatile BMOPlaybackState playback_state = BMO_PLAYBACK_IDLE;
+static volatile JoyPlaybackState playback_state = JOY_PLAYBACK_IDLE;
 static char current_request_id[37] = {0};
 static PlaybackJob current_playback_job = {};
-static char backend_state[BMO_BACKEND_STATE_MAX_LEN] = "idle";
+static char backend_state[JOY_BACKEND_STATE_MAX_LEN] = "idle";
 static char backend_active_request_id[37] = {0};
 static TickType_t audio_deadline_tick = 0;
 
@@ -105,33 +105,33 @@ static bool ws_reconnect_pending = false;
 static bool ws_pairing_reconnect_pending = false;
 static bool ws_connection_replacement_suppressed = false;
 
-enum BMOWsLifecycleState {
-    BMO_WS_LIFECYCLE_STOPPED,
-    BMO_WS_LIFECYCLE_STARTED,
-    BMO_WS_LIFECYCLE_CONNECTED,
-    BMO_WS_LIFECYCLE_TERMINAL
+enum JoyWsLifecycleState {
+    JOY_WS_LIFECYCLE_STOPPED,
+    JOY_WS_LIFECYCLE_STARTED,
+    JOY_WS_LIFECYCLE_CONNECTED,
+    JOY_WS_LIFECYCLE_TERMINAL
 };
 
-static BMOWsLifecycleState ws_lifecycle_state = BMO_WS_LIFECYCLE_STOPPED;
+static JoyWsLifecycleState ws_lifecycle_state = JOY_WS_LIFECYCLE_STOPPED;
 
 static bool ws_reconnect_allowed()
 {
     return !ws_authentication_blocked && !ws_connection_replacement_suppressed;
 }
 
-enum BMOPendingPlaybackEvent {
-    BMO_PENDING_PLAYBACK_NONE,
-    BMO_PENDING_PLAYBACK_DONE,
-    BMO_PENDING_PLAYBACK_FAILED
+enum JoyPendingPlaybackEvent {
+    JOY_PENDING_PLAYBACK_NONE,
+    JOY_PENDING_PLAYBACK_DONE,
+    JOY_PENDING_PLAYBACK_FAILED
 };
 
-static BMOPendingPlaybackEvent pending_playback_event = BMO_PENDING_PLAYBACK_NONE;
+static JoyPendingPlaybackEvent pending_playback_event = JOY_PENDING_PLAYBACK_NONE;
 static char pending_playback_request_id[37] = {0};
-static char pending_playback_reason[BMO_PLAYBACK_REASON_MAX_LEN] = {0};
+static char pending_playback_reason[JOY_PLAYBACK_REASON_MAX_LEN] = {0};
 static bool recovery_request_pending = false;
 static volatile bool pending_request_failed = false;
 static char pending_request_failed_id[37] = {0};
-static char pending_request_failed_code[BMO_PLAYBACK_REASON_MAX_LEN] = {0};
+static char pending_request_failed_code[JOY_PLAYBACK_REASON_MAX_LEN] = {0};
 
 static SemaphoreHandle_t ws_send_mutex = NULL;
 
@@ -161,17 +161,17 @@ static const char *ws_error_type_name(esp_websocket_error_type_t error_type)
     }
 }
 
-static const char *ws_lifecycle_state_name(BMOWsLifecycleState state)
+static const char *ws_lifecycle_state_name(JoyWsLifecycleState state)
 {
     switch (state)
     {
-        case BMO_WS_LIFECYCLE_STOPPED:
+        case JOY_WS_LIFECYCLE_STOPPED:
             return "stopped";
-        case BMO_WS_LIFECYCLE_STARTED:
+        case JOY_WS_LIFECYCLE_STARTED:
             return "started";
-        case BMO_WS_LIFECYCLE_CONNECTED:
+        case JOY_WS_LIFECYCLE_CONNECTED:
             return "connected";
-        case BMO_WS_LIFECYCLE_TERMINAL:
+        case JOY_WS_LIFECYCLE_TERMINAL:
             return "terminal";
         default:
             return "unknown";
@@ -246,9 +246,9 @@ static void log_ws_lifecycle_event(const char *event_name, const char *source,
 
 static void mark_ws_down(const char *source)
 {
-    if (ws_lifecycle_state != BMO_WS_LIFECYCLE_STOPPED)
+    if (ws_lifecycle_state != JOY_WS_LIFECYCLE_STOPPED)
     {
-        ws_lifecycle_state = BMO_WS_LIFECYCLE_TERMINAL;
+        ws_lifecycle_state = JOY_WS_LIFECYCLE_TERMINAL;
     }
     log_ws_lifecycle_event("state_down_before", source, NULL);
     ws_connected = false;
@@ -291,7 +291,7 @@ static esp_err_t start_ws_if_network_ready(const char *source)
 
     log_ws_lifecycle_event("start_call_before", source, NULL);
     ws_client_started = true;
-    ws_lifecycle_state = BMO_WS_LIFECYCLE_STARTED;
+    ws_lifecycle_state = JOY_WS_LIFECYCLE_STARTED;
     esp_err_t err = esp_websocket_client_start(ws_client);
     if (err == ESP_OK)
     {
@@ -301,7 +301,7 @@ static esp_err_t start_ws_if_network_ready(const char *source)
     else
     {
         ws_client_started = false;
-        ws_lifecycle_state = BMO_WS_LIFECYCLE_STOPPED;
+        ws_lifecycle_state = JOY_WS_LIFECYCLE_STOPPED;
         ESP_LOGW(TAG, "Failed to start WebSocket: %s", esp_err_to_name(err));
     }
 
@@ -326,7 +326,7 @@ static void stop_ws_if_started(const char *source)
         if (err == ESP_OK)
         {
             ws_client_started = false;
-            ws_lifecycle_state = BMO_WS_LIFECYCLE_STOPPED;
+            ws_lifecycle_state = JOY_WS_LIFECYCLE_STOPPED;
         }
         log_ws_lifecycle_event("stop_call_after", source, NULL);
         ESP_LOGI(TAG, "WS lifecycle operation=stop source=%s return_code=%s(%d)",
@@ -504,18 +504,18 @@ static void clear_current_playback_job()
     memset(&current_playback_job, 0, sizeof(current_playback_job));
 }
 
-static PlaybackTerminalResult playback_terminal_result(BMOPlaybackResult result)
+static PlaybackTerminalResult playback_terminal_result(JoyPlaybackResult result)
 {
     switch (result)
     {
-        case BMO_PLAYBACK_SUCCESS:
+        case JOY_PLAYBACK_SUCCESS:
             return PlaybackTerminalResult::DONE;
-        case BMO_PLAYBACK_EXPIRED:
+        case JOY_PLAYBACK_EXPIRED:
             return PlaybackTerminalResult::EXPIRED;
-        case BMO_PLAYBACK_DOWNLOAD_FAILED:
-        case BMO_PLAYBACK_DECODE_FAILED:
-        case BMO_PLAYBACK_PLAYBACK_FAILED:
-        case BMO_PLAYBACK_REQUEST_FAILED:
+        case JOY_PLAYBACK_DOWNLOAD_FAILED:
+        case JOY_PLAYBACK_DECODE_FAILED:
+        case JOY_PLAYBACK_PLAYBACK_FAILED:
+        case JOY_PLAYBACK_REQUEST_FAILED:
         default:
             return PlaybackTerminalResult::FAILED;
     }
@@ -532,11 +532,11 @@ static bool request_is_known(const char *request_id)
 
 static bool request_is_terminal(void)
 {
-    return playback_state == BMO_PLAYBACK_DONE ||
-           playback_state == BMO_PLAYBACK_FAILED ||
-           playback_state == BMO_PLAYBACK_CANCELLED ||
-           playback_state == BMO_PLAYBACK_DONE_PENDING_SEND ||
-           playback_state == BMO_PLAYBACK_FAILED_PENDING_SEND;
+    return playback_state == JOY_PLAYBACK_DONE ||
+           playback_state == JOY_PLAYBACK_FAILED ||
+           playback_state == JOY_PLAYBACK_CANCELLED ||
+           playback_state == JOY_PLAYBACK_DONE_PENDING_SEND ||
+           playback_state == JOY_PLAYBACK_FAILED_PENDING_SEND;
 }
 
 static bool adopt_recovered_request(const char *request_id)
@@ -546,13 +546,13 @@ static bool adopt_recovered_request(const char *request_id)
 
     if (current_request_id[0] == '\0' ||
         (strcmp(current_request_id, request_id) != 0 && request_is_terminal() &&
-         pending_playback_event == BMO_PENDING_PLAYBACK_NONE))
+         pending_playback_event == JOY_PENDING_PLAYBACK_NONE))
     {
         strncpy(current_request_id, request_id, sizeof(current_request_id) - 1);
         current_request_id[sizeof(current_request_id) - 1] = '\0';
         clear_current_playback_job();
         reset_audio_deadline();
-        playback_state = BMO_PLAYBACK_WAITING;
+        playback_state = JOY_PLAYBACK_WAITING;
     }
 
     return strcmp(current_request_id, request_id) == 0;
@@ -626,8 +626,8 @@ static bool send_authenticate() {
     if (root == NULL)
         return false;
     cJSON_AddStringToObject(root, "event", "authenticate");
-    cJSON_AddStringToObject(root, "device_id", BMO_DEVICE_ID);
-    cJSON_AddStringToObject(root, "device_token", BMO_DEVICE_TOKEN);
+    cJSON_AddStringToObject(root, "device_id", JOY_DEVICE_ID);
+    cJSON_AddStringToObject(root, "device_token", JOY_DEVICE_TOKEN);
     char *json_str = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
 
@@ -658,7 +658,7 @@ static bool send_pairing_mode_request() {
 
 static void clear_pending_playback_event()
 {
-    pending_playback_event = BMO_PENDING_PLAYBACK_NONE;
+    pending_playback_event = JOY_PENDING_PLAYBACK_NONE;
     pending_playback_request_id[0] = '\0';
     pending_playback_reason[0] = '\0';
 }
@@ -681,7 +681,7 @@ static void mark_request_result_sent(const char *request_id)
     reset_audio_deadline();
 }
 
-static void queue_pending_playback_event(const char *request_id, BMOPendingPlaybackEvent event, const char *reason)
+static void queue_pending_playback_event(const char *request_id, JoyPendingPlaybackEvent event, const char *reason)
 {
     pending_playback_event = event;
     strncpy(pending_playback_request_id, request_id, sizeof(pending_playback_request_id) - 1);
@@ -696,26 +696,26 @@ static void queue_pending_playback_event(const char *request_id, BMOPendingPlayb
         pending_playback_reason[0] = '\0';
     }
 
-    playback_state = event == BMO_PENDING_PLAYBACK_DONE
-        ? BMO_PLAYBACK_DONE_PENDING_SEND
-        : BMO_PLAYBACK_FAILED_PENDING_SEND;
+    playback_state = event == JOY_PENDING_PLAYBACK_DONE
+        ? JOY_PLAYBACK_DONE_PENDING_SEND
+        : JOY_PLAYBACK_FAILED_PENDING_SEND;
 }
 
 static bool flush_pending_playback_event()
 {
-    if (pending_playback_event == BMO_PENDING_PLAYBACK_NONE)
+    if (pending_playback_event == JOY_PENDING_PLAYBACK_NONE)
         return true;
 
-    bool sent = pending_playback_event == BMO_PENDING_PLAYBACK_DONE
+    bool sent = pending_playback_event == JOY_PENDING_PLAYBACK_DONE
         ? send_playback_done(pending_playback_request_id)
         : send_playback_failed(pending_playback_request_id, pending_playback_reason);
 
     if (!sent)
         return false;
 
-    BMOPlaybackState final_state = pending_playback_event == BMO_PENDING_PLAYBACK_DONE
-        ? BMO_PLAYBACK_DONE
-        : BMO_PLAYBACK_FAILED;
+    JoyPlaybackState final_state = pending_playback_event == JOY_PENDING_PLAYBACK_DONE
+        ? JOY_PLAYBACK_DONE
+        : JOY_PLAYBACK_FAILED;
     char sent_request_id[37] = {0};
     strncpy(sent_request_id, pending_playback_request_id, sizeof(sent_request_id) - 1);
     clear_pending_playback_event();
@@ -727,17 +727,17 @@ static bool flush_pending_playback_event()
 // Handle request_failed locally (e.g. error message sound and face display)
 static void handle_request_failed(const char *code) {
     audio_stopThinkingFillerLoop();
-    setState(BMOState::ERROR_STATE);
+    setState(JoyState::ERROR_STATE);
     audio_play_error();
     
     if (strcmp(code, "NO_SPEECH") == 0) {
-        ESP_LOGI(TAG, "Voice Error: Sorry, it is too noisy. BMO cannot hear you.");
+        ESP_LOGI(TAG, "Voice Error: Sorry, it is too noisy. Joy cannot hear you.");
     } else {
-        ESP_LOGI(TAG, "Voice Error: Oh no. BMO could not answer. Please try again. Code: %s", code);
+        ESP_LOGI(TAG, "Voice Error: Oh no. Joy could not answer. Please try again. Code: %s", code);
     }
     
     vTaskDelay(pdMS_TO_TICKS(2000));
-    setState(BMOState::IDLE);
+    setState(JoyState::IDLE);
 }
 
 static void queue_request_failed(const char *request_id, const char *code)
@@ -749,7 +749,7 @@ static void queue_request_failed(const char *request_id, const char *code)
             sizeof(pending_request_failed_code) - 1);
     pending_request_failed_code[sizeof(pending_request_failed_code) - 1] = '\0';
     pending_request_failed = true;
-    playback_state = BMO_PLAYBACK_CANCELLED;
+    playback_state = JOY_PLAYBACK_CANCELLED;
     playback_cancel();
     backend_active_request_id[0] = '\0';
     clear_current_playback_job();
@@ -765,7 +765,7 @@ static bool process_pending_request_failed(void)
         return false;
 
     char request_id[37] = {0};
-    char code[BMO_PLAYBACK_REASON_MAX_LEN] = {0};
+    char code[JOY_PLAYBACK_REASON_MAX_LEN] = {0};
     strncpy(request_id, pending_request_failed_id, sizeof(request_id) - 1);
     strncpy(code, pending_request_failed_code, sizeof(code) - 1);
     pending_request_failed = false;
@@ -776,7 +776,7 @@ static bool process_pending_request_failed(void)
     playback_cancel();
     clear_current_playback_job();
     reset_audio_deadline();
-    playback_state = BMO_PLAYBACK_CANCELLED;
+    playback_state = JOY_PLAYBACK_CANCELLED;
     handle_request_failed(code);
     return true;
 }
@@ -815,7 +815,7 @@ static void handle_ws_message(const char *payload, int len) {
             status_node != NULL && cJSON_IsString(status_node) &&
             strcmp(status_node->valuestring, "ok") == 0 &&
             device_id_node != NULL && cJSON_IsString(device_id_node) &&
-            strcmp(device_id_node->valuestring, BMO_DEVICE_ID) == 0 &&
+            strcmp(device_id_node->valuestring, JOY_DEVICE_ID) == 0 &&
             active_request_node != NULL && active_request_is_valid &&
             state_matches_active_request;
 
@@ -849,9 +849,9 @@ static void handle_ws_message(const char *payload, int len) {
             adopt_recovered_request(backend_active_request_id) &&
             !request_is_terminal() &&
             (strcmp(backend_state, "thinking") == 0 || strcmp(backend_state, "audio_ready") == 0)) {
-            if (getState() == BMOState::IDLE) {
+            if (getState() == JoyState::IDLE) {
                 recovery_request_pending = true;
-                setState(BMOState::THINKING);
+                setState(JoyState::THINKING);
             }
         }
 
@@ -922,9 +922,9 @@ static void handle_ws_message(const char *payload, int len) {
             // Backend owns the thinking transition; listening remains local
             // firmware state and is never sent over WebSocket.
             display_set_mode(DisplayMode::THINKING);
-            if (getState() == BMOState::IDLE) {
+            if (getState() == JoyState::IDLE) {
                 recovery_request_pending = true;
-                setState(BMOState::THINKING);
+                setState(JoyState::THINKING);
             }
         }
     }
@@ -975,19 +975,19 @@ static void handle_ws_message(const char *payload, int len) {
             }
             if (resp_text_node != NULL && cJSON_IsString(resp_text_node) &&
                 resp_text_node->valuestring != NULL && resp_text_node->valuestring[0] != '\0') {
-                ESP_LOGI(TAG, "🤖 [BMO AI]: %s", resp_text_node->valuestring);
+                ESP_LOGI(TAG, "🤖 [Joy AI]: %s", resp_text_node->valuestring);
             }
             strncpy(backend_state, "audio_ready", sizeof(backend_state) - 1);
             backend_state[sizeof(backend_state) - 1] = '\0';
-            if (playback_state == BMO_PLAYBACK_DONE_PENDING_SEND ||
-                playback_state == BMO_PLAYBACK_FAILED_PENDING_SEND) {
+            if (playback_state == JOY_PLAYBACK_DONE_PENDING_SEND ||
+                playback_state == JOY_PLAYBACK_FAILED_PENDING_SEND) {
                 ESP_LOGI(TAG, "Ignore audio_ready while playback outcome is pending");
             }
-            else if (playback_state == BMO_PLAYBACK_DOWNLOADING ||
-                     playback_state == BMO_PLAYBACK_PLAYING ||
-                     playback_state == BMO_PLAYBACK_DONE ||
-                     playback_state == BMO_PLAYBACK_FAILED ||
-                     playback_state == BMO_PLAYBACK_CANCELLED) {
+            else if (playback_state == JOY_PLAYBACK_DOWNLOADING ||
+                     playback_state == JOY_PLAYBACK_PLAYING ||
+                     playback_state == JOY_PLAYBACK_DONE ||
+                     playback_state == JOY_PLAYBACK_FAILED ||
+                     playback_state == JOY_PLAYBACK_CANCELLED) {
                 ESP_LOGI(TAG, "Ignore duplicate audio_ready for request");
             }
             else {
@@ -1006,13 +1006,13 @@ static void handle_ws_message(const char *payload, int len) {
                     audio_stopThinkingFillerLoop();
                     current_playback_job = voice_job;
                     set_audio_deadline(expires_in_seconds);
-                    playback_state = BMO_PLAYBACK_DOWNLOADING;
+                    playback_state = JOY_PLAYBACK_DOWNLOADING;
                     ESP_LOGI(TAG, "Accepted audio_ready request_id=%s format=mp3 expires_in_seconds=%lu url_host=%s",
                              req_id_node->valuestring, (unsigned long)expires_in_seconds,
-                             BMO_BACKEND_HOST);
-                    if (getState() == BMOState::IDLE) {
+                             JOY_BACKEND_HOST);
+                    if (getState() == JoyState::IDLE) {
                         recovery_request_pending = true;
-                        setState(BMOState::THINKING);
+                        setState(JoyState::THINKING);
                     }
                 }
             }
@@ -1040,14 +1040,14 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
     switch (event_id) {
         case WEBSOCKET_EVENT_BEGIN:
             ws_client_started = true;
-            ws_lifecycle_state = BMO_WS_LIFECYCLE_STARTED;
+            ws_lifecycle_state = JOY_WS_LIFECYCLE_STARTED;
             log_ws_lifecycle_event("event_begin", "websocket_event", data);
             break;
 
         case WEBSOCKET_EVENT_FINISH:
             ws_client_started = false;
             mark_ws_down("event_finish");
-            ws_lifecycle_state = BMO_WS_LIFECYCLE_STOPPED;
+            ws_lifecycle_state = JOY_WS_LIFECYCLE_STOPPED;
             ws_reconnect_pending = ws_reconnect_allowed();
             log_ws_lifecycle_event("event_finish", "websocket_event", data);
             break;
@@ -1060,7 +1060,7 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
             ws_authenticated = false;
             ws_auth_pending = true;
             ws_auth_deadline = xTaskGetTickCount() + pdMS_TO_TICKS(WS_AUTH_TIMEOUT_MS);
-            ws_lifecycle_state = BMO_WS_LIFECYCLE_CONNECTED;
+            ws_lifecycle_state = JOY_WS_LIFECYCLE_CONNECTED;
             ws_reconnect_pending = false;
             (void)pairing_on_socket_connected();
             log_ws_lifecycle_event("event_connected", "websocket_event", data);
@@ -1123,7 +1123,7 @@ static void process_pairing_actions() {
         return;
 
     if ((actions & PAIRING_ACTION_SHOW_UI) != 0) {
-#if !BMO_DEV_SUPPRESS_PAIRING_UI
+#if !JOY_DEV_SUPPRESS_PAIRING_UI
         const PairingSnapshot snapshot = pairing_get_snapshot();
         if (!display_set_pairing_code(snapshot.code))
             ESP_LOGW(TAG, "Pairing display update failed");
@@ -1216,8 +1216,8 @@ static void ws_monitor_task(void *param) {
             ESP_LOGI(TAG, "Network ready, starting WebSocket...");
             start_ws_if_network_ready("monitor_initial");
         }
-        else if (ws_lifecycle_state == BMO_WS_LIFECYCLE_STARTED ||
-                 ws_lifecycle_state == BMO_WS_LIFECYCLE_TERMINAL) {
+        else if (ws_lifecycle_state == JOY_WS_LIFECYCLE_STARTED ||
+                 ws_lifecycle_state == JOY_WS_LIFECYCLE_TERMINAL) {
             // A connection attempt or shutdown is still active; do not stop/start it.
         }
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -1237,11 +1237,11 @@ void api_init() {
     }
     
     esp_websocket_client_config_t ws_cfg = {};
-    ws_cfg.uri = BMO_WS_URL;
+    ws_cfg.uri = JOY_WS_URL;
     ws_cfg.task_stack = 8192;
     ws_cfg.disable_auto_reconnect = true; // Let monitor task manage reconnect with exact backoff
     ws_cfg.crt_bundle_attach = esp_crt_bundle_attach;
-    ws_cfg.cert_common_name = BMO_BACKEND_HOST;
+    ws_cfg.cert_common_name = JOY_BACKEND_HOST;
     ws_cfg.skip_cert_common_name_check = false;
     ws_cfg.network_timeout_ms = 10000;
     
@@ -1319,16 +1319,16 @@ static esp_err_t mp3_http_event_handler(esp_http_client_event_t *event)
 
 // Shared MP3 downloader/decoder/player. Transport validation and voice
 // correlation happen before this physical playback path is entered.
-static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
+static JoyPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
     audio_stopThinkingFillerLoop();
     if (job == NULL || audio_deadline_expired() ||
         playback_is_expired(esp_timer_get_time() / 1000))
     {
         ESP_LOGW(TAG, "MP3 download skipped: audio URL expired");
-        return BMO_PLAYBACK_EXPIRED;
+        return JOY_PLAYBACK_EXPIRED;
     }
 
-    ESP_LOGI(TAG, "Initializing HTTP GET stream for MP3 host=%s", BMO_BACKEND_HOST);
+    ESP_LOGI(TAG, "Initializing HTTP GET stream for MP3 host=%s", JOY_BACKEND_HOST);
     
     char content_type[64] = {};
     esp_http_client_config_t config = {};
@@ -1338,20 +1338,20 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
     config.event_handler = mp3_http_event_handler;
     config.user_data = content_type;
     config.crt_bundle_attach = esp_crt_bundle_attach;
-    config.common_name = BMO_BACKEND_HOST;
+    config.common_name = JOY_BACKEND_HOST;
     config.skip_cert_common_name_check = false;
     
     esp_http_client_handle_t http_client = esp_http_client_init(&config);
     if (http_client == NULL) {
         ESP_LOGE(TAG, "Failed to initialize HTTP client");
-        return BMO_PLAYBACK_DOWNLOAD_FAILED;
+        return JOY_PLAYBACK_DOWNLOAD_FAILED;
     }
     
     esp_err_t err = esp_http_client_open(http_client, 0);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to open GET connection: %s", esp_err_to_name(err));
         esp_http_client_cleanup(http_client);
-        return BMO_PLAYBACK_DOWNLOAD_FAILED;
+        return JOY_PLAYBACK_DOWNLOAD_FAILED;
     }
     
     int64_t content_length = esp_http_client_fetch_headers(http_client);
@@ -1366,7 +1366,7 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
         ESP_LOGW(TAG, "Audio expired (HTTP 410 Gone)");
         esp_http_client_close(http_client);
         esp_http_client_cleanup(http_client);
-        return BMO_PLAYBACK_EXPIRED;
+        return JOY_PLAYBACK_EXPIRED;
     }
     
     if (status_code != 200 || !content_type_valid || (!is_chunked && content_length <= 0)) {
@@ -1374,7 +1374,7 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
                  status_code, content_type_valid ? 1 : 0, (long long)content_length, is_chunked ? "yes" : "no");
         esp_http_client_close(http_client);
         esp_http_client_cleanup(http_client);
-        return BMO_PLAYBACK_DOWNLOAD_FAILED;
+        return JOY_PLAYBACK_DOWNLOAD_FAILED;
     }
     
     // MP3 Buffer configuration
@@ -1385,7 +1385,7 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
         ESP_LOGE(TAG, "Failed to allocate MP3 streaming buffer");
         esp_http_client_close(http_client);
         esp_http_client_cleanup(http_client);
-        return BMO_PLAYBACK_DOWNLOAD_FAILED;
+        return JOY_PLAYBACK_DOWNLOAD_FAILED;
     }
     
     HMP3Decoder hMP3Decoder = MP3InitDecoder();
@@ -1394,7 +1394,7 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
         free(mp3_stream_buf);
         esp_http_client_close(http_client);
         esp_http_client_cleanup(http_client);
-        return BMO_PLAYBACK_DECODE_FAILED;
+        return JOY_PLAYBACK_DECODE_FAILED;
     }
     
     int bytes_left = 0;
@@ -1421,24 +1421,24 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
         free(mp3_stream_buf);
         esp_http_client_close(http_client);
         esp_http_client_cleanup(http_client);
-        return BMO_PLAYBACK_DECODE_FAILED;
+        return JOY_PLAYBACK_DECODE_FAILED;
     }
 
-    BMOPlaybackResult result = BMO_PLAYBACK_DOWNLOAD_FAILED;
+    JoyPlaybackResult result = JOY_PLAYBACK_DOWNLOAD_FAILED;
     
     while (true) {
         int64_t now_us = esp_timer_get_time();
 
         if (audio_deadline_expired() ||
             playback_is_expired(now_us / 1000LL)) {
-            result = BMO_PLAYBACK_EXPIRED;
+            result = JOY_PLAYBACK_EXPIRED;
             break;
         }
 
-        if (playback_state == BMO_PLAYBACK_CANCELLED) {
+        if (playback_state == JOY_PLAYBACK_CANCELLED) {
             result = pending_request_failed
-                ? BMO_PLAYBACK_REQUEST_FAILED
-                : BMO_PLAYBACK_DOWNLOAD_FAILED;
+                ? JOY_PLAYBACK_REQUEST_FAILED
+                : JOY_PLAYBACK_DOWNLOAD_FAILED;
             break;
         }
 
@@ -1446,7 +1446,7 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
             ESP_LOGW(TAG, "MP3 stream stall timeout: no bytes received for %lld ms",
                      (long long)((now_us - last_receive_time_us) / 1000LL));
             read_failed = true;
-            result = BMO_PLAYBACK_DOWNLOAD_FAILED;
+            result = JOY_PLAYBACK_DOWNLOAD_FAILED;
             break;
         }
 
@@ -1454,7 +1454,7 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
             ESP_LOGW(TAG, "MP3 playback underrun timeout: wall_ms=%lld media_ms=%llu",
                      (long long)((now_us - playback_wall_start_us) / 1000LL),
                      (unsigned long long)(decoded_media_us / 1000ULL));
-            result = BMO_PLAYBACK_PLAYBACK_FAILED;
+            result = JOY_PLAYBACK_PLAYBACK_FAILED;
             break;
         }
         // 1. Fetch more data if space is available
@@ -1473,7 +1473,7 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
             if (r < 0) {
                 ESP_LOGE(TAG, "HTTP read error: %d", r);
                 read_failed = true;
-                result = BMO_PLAYBACK_DOWNLOAD_FAILED;
+                result = JOY_PLAYBACK_DOWNLOAD_FAILED;
                 break;
             } else if (r == 0) {
                 is_eof = true;
@@ -1485,7 +1485,7 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
                              (long long)content_length,
                              (unsigned long long)received_bytes);
                     read_failed = true;
-                    result = BMO_PLAYBACK_DOWNLOAD_FAILED;
+                    result = JOY_PLAYBACK_DOWNLOAD_FAILED;
                     break;
                 }
                 bytes_left += r;
@@ -1502,14 +1502,14 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
                 if (!is_chunked && (uint64_t)content_length > 0 && received_bytes > (uint64_t)content_length) {
                     ESP_LOGE(TAG, "MP3 ID3 skip exceeded Content-Length");
                     read_failed = true;
-                    result = BMO_PLAYBACK_DOWNLOAD_FAILED;
+                    result = JOY_PLAYBACK_DOWNLOAD_FAILED;
                     break;
                 }
                 read_ptr += skipped;
                 bytes_left -= skipped;
             } else {
                 read_failed = true;
-                result = BMO_PLAYBACK_DOWNLOAD_FAILED;
+                result = JOY_PLAYBACK_DOWNLOAD_FAILED;
                 break;
             }
         }
@@ -1540,7 +1540,7 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
                 (frameInfo.nChans != 1 && frameInfo.nChans != 2) ||
                 frameInfo.samprate <= 0) {
                 ESP_LOGE(TAG, "MP3 decoder returned invalid frame metadata");
-                result = BMO_PLAYBACK_DECODE_FAILED;
+                result = JOY_PLAYBACK_DECODE_FAILED;
                 break;
             }
             
@@ -1549,14 +1549,14 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
                 playback_wall_start_us = esp_timer_get_time();
                 last_progress_log_us = playback_wall_start_us;
                 playback_mark_started();
-                playback_state = BMO_PLAYBACK_PLAYING;
-                setState(BMOState::SPEAKING);
+                playback_state = JOY_PLAYBACK_PLAYING;
+                setState(JoyState::SPEAKING);
                 ESP_LOGI(TAG, "MP3 Playback started: rate=%d, channels=%d", frameInfo.samprate, frameInfo.nChans);
             }
             
             // Output audio through dynamic scaling configuration
             if (!audio_play_raw(out_pcm, frameInfo.outputSamps, frameInfo.nChans, frameInfo.samprate)) {
-                result = BMO_PLAYBACK_PLAYBACK_FAILED;
+                result = JOY_PLAYBACK_PLAYBACK_FAILED;
                 break;
             }
 
@@ -1585,9 +1585,9 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
             
             if (is_eof) {
                 if (playback_started && decoded_frames > 0) {
-                    result = BMO_PLAYBACK_SUCCESS;
+                    result = JOY_PLAYBACK_SUCCESS;
                 } else {
-                    result = BMO_PLAYBACK_DECODE_FAILED;
+                    result = JOY_PLAYBACK_DECODE_FAILED;
                 }
                 break;
             }
@@ -1596,7 +1596,7 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
         else {
             if (playback_started || resync_bytes >= 1024U) {
                 ESP_LOGE(TAG, "MP3 decoder rejected stream after limited resync");
-                result = BMO_PLAYBACK_DECODE_FAILED;
+                result = JOY_PLAYBACK_DECODE_FAILED;
                 break;
             }
 
@@ -1611,17 +1611,17 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
         }
     }
 
-    if (result == BMO_PLAYBACK_DOWNLOAD_FAILED && !read_failed) {
+    if (result == JOY_PLAYBACK_DOWNLOAD_FAILED && !read_failed) {
         if (is_chunked) {
             ESP_LOGI(TAG, "MP3 chunked download completeness is_eof=%d received_bytes=%llu playback_started=%d frames=%lu bytes_left=%d",
                      is_eof ? 1 : 0, (unsigned long long)received_bytes,
                      playback_started ? 1 : 0, (unsigned long)decoded_frames, bytes_left);
             if (playback_started && decoded_frames > 0 && is_eof) {
-                result = BMO_PLAYBACK_SUCCESS;
+                result = JOY_PLAYBACK_SUCCESS;
             } else if (!playback_started || bytes_left != 0) {
-                result = BMO_PLAYBACK_DECODE_FAILED;
+                result = JOY_PLAYBACK_DECODE_FAILED;
             } else {
-                result = BMO_PLAYBACK_DOWNLOAD_FAILED;
+                result = JOY_PLAYBACK_DOWNLOAD_FAILED;
             }
         } else {
             bool complete_data = esp_http_client_is_complete_data_received(http_client);
@@ -1629,13 +1629,13 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
                      complete_data ? "yes" : "no", (long long)content_length,
                      (unsigned long long)received_bytes);
             if (!complete_data || received_bytes != (uint64_t)content_length) {
-                result = BMO_PLAYBACK_DOWNLOAD_FAILED;
+                result = JOY_PLAYBACK_DOWNLOAD_FAILED;
             }
             else if (!playback_started || bytes_left != 0) {
-                result = BMO_PLAYBACK_DECODE_FAILED;
+                result = JOY_PLAYBACK_DECODE_FAILED;
             }
             else {
-                result = BMO_PLAYBACK_SUCCESS;
+                result = JOY_PLAYBACK_SUCCESS;
             }
         }
     }
@@ -1808,32 +1808,32 @@ static bool validate_canonical_wav(const uint8_t *wav, size_t wav_bytes,
     return true;
 }
 
-enum BMOResponseReadResult {
-    BMO_RESPONSE_READ_OK,
-    BMO_RESPONSE_READ_TRUNCATED,
-    BMO_RESPONSE_READ_TOO_LARGE,
-    BMO_RESPONSE_READ_ERROR
+enum JoyResponseReadResult {
+    JOY_RESPONSE_READ_OK,
+    JOY_RESPONSE_READ_TRUNCATED,
+    JOY_RESPONSE_READ_TOO_LARGE,
+    JOY_RESPONSE_READ_ERROR
 };
 
-static BMOResponseReadResult read_bounded_response(esp_http_client_handle_t client,
+static JoyResponseReadResult read_bounded_response(esp_http_client_handle_t client,
                                                     int64_t expected_length,
                                                     char *response_buf,
                                                     size_t response_capacity,
                                                     size_t *response_length)
 {
     if (client == NULL || response_buf == NULL || response_capacity < 2 || response_length == NULL)
-        return BMO_RESPONSE_READ_ERROR;
+        return JOY_RESPONSE_READ_ERROR;
 
     const size_t max_body = response_capacity - 1;
     if (expected_length > (int64_t)max_body)
-        return BMO_RESPONSE_READ_TOO_LARGE;
+        return JOY_RESPONSE_READ_TOO_LARGE;
 
     size_t total = 0;
     while (total < max_body)
     {
         int read_count = esp_http_client_read(client, response_buf + total, max_body - total);
         if (read_count < 0)
-            return BMO_RESPONSE_READ_ERROR;
+            return JOY_RESPONSE_READ_ERROR;
         if (read_count == 0)
             break;
         total += (size_t)read_count;
@@ -1844,19 +1844,19 @@ static BMOResponseReadResult read_bounded_response(esp_http_client_handle_t clie
         char extra = 0;
         int extra_count = esp_http_client_read(client, &extra, 1);
         if (extra_count < 0)
-            return BMO_RESPONSE_READ_ERROR;
+            return JOY_RESPONSE_READ_ERROR;
         if (extra_count > 0)
-            return BMO_RESPONSE_READ_TOO_LARGE;
+            return JOY_RESPONSE_READ_TOO_LARGE;
     }
 
     response_buf[total] = '\0';
     *response_length = total;
     if (expected_length >= 0 && total != (size_t)expected_length)
-        return BMO_RESPONSE_READ_TRUNCATED;
-    return BMO_RESPONSE_READ_OK;
+        return JOY_RESPONSE_READ_TRUNCATED;
+    return JOY_RESPONSE_READ_OK;
 }
 
-static void clear_upload_request(const char *request_id, BMOPlaybackState terminal_state)
+static void clear_upload_request(const char *request_id, JoyPlaybackState terminal_state)
 {
     if (request_id != NULL && strcmp(current_request_id, request_id) == 0)
         current_request_id[0] = '\0';
@@ -1871,9 +1871,9 @@ static void clear_upload_request(const char *request_id, BMOPlaybackState termin
 }
 
 // Perform HTTP POST WAV Upload with the Retry Matrix
-static BMOUploadResult finish_upload_client(esp_http_client_handle_t client,
+static JoyUploadResult finish_upload_client(esp_http_client_handle_t client,
                                              bool client_open,
-                                             BMOUploadResult result)
+                                             JoyUploadResult result)
 {
     if (client != NULL)
     {
@@ -1884,19 +1884,19 @@ static BMOUploadResult finish_upload_client(esp_http_client_handle_t client,
     return result;
 }
 
-static BMOUploadResult upload_wav_voice(const char *uuid, int16_t *record_buf, size_t sample_count) {
+static JoyUploadResult upload_wav_voice(const char *uuid, int16_t *record_buf, size_t sample_count) {
 
     if (!api_ws_is_authenticated()) {
         ESP_LOGW(TAG, "Refusing upload until WebSocket authentication is valid");
         return ws_authentication_blocked
-            ? BMO_UPLOAD_TERMINAL_CREDENTIAL
-            : BMO_UPLOAD_RECONNECT_REQUIRED;
+            ? JOY_UPLOAD_TERMINAL_CREDENTIAL
+            : JOY_UPLOAD_RECONNECT_REQUIRED;
     }
     
     if (record_buf == NULL || sample_count > (SIZE_MAX / sizeof(int16_t)))
     {
         ESP_LOGE(TAG, "WAV body size is invalid before upload");
-        return BMO_UPLOAD_TERMINAL_RECORDING;
+        return JOY_UPLOAD_TERMINAL_RECORDING;
     }
 
     size_t wav_byte_size = sample_count * sizeof(int16_t);
@@ -1904,30 +1904,30 @@ static BMOUploadResult upload_wav_voice(const char *uuid, int16_t *record_buf, s
              (unsigned long)wav_byte_size, uuid);
     
     esp_http_client_config_t config = {};
-    config.url = BMO_UPLOAD_URL;
+    config.url = JOY_UPLOAD_URL;
     config.method = HTTP_METHOD_POST;
     config.timeout_ms = 30000; // 30s individual POST timeout
     config.crt_bundle_attach = esp_crt_bundle_attach;
-    config.common_name = BMO_BACKEND_HOST;
+    config.common_name = JOY_BACKEND_HOST;
     config.skip_cert_common_name_check = false;
     
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (client == NULL) {
         ESP_LOGE(TAG, "Failed to init HTTP upload client");
-        return BMO_UPLOAD_RETRYABLE_TRANSPORT;
+        return JOY_UPLOAD_RETRYABLE_TRANSPORT;
     }
     bool client_open = false;
     
     // Set headers
-    esp_http_client_set_header(client, "X-Device-Id", BMO_DEVICE_ID);
-    esp_http_client_set_header(client, "X-Device-Token", BMO_DEVICE_TOKEN);
+    esp_http_client_set_header(client, "X-Device-Id", JOY_DEVICE_ID);
+    esp_http_client_set_header(client, "X-Device-Token", JOY_DEVICE_TOKEN);
     esp_http_client_set_header(client, "X-Request-Id", uuid);
     esp_http_client_set_header(client, "Content-Type", "audio/wav");
     
     esp_err_t err = esp_http_client_open(client, wav_byte_size);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to open upload connection: %s", esp_err_to_name(err));
-        return finish_upload_client(client, client_open, BMO_UPLOAD_RETRYABLE_TRANSPORT);
+        return finish_upload_client(client, client_open, JOY_UPLOAD_RETRYABLE_TRANSPORT);
     }
     client_open = true;
     
@@ -1939,7 +1939,7 @@ static BMOUploadResult upload_wav_voice(const char *uuid, int16_t *record_buf, s
         {
             ESP_LOGE(TAG, "WAV body write timeout at %lu/%lu bytes",
                      (unsigned long)bytes_written, (unsigned long)wav_byte_size);
-            return finish_upload_client(client, client_open, BMO_UPLOAD_RETRYABLE_TRANSPORT);
+            return finish_upload_client(client, client_open, JOY_UPLOAD_RETRYABLE_TRANSPORT);
         }
 
         size_t remaining = wav_byte_size - bytes_written;
@@ -1951,7 +1951,7 @@ static BMOUploadResult upload_wav_voice(const char *uuid, int16_t *record_buf, s
         {
             ESP_LOGE(TAG, "WAV body write stopped at %lu/%lu bytes",
                      (unsigned long)bytes_written, (unsigned long)wav_byte_size);
-            return finish_upload_client(client, client_open, BMO_UPLOAD_RETRYABLE_TRANSPORT);
+            return finish_upload_client(client, client_open, JOY_UPLOAD_RETRYABLE_TRANSPORT);
         }
         bytes_written += (size_t)written;
     }
@@ -1963,7 +1963,7 @@ static BMOUploadResult upload_wav_voice(const char *uuid, int16_t *record_buf, s
     ESP_LOGI(TAG, "Upload response status: %d", status_code);
 
     if (status_code <= 0)
-        return finish_upload_client(client, client_open, BMO_UPLOAD_RETRYABLE_TRANSPORT);
+        return finish_upload_client(client, client_open, JOY_UPLOAD_RETRYABLE_TRANSPORT);
 
     bool needs_json = status_code == 202 || status_code == 200 || status_code == 409;
     char response_buf[UPLOAD_RESPONSE_MAX_BYTES] = {0};
@@ -1971,24 +1971,24 @@ static BMOUploadResult upload_wav_voice(const char *uuid, int16_t *record_buf, s
     cJSON *response_root = NULL;
     if (needs_json)
     {
-        BMOResponseReadResult read_result = read_bounded_response(
+        JoyResponseReadResult read_result = read_bounded_response(
             client, fetch_len, response_buf, sizeof(response_buf), &response_length);
-        if (read_result != BMO_RESPONSE_READ_OK)
+        if (read_result != JOY_RESPONSE_READ_OK)
         {
             ESP_LOGE(TAG, "Upload response body rejected class=%d bytes=%lu",
                      (int)read_result, (unsigned long)response_length);
-            return finish_upload_client(client, client_open, BMO_UPLOAD_TERMINAL_MALFORMED_RESPONSE);
+            return finish_upload_client(client, client_open, JOY_UPLOAD_TERMINAL_MALFORMED_RESPONSE);
         }
         response_root = cJSON_ParseWithLength(response_buf, response_length);
         if (response_root == NULL)
         {
             ESP_LOGE(TAG, "Upload response JSON is malformed bytes=%lu",
                      (unsigned long)response_length);
-            return finish_upload_client(client, client_open, BMO_UPLOAD_TERMINAL_MALFORMED_RESPONSE);
+            return finish_upload_client(client, client_open, JOY_UPLOAD_TERMINAL_MALFORMED_RESPONSE);
         }
     }
 
-    BMOUploadResult result = BMO_UPLOAD_TERMINAL_REQUEST;
+    JoyUploadResult result = JOY_UPLOAD_TERMINAL_REQUEST;
     bool duplicate_failure = false;
     bool duplicate_expired = false;
     if (status_code == 202)
@@ -2001,13 +2001,13 @@ static BMOUploadResult upload_wav_voice(const char *uuid, int16_t *record_buf, s
             strcmp(status_node->valuestring, "processing") != 0)
         {
             ESP_LOGE(TAG, "HTTP 202 response identity/status mismatch");
-            result = BMO_UPLOAD_TERMINAL_MALFORMED_RESPONSE;
+            result = JOY_UPLOAD_TERMINAL_MALFORMED_RESPONSE;
         }
         else
         {
             ESP_LOGI(TAG, "Upload accepted status=processing response_bytes=%lu",
                      (unsigned long)response_length);
-            result = BMO_UPLOAD_ACCEPTED;
+            result = JOY_UPLOAD_ACCEPTED;
         }
     }
     else if (status_code == 200)
@@ -2021,14 +2021,14 @@ static BMOUploadResult upload_wav_voice(const char *uuid, int16_t *record_buf, s
             status_node == NULL || !cJSON_IsString(status_node))
         {
             ESP_LOGE(TAG, "HTTP 200 duplicate response identity/status mismatch");
-            result = BMO_UPLOAD_TERMINAL_MALFORMED_RESPONSE;
+            result = JOY_UPLOAD_TERMINAL_MALFORMED_RESPONSE;
         }
         else if (strcmp(status_node->valuestring, "processing") == 0 ||
                  strcmp(status_node->valuestring, "audio_ready") == 0)
         {
             ESP_LOGI(TAG, "Duplicate response status=%s response_bytes=%lu",
                      status_node->valuestring, (unsigned long)response_length);
-            result = BMO_UPLOAD_ACCEPTED;
+            result = JOY_UPLOAD_ACCEPTED;
         }
         else if (strcmp(status_node->valuestring, "completed") == 0 ||
                  strcmp(status_node->valuestring, "failed") == 0 ||
@@ -2037,18 +2037,18 @@ static BMOUploadResult upload_wav_voice(const char *uuid, int16_t *record_buf, s
             ESP_LOGI(TAG, "Duplicate terminal status=%s; no new request",
                      status_node->valuestring);
             duplicate_expired = strcmp(status_node->valuestring, "expired") == 0;
-            clear_upload_request(uuid, BMO_PLAYBACK_CANCELLED);
+            clear_upload_request(uuid, JOY_PLAYBACK_CANCELLED);
             duplicate_failure = strcmp(status_node->valuestring, "failed") == 0 || duplicate_expired;
             if (!duplicate_failure)
             {
-                setState(BMOState::IDLE);
+                setState(JoyState::IDLE);
             }
-            result = BMO_UPLOAD_TERMINAL_DUPLICATE;
+            result = JOY_UPLOAD_TERMINAL_DUPLICATE;
         }
         else
         {
             ESP_LOGE(TAG, "HTTP 200 duplicate status is unsupported");
-            result = BMO_UPLOAD_TERMINAL_MALFORMED_RESPONSE;
+            result = JOY_UPLOAD_TERMINAL_MALFORMED_RESPONSE;
         }
     }
     else if (status_code == 409)
@@ -2057,63 +2057,63 @@ static BMOUploadResult upload_wav_voice(const char *uuid, int16_t *record_buf, s
         if (error_node == NULL || !cJSON_IsString(error_node))
         {
             ESP_LOGE(TAG, "HTTP 409 response has no error classification");
-            result = BMO_UPLOAD_TERMINAL_MALFORMED_RESPONSE;
+            result = JOY_UPLOAD_TERMINAL_MALFORMED_RESPONSE;
         }
         else if (strcmp(error_node->valuestring, "WEBSOCKET_NOT_CONNECTED") == 0)
         {
             ESP_LOGW(TAG, "HTTP 409 classified=WEBSOCKET_NOT_CONNECTED");
-            result = BMO_UPLOAD_RECONNECT_REQUIRED;
+            result = JOY_UPLOAD_RECONNECT_REQUIRED;
         }
         else if (strcmp(error_node->valuestring, "DEVICE_BUSY") == 0)
         {
             ESP_LOGW(TAG, "HTTP 409 classified=DEVICE_BUSY; no retry loop");
-            result = BMO_UPLOAD_TERMINAL_BUSY;
+            result = JOY_UPLOAD_TERMINAL_BUSY;
         }
         else if (strcmp(error_node->valuestring, "REQUEST_ID_CONFLICT") == 0)
         {
             ESP_LOGE(TAG, "HTTP 409 classified=REQUEST_ID_CONFLICT; terminal");
-            result = BMO_UPLOAD_TERMINAL_REQUEST_CONFLICT;
+            result = JOY_UPLOAD_TERMINAL_REQUEST_CONFLICT;
         }
         else
         {
             ESP_LOGE(TAG, "HTTP 409 classification is unsupported");
-            result = BMO_UPLOAD_TERMINAL_MALFORMED_RESPONSE;
+            result = JOY_UPLOAD_TERMINAL_MALFORMED_RESPONSE;
         }
     }
     else if (status_code == 401)
     {
         ESP_LOGE(TAG, "Upload rejected: terminal credential status");
-        result = BMO_UPLOAD_TERMINAL_CREDENTIAL;
+        result = JOY_UPLOAD_TERMINAL_CREDENTIAL;
     }
     else if (status_code == 400)
     {
         ESP_LOGE(TAG, "Upload rejected: terminal request status=400");
-        result = BMO_UPLOAD_TERMINAL_REQUEST;
+        result = JOY_UPLOAD_TERMINAL_REQUEST;
     }
     else if (status_code == 413 || status_code == 415 || status_code == 422)
     {
         ESP_LOGE(TAG, "Upload rejected: terminal recording/format status=%d", status_code);
-        result = BMO_UPLOAD_TERMINAL_RECORDING;
+        result = JOY_UPLOAD_TERMINAL_RECORDING;
     }
     else if (status_code >= 500 && status_code <= 599)
     {
         ESP_LOGW(TAG, "Upload server status=%d; retryable transport/server result", status_code);
-        result = BMO_UPLOAD_RETRYABLE_TRANSPORT;
+        result = JOY_UPLOAD_RETRYABLE_TRANSPORT;
     }
     else if (status_code >= 400 && status_code < 500)
     {
         ESP_LOGE(TAG, "Upload rejected: terminal client status=%d", status_code);
-        result = BMO_UPLOAD_TERMINAL_REQUEST;
+        result = JOY_UPLOAD_TERMINAL_REQUEST;
     }
     else
     {
         ESP_LOGE(TAG, "Upload returned unexpected HTTP status=%d", status_code);
-        result = BMO_UPLOAD_TERMINAL_REQUEST;
+        result = JOY_UPLOAD_TERMINAL_REQUEST;
     }
 
     if (response_root != NULL)
         cJSON_Delete(response_root);
-    BMOUploadResult finished_result = finish_upload_client(client, client_open, result);
+    JoyUploadResult finished_result = finish_upload_client(client, client_open, result);
     if (duplicate_failure)
         handle_request_failed(duplicate_expired ? "AUDIO_EXPIRED" : "REQUEST_FAILED");
     return finished_result;
@@ -2133,7 +2133,7 @@ void api_upload_audio_and_process() {
         if (record_buf == NULL || sample_count <= WAV_HEADER_SAMPLES) {
             ESP_LOGW(TAG, "Record buffer is empty, skipping API processing");
             audio_stopThinkingFillerLoop();
-            setState(BMOState::IDLE);
+            setState(JoyState::IDLE);
             return;
         }
 
@@ -2163,16 +2163,16 @@ void api_upload_audio_and_process() {
             return;
         }
 
-        if (pending_playback_event != BMO_PENDING_PLAYBACK_NONE) {
+        if (pending_playback_event != JOY_PENDING_PLAYBACK_NONE) {
             (void)flush_pending_playback_event();
-            if (pending_playback_event != BMO_PENDING_PLAYBACK_NONE)
+            if (pending_playback_event != JOY_PENDING_PLAYBACK_NONE)
                 return;
         }
 
         if (backend_active_request_id[0] != '\0') {
-            if (playback_state == BMO_PLAYBACK_IDLE ||
-                playback_state == BMO_PLAYBACK_FAILED ||
-                playback_state == BMO_PLAYBACK_DONE)
+            if (playback_state == JOY_PLAYBACK_IDLE ||
+                playback_state == JOY_PLAYBACK_FAILED ||
+                playback_state == JOY_PLAYBACK_DONE)
             {
                 ESP_LOGI(TAG, "Overriding previous inactive request %s with new voice capture", backend_active_request_id);
                 backend_active_request_id[0] = '\0';
@@ -2188,29 +2188,27 @@ void api_upload_audio_and_process() {
         generate_uuid_v4(current_request_id);
         strncpy(backend_active_request_id, current_request_id, sizeof(backend_active_request_id) - 1);
         backend_active_request_id[sizeof(backend_active_request_id) - 1] = '\0';
-        playback_state = BMO_PLAYBACK_WAITING;
+        playback_state = JOY_PLAYBACK_WAITING;
 
         // HTTP POST retry matrix: preserve the same UUID and body on every attempt.
         bool success_post = false;
-        BMOUploadResult last_upload_result = BMO_UPLOAD_TERMINAL_REQUEST;
-
+        JoyUploadResult last_upload_result = JOY_UPLOAD_TERMINAL_REQUEST;
         for (unsigned attempt = 1; attempt <= UPLOAD_MAX_ATTEMPTS && !success_post; ++attempt) {
             ESP_LOGI(TAG, "Voice upload attempt %u/%u", attempt, UPLOAD_MAX_ATTEMPTS);
 
             last_upload_result = upload_wav_voice(current_request_id, record_buf, sample_count);
-            success_post = last_upload_result == BMO_UPLOAD_ACCEPTED;
+            success_post = last_upload_result == JOY_UPLOAD_ACCEPTED;
 
             if (success_post) {
                 break;
             }
 
-            if (last_upload_result == BMO_UPLOAD_TERMINAL_DUPLICATE)
+            if (last_upload_result == JOY_UPLOAD_TERMINAL_DUPLICATE)
             {
                 break;
             }
 
-            if (last_upload_result == BMO_UPLOAD_RECONNECT_REQUIRED) {
-                ESP_LOGW(TAG, "Upload requires WSS reconnect/auth; retaining same body and request ID");
+            if (last_upload_result == JOY_UPLOAD_RECONNECT_REQUIRED) {
                 if (network_has_ip() && !ws_authentication_blocked) {
                     stop_ws_if_started("upload_reconnect");
                     start_ws_if_network_ready("upload_reconnect");
@@ -2224,8 +2222,8 @@ void api_upload_audio_and_process() {
                 }
             }
 
-            if (last_upload_result != BMO_UPLOAD_RETRYABLE_TRANSPORT &&
-                last_upload_result != BMO_UPLOAD_RECONNECT_REQUIRED)
+            if (last_upload_result != JOY_UPLOAD_RETRYABLE_TRANSPORT &&
+                last_upload_result != JOY_UPLOAD_RECONNECT_REQUIRED)
                 break;
 
             if (attempt < UPLOAD_MAX_ATTEMPTS) {
@@ -2235,34 +2233,34 @@ void api_upload_audio_and_process() {
             }
         }
 
-        if (!success_post && playback_state != BMO_PLAYBACK_CANCELLED) {
+        if (!success_post && playback_state != JOY_PLAYBACK_CANCELLED) {
             const char *failure_code = "UPLOAD_FAILED";
             switch (last_upload_result)
             {
-                case BMO_UPLOAD_TERMINAL_CREDENTIAL:
+                case JOY_UPLOAD_TERMINAL_CREDENTIAL:
                     failure_code = "INVALID_DEVICE_CREDENTIALS";
                     break;
-                case BMO_UPLOAD_TERMINAL_BUSY:
+                case JOY_UPLOAD_TERMINAL_BUSY:
                     failure_code = "DEVICE_BUSY";
                     break;
-                case BMO_UPLOAD_TERMINAL_REQUEST_CONFLICT:
+                case JOY_UPLOAD_TERMINAL_REQUEST_CONFLICT:
                     failure_code = "REQUEST_ID_CONFLICT";
                     break;
-                case BMO_UPLOAD_TERMINAL_RECORDING:
+                case JOY_UPLOAD_TERMINAL_RECORDING:
                     failure_code = "INVALID_AUDIO";
                     break;
-                case BMO_UPLOAD_TERMINAL_REQUEST:
+                case JOY_UPLOAD_TERMINAL_REQUEST:
                     failure_code = "UPLOAD_REJECTED";
                     break;
-                case BMO_UPLOAD_TERMINAL_MALFORMED_RESPONSE:
+                case JOY_UPLOAD_TERMINAL_MALFORMED_RESPONSE:
                     failure_code = "MALFORMED_RESPONSE";
                     break;
-                case BMO_UPLOAD_RECONNECT_REQUIRED:
+                case JOY_UPLOAD_RECONNECT_REQUIRED:
                     failure_code = ws_authentication_blocked
                         ? "INVALID_DEVICE_CREDENTIALS"
                         : "WEBSOCKET_NOT_CONNECTED";
                     break;
-                case BMO_UPLOAD_RETRYABLE_TRANSPORT:
+                case JOY_UPLOAD_RETRYABLE_TRANSPORT:
                     failure_code = "UPLOAD_TRANSPORT_FAILED";
                     break;
                 default:
@@ -2270,13 +2268,13 @@ void api_upload_audio_and_process() {
                     break;
             }
             ESP_LOGE(TAG, "Upload terminal result=%d after bounded attempts", (int)last_upload_result);
-            clear_upload_request(current_request_id, BMO_PLAYBACK_FAILED);
+            clear_upload_request(current_request_id, JOY_PLAYBACK_FAILED);
             handle_request_failed(failure_code);
             return;
         }
     }
 
-    if (playback_state == BMO_PLAYBACK_CANCELLED) {
+    if (playback_state == JOY_PLAYBACK_CANCELLED) {
         (void)process_pending_request_failed();
         return;
     }
@@ -2284,41 +2282,41 @@ void api_upload_audio_and_process() {
     // Loop wait for audio_ready or failures (pipeline timeout: 300 seconds).
     int wait_timer_ms = 0;
 
-    while (playback_state == BMO_PLAYBACK_WAITING && wait_timer_ms < TOTAL_PIPELINE_TIMEOUT_MS) {
+    while (playback_state == JOY_PLAYBACK_WAITING && wait_timer_ms < TOTAL_PIPELINE_TIMEOUT_MS) {
         vTaskDelay(pdMS_TO_TICKS(20));
         wait_timer_ms += 20;
     }
 
-    if (playback_state == BMO_PLAYBACK_WAITING) {
+    if (playback_state == JOY_PLAYBACK_WAITING) {
         ESP_LOGE(TAG, "Pipeline timeout: no audio_ready received within 300 seconds");
-        clear_upload_request(current_request_id, BMO_PLAYBACK_FAILED);
+        clear_upload_request(current_request_id, JOY_PLAYBACK_FAILED);
         handle_request_failed("PIPELINE_TIMEOUT");
         return;
     }
 
-    if (playback_state == BMO_PLAYBACK_CANCELLED) {
+    if (playback_state == JOY_PLAYBACK_CANCELLED) {
         (void)process_pending_request_failed();
         return;
     }
 
-    if (playback_state == BMO_PLAYBACK_DOWNLOADING) {
-        BMOPlaybackResult play_result = BMO_PLAYBACK_DOWNLOAD_FAILED;
+    if (playback_state == JOY_PLAYBACK_DOWNLOADING) {
+        JoyPlaybackResult play_result = JOY_PLAYBACK_DOWNLOAD_FAILED;
         unsigned download_attempts = 0;
 
         while (download_attempts < 2) {
             if (audio_deadline_expired()) {
-                play_result = BMO_PLAYBACK_EXPIRED;
+                play_result = JOY_PLAYBACK_EXPIRED;
                 break;
             }
 
             download_attempts++;
             play_result = download_and_play_mp3(&current_playback_job);
-            if (play_result == BMO_PLAYBACK_SUCCESS ||
-                play_result == BMO_PLAYBACK_EXPIRED ||
-                play_result == BMO_PLAYBACK_DECODE_FAILED ||
-                play_result == BMO_PLAYBACK_PLAYBACK_FAILED ||
-                play_result == BMO_PLAYBACK_REQUEST_FAILED ||
-                playback_state == BMO_PLAYBACK_CANCELLED) {
+            if (play_result == JOY_PLAYBACK_SUCCESS ||
+                play_result == JOY_PLAYBACK_EXPIRED ||
+                play_result == JOY_PLAYBACK_DECODE_FAILED ||
+                play_result == JOY_PLAYBACK_PLAYBACK_FAILED ||
+                play_result == JOY_PLAYBACK_REQUEST_FAILED ||
+                playback_state == JOY_PLAYBACK_CANCELLED) {
                 break;
             }
 
@@ -2328,44 +2326,44 @@ void api_upload_audio_and_process() {
             }
         }
 
-        if (play_result == BMO_PLAYBACK_REQUEST_FAILED ||
-            (playback_state == BMO_PLAYBACK_CANCELLED && pending_request_failed)) {
+        if (play_result == JOY_PLAYBACK_REQUEST_FAILED ||
+            (playback_state == JOY_PLAYBACK_CANCELLED && pending_request_failed)) {
             (void)process_pending_request_failed();
             return;
         }
 
-        if (play_result == BMO_PLAYBACK_EXPIRED) {
+        if (play_result == JOY_PLAYBACK_EXPIRED) {
             playback_mark_terminal(playback_terminal_result(play_result));
-            clear_upload_request(current_request_id, BMO_PLAYBACK_CANCELLED);
+            clear_upload_request(current_request_id, JOY_PLAYBACK_CANCELLED);
             handle_request_failed("AUDIO_EXPIRED");
             return;
         }
 
-        if (play_result == BMO_PLAYBACK_SUCCESS) {
+        if (play_result == JOY_PLAYBACK_SUCCESS) {
             playback_mark_terminal(playback_terminal_result(play_result));
             if (send_playback_done(current_request_id)) {
-                playback_state = BMO_PLAYBACK_DONE;
+                playback_state = JOY_PLAYBACK_DONE;
                 mark_request_result_sent(current_request_id);
             } else {
-                queue_pending_playback_event(current_request_id, BMO_PENDING_PLAYBACK_DONE, NULL);
+                queue_pending_playback_event(current_request_id, JOY_PENDING_PLAYBACK_DONE, NULL);
             }
 
-            setState(BMOState::IDLE);
+            setState(JoyState::IDLE);
         } else {
             playback_mark_terminal(playback_terminal_result(play_result));
-            const char *failure_reason = play_result == BMO_PLAYBACK_DECODE_FAILED
+            const char *failure_reason = play_result == JOY_PLAYBACK_DECODE_FAILED
                 ? "DECODE_FAILED"
-                : play_result == BMO_PLAYBACK_PLAYBACK_FAILED
+                : play_result == JOY_PLAYBACK_PLAYBACK_FAILED
                     ? "PLAYBACK_FAILED"
                     : "DOWNLOAD_FAILED";
-            queue_pending_playback_event(current_request_id, BMO_PENDING_PLAYBACK_FAILED, failure_reason);
+            queue_pending_playback_event(current_request_id, JOY_PENDING_PLAYBACK_FAILED, failure_reason);
             flush_pending_playback_event();
 
             audio_stopThinkingFillerLoop();
-            setState(BMOState::ERROR_STATE);
+            setState(JoyState::ERROR_STATE);
             audio_play_error();
             vTaskDelay(pdMS_TO_TICKS(2000));
-            setState(BMOState::IDLE);
+            setState(JoyState::IDLE);
         }
     }
 }

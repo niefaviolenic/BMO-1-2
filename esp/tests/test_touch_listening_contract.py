@@ -48,19 +48,19 @@ class TouchListeningContractTest(unittest.TestCase):
         source = STATE_SOURCE.read_text(encoding="utf-8")
         task = function_body(
             source,
-            r"static\s+void\s+bmo_state_machine_task\s*\([^)]*\)",
+            r"static\s+void\s+joy_state_machine_task\s*\([^)]*\)",
         )
         recording = function_body(
             task,
-            r"case\s+BMOState::RECORDING\s*:",
+            r"case\s+JoyState::RECORDING\s*:",
         )
 
         self.assertTrue(
-            "setState(BMOState::THINKING)" in recording or "display_set_mode(DisplayMode::IDLE)" in recording,
+            "setState(JoyState::THINKING)" in recording or "display_set_mode(DisplayMode::IDLE)" in recording,
             "RECORDING completion must release LISTENING before upload",
         )
-        if "setState(BMOState::THINKING)" in recording:
-            thinking = recording.index("setState(BMOState::THINKING)")
+        if "setState(JoyState::THINKING)" in recording:
+            thinking = recording.index("setState(JoyState::THINKING)")
             upload = recording.index("api_upload_audio_and_process()")
             self.assertLess(thinking, upload)
     def test_listening_expression_is_distinct_and_non_blocking(self) -> None:
@@ -117,7 +117,7 @@ class TouchListeningContractTest(unittest.TestCase):
         self.assertIn("display_next_touch_face", update)
         self.assertIn("audio_playExpressionAudio", update)
         self.assertRegex(update, r"audio_setVolume\((?:100|SPEAKER_DEFAULT_VOLUME)\)")
-        self.assertIn("getState() == BMOState::IDLE", update)
+        self.assertIn("getState() == JoyState::IDLE", update)
 
     def test_touch_action_is_one_shot_and_expression_audio_follows_face_render(self) -> None:
         button = BUTTON_SOURCE.read_text(encoding="utf-8")
@@ -144,7 +144,7 @@ class TouchListeningContractTest(unittest.TestCase):
             "Touch stable",
             "Touch lifecycle",
             "Touch accepted",
-            "BMO state before",
+            "Joy state before",
             "Face before",
             "Face after",
             "Face render requested",
@@ -290,9 +290,9 @@ class TouchListeningContractTest(unittest.TestCase):
 
         for existing_mode in ("IDLE", "THINKING", "SPEAKING", "ERROR"):
             self.assertIn(f"DisplayMode::{existing_mode}", mode)
-        self.assertIn("setState(BMOState::SPEAKING)", api)
-        self.assertIn("setState(BMOState::ERROR_STATE)", api)
-        self.assertIn("setState(BMOState::IDLE)", api)
+        self.assertIn("setState(JoyState::SPEAKING)", api)
+        self.assertIn("setState(JoyState::ERROR_STATE)", api)
+        self.assertIn("setState(JoyState::IDLE)", api)
 
 
 if __name__ == "__main__":

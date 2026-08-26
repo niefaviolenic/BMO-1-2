@@ -75,7 +75,7 @@ extern "C" void app_main()
         NULL);
 
     // Jalankan background task state machine orchestrator
-    bmo_state_machine_init();
+    joy_state_machine_init();
 
     wakeword_init();
 

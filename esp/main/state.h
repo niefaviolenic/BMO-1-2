@@ -1,7 +1,7 @@
 #ifndef STATE_H
 #define STATE_H
 
-enum class BMOState
+enum class JoyState
 {
     IDLE,
     RECORDING,
@@ -10,12 +10,12 @@ enum class BMOState
     ERROR_STATE
 };
 
-extern BMOState currentState;
+extern JoyState currentState;
 
-void setState(BMOState state);
-bool trySetState(BMOState expected, BMOState next);
-BMOState getState();
+void setState(JoyState state);
+bool trySetState(JoyState expected, JoyState next);
+JoyState getState();
 
-void bmo_state_machine_init();
+void joy_state_machine_init();
 
 #endif

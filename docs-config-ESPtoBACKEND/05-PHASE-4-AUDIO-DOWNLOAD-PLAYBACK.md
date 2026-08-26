@@ -33,7 +33,7 @@ File utama: `esp/main/api.cpp`; decoder/output: `esp/main/audio.cpp`/`audio.h`.
 ### Decode dan playback
 
 - Decoder menggunakan Helix MP3 Decoder native (`HMP3Decoder`) dengan frame capacity buffer 1152x2 sample.
-- Decoder mengembalikan status sukses/gagal secara granular (`BMOPlaybackResult`), bukan hanya `void`.
+- Decoder mengembalikan status sukses/gagal secara granular (`JoyPlaybackResult`), bukan hanya `void`.
 - Bila MP3 corrupt atau decode gagal, kirim `audio_playback_failed` dengan `DECODE_FAILED`.
 - Bila speaker/I2S gagal atau playback mengalami underrun/stalling, kirim `PLAYBACK_FAILED`.
 - Hanya setelah seluruh sample selesai diputar kirim `audio_playback_done`.
@@ -46,7 +46,7 @@ File utama: `esp/main/api.cpp`; decoder/output: `esp/main/audio.cpp`/`audio.h`.
 
 ### Backend Hermes Streaming & Chunked MP3 Delivery
 
-Backend BMO mengimplementasikan **Hermes Streaming** (`POST /v1/chat/completions` SSE stream dengan `stream: true`), `SentenceSplitter` untuk pemotongan kalimat/klausa secara real-time, dan sintesis TTS terpipanisasi (*pipelined TTS*):
+Backend Joy mengimplementasikan **Hermes Streaming** (`POST /v1/chat/completions` SSE stream dengan `stream: true`), `SentenceSplitter` untuk pemotongan kalimat/klausa secara real-time, dan sintesis TTS terpipanisasi (*pipelined TTS*):
 1. Segera setelah chunk audio pertama disintesis oleh TTS dan ditulis ke `LiveAudioStream`, backend meng-emit WebSocket `audio_ready` ke ESP32 (Time-To-First-Audio / TTFA turun menjadi **~1.7 detik**).
 2. ESP32 langsung menginisiasi HTTPS GET ke `audio_url` (`https://api.personalbmo.web.id/audio/<uuid>.mp3`).
 3. Endpoint audio backend melayani response dengan `Transfer-Encoding: chunked` secara streaming simultan saat TTS menyelesaikan sintesis kalimat-kalimat berikutnya.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate canonical dynamic thinking filler WAV files for BMO.
+Generate canonical dynamic thinking filler WAV files for Joy.
 
 Clips:
 1. thinking_01.wav - "bentar aku pikir dulu" (~1.9s)

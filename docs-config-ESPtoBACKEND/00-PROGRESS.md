@@ -10,7 +10,7 @@ File ini adalah sumber status implementasi. Agent yang mengerjakan perubahan ESP
 | Current step | `Step 5 — Production Verification & Multi-Feature Parity` |
 | Overall progress | `Wake-Ack Cue PASS; Single-Breath Wake Word Pre-roll PASS; Dynamic Thinking Filler PASS; Shared Playback Task PASS; Pairing UI Suppression PASS; 90/90 Python Contract Tests 100% PASS; Backend Hermes Streaming & TTFA ~1.7s PASS` |
 | Last updated | `2026-08-26 15:30:00 +07:00` |
-| Updated by | `BMO Engineering Assistant` |
+| Updated by | `Joy Engineering Assistant` |
 | Firmware/build | `PASS — ESP-IDF build verified; 90/90 Python contract tests passing` |
 | Hardware | `PASS` — ESP32-S3 (INMP441 I2S Mic, MAX98357A I2S Amp, ILI9341 LCD, Touch GPIO 14, Buttons GPIO 15/16) |
 | Production target | `https://api.personalbmo.web.id` / `wss://api.personalbmo.web.id/ws` |
@@ -19,9 +19,9 @@ File ini adalah sumber status implementasi. Agent yang mengerjakan perubahan ESP
 
 1. **Non-Blocking Wake Acknowledgment Cue (Earcon)**: Background worker task `wake_ack_worker_task` pinned to Core 0 in `audio.cpp`, triggered asynchronously via `audio_triggerWakeAck()` on `WAKENET_DETECTED`. Plays `wake_ack.wav` (<=600ms, 16kHz mono WAV) or dual-tone chime (659Hz -> 880Hz) with 0ms mic loop delay.
 2. **Seamless Single-Breath Wake Word Capture**: Rolling circular pre-roll buffer (`PREROLL_BUFFER_SAMPLES = 8192` / ~512ms at 16kHz mono) during IDLE state in `wakeword.cpp`. Zero dropped frames when user speaks commands directly after wake word ("Hi Joy jam berapa...").
-3. **Dynamic Thinking Filler Voice Speech**: 5 embedded WAV clips (`thinking_01.wav` .. `thinking_05.wav`) played upon `BMO_UPLOAD_ACCEPTED` (`202 Accepted` from backend) to eliminate dead-air latency while backend LLM/TTS runs.
+3. **Dynamic Thinking Filler Voice Speech**: 5 embedded WAV clips (`thinking_01.wav` .. `thinking_05.wav`) played upon `JOY_UPLOAD_ACCEPTED` (`202 Accepted` from backend) to eliminate dead-air latency while backend LLM/TTS runs.
 4. **Shared Playback Job Architecture**: `PlaybackJob` abstraction in `playback.cpp` arbitrating voice audio vs proactive playback deliveries.
-5. **Development Pairing UI Suppression**: Compile-time flag `BMO_DEV_SUPPRESS_PAIRING_UI` allowing headless/dev firmware to exercise pairing protocol without rendering PIN to LCD.
+5. **Development Pairing UI Suppression**: Compile-time flag `JOY_DEV_SUPPRESS_PAIRING_UI` allowing headless/dev firmware to exercise pairing protocol without rendering PIN to LCD.
 6. **Python Contract Test Suite**: `90/90 PASS` (100% passing across all contract tests in `esp/tests/`).
 ## Backend Update — Hermes Streaming Integration & TTFA Optimization (~1.7s) — 2026-08-26
 
@@ -33,8 +33,8 @@ Backend production telah dioptimasi dengan arsitektur **Hermes Streaming** (`POS
 
 Read-only verification matched the corrective artifact already installed on the board:
 
-- `build/all_bmo.bin`: 1,253,952 bytes; SHA-256 `EE19260C30DC567A73CE03B3B4E86708C8E24C156DA630FABC6CEBE6271AA452`.
-- `build/all_bmo.elf`: 12,599,916 bytes; SHA-256 `12E05D55F3C71CEFBE17FB2C9CF69893A53DA39D2D9F056CEEDD73D55407A74F`.
+- `build/all_joy.bin`: 1,253,952 bytes; SHA-256 `EE19260C30DC567A73CE03B3B4E86708C8E24C156DA630FABC6CEBE6271AA452`.
+- `build/all_joy.elf`: 12,599,916 bytes; SHA-256 `12E05D55F3C71CEFBE17FB2C9CF69893A53DA39D2D9F056CEEDD73D55407A74F`.
 - COM7 was present as `USB-Enhanced-SERIAL CH343`; no source, firmware, backend, router, WiFi, credential, build, or flash change was made.
 
 The sanitized monitor was active on COM7, but the board repeatedly reported `reason=201 (NO_AP_FOUND)`. It never reached IP, SNTP, TLS, WSS `authenticated`, or `backend_state=idle`, so the operator trigger was not requested and no recording attempt occurred. Evidence: `docs-config-ESPtoBACKEND/serial-gate4-retest-2026-08-18-sanitized.log` and `docs-config-ESPtoBACKEND/gate4-retest-2026-08-18-sanitized.log`.

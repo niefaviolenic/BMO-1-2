@@ -41,13 +41,13 @@ class PairingUiSuppressionContractTest(unittest.TestCase):
         self.assertRegex(
             cmake,
             re.compile(
-                r'option\s*\(\s*BMO_DEV_SUPPRESS_PAIRING_UI\b.*?OFF\s*\)',
+                r'option\s*\(\s*JOY_DEV_SUPPRESS_PAIRING_UI\b.*?OFF\s*\)',
                 re.DOTALL,
             ),
         )
-        self.assertIn("BMO_DEV_SUPPRESS_PAIRING_UI_VALUE", cmake)
-        self.assertIn("bmo_dev_config.h", cmake)
-        self.assertIn('#include "bmo_dev_config.h"', api)
+        self.assertIn("JOY_DEV_SUPPRESS_PAIRING_UI_VALUE", cmake)
+        self.assertIn("joy_dev_config.h", cmake)
+        self.assertIn('#include "joy_dev_config.h"', api)
 
     def test_suppression_guards_only_pairing_code_rendering(self) -> None:
         api = self.read(API_SOURCE)
@@ -57,7 +57,7 @@ class PairingUiSuppressionContractTest(unittest.TestCase):
         )
 
         guarded_render = re.search(
-            r"#if\s*!BMO_DEV_SUPPRESS_PAIRING_UI(?P<body>.*?)#endif",
+            r"#if\s*!JOY_DEV_SUPPRESS_PAIRING_UI(?P<body>.*?)#endif",
             processor,
             re.DOTALL,
         )
@@ -121,6 +121,7 @@ class PairingUiSuppressionContractTest(unittest.TestCase):
     def test_pairing_renderer_has_no_suppression_or_orientation_change(self) -> None:
         display = self.read(DISPLAY_SOURCE)
 
+        self.assertNotIn("JOY_DEV_SUPPRESS_PAIRING_UI", display)
         self.assertNotIn("BMO_DEV_SUPPRESS_PAIRING_UI", display)
         self.assertIn("PAIRING_NUMERIC_GLYPHS", display)
         self.assertIn("PAIRING_GLYPH_COLUMNS - 1 - column", display)

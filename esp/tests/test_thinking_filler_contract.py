@@ -136,7 +136,7 @@ class ThinkingFillerContractTest(unittest.TestCase):
         state_source = STATE_SOURCE.read_text(encoding="utf-8")
         task_body = function_body(
             state_source,
-            r"static\s+void\s+bmo_state_machine_task\s*\([^)]*\)",
+            r"static\s+void\s+joy_state_machine_task\s*\([^)]*\)",
         )
         self.assertIn(
             "audio_startThinkingFillerLoop()",
@@ -145,7 +145,7 @@ class ThinkingFillerContractTest(unittest.TestCase):
         )
 
         recording_case = re.search(
-            r"case\s+BMOState::RECORDING\s*:(?P<body>.*?)case\s+BMOState::THINKING\s*:",
+            r"case\s+JoyState::RECORDING\s*:(?P<body>.*?)case\s+JoyState::THINKING\s*:",
             task_body,
             re.DOTALL,
         )
@@ -163,12 +163,12 @@ class ThinkingFillerContractTest(unittest.TestCase):
             upload_pos,
             "audio_startThinkingFillerLoop() must be triggered before api_upload_audio_and_process()",
         )
-        self.assertIn("setState(BMOState::THINKING)", body, "Must transition to THINKING state on recording completion")
-        thinking_pos = body.index("setState(BMOState::THINKING)")
+        self.assertIn("setState(JoyState::THINKING)", body, "Must transition to THINKING state on recording completion")
+        thinking_pos = body.index("setState(JoyState::THINKING)")
         self.assertLess(
             thinking_pos,
             filler_pos,
-            "setState(BMOState::THINKING) must precede audio_startThinkingFillerLoop() so confused face renders during filler voice",
+            "setState(JoyState::THINKING) must precede audio_startThinkingFillerLoop() so confused face renders during filler voice",
         )
     def test_api_does_not_duplicate_thinking_filler(self) -> None:
         api_source = API_SOURCE.read_text(encoding="utf-8")
@@ -204,7 +204,7 @@ class ThinkingFillerContractTest(unittest.TestCase):
 
         download_play_body = function_body(
             api_source,
-            r"static\s+BMOPlaybackResult\s+download_and_play_mp3\s*\(\s*const\s+PlaybackJob\s*\*\s*job\s*\)",
+            r"static\s+JoyPlaybackResult\s+download_and_play_mp3\s*\(\s*const\s+PlaybackJob\s*\*\s*job\s*\)",
         )
         self.assertIn(
             "audio_stopThinkingFillerLoop()",

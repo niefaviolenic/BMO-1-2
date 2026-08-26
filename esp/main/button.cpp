@@ -53,15 +53,15 @@ static const char *touch_lifecycle_name(TouchLifecycleState state)
     }
 }
 
-static const char *bmo_state_name(BMOState state)
+static const char *joy_state_name(JoyState state)
 {
     switch(state)
     {
-        case BMOState::IDLE: return "IDLE";
-        case BMOState::RECORDING: return "RECORDING";
-        case BMOState::THINKING: return "THINKING";
-        case BMOState::SPEAKING: return "SPEAKING";
-        case BMOState::ERROR_STATE: return "ERROR";
+        case JoyState::IDLE: return "IDLE";
+        case JoyState::RECORDING: return "RECORDING";
+        case JoyState::THINKING: return "THINKING";
+        case JoyState::SPEAKING: return "SPEAKING";
+        case JoyState::ERROR_STATE: return "ERROR";
         default: return "UNKNOWN";
     }
 }
@@ -191,7 +191,7 @@ void button_update()
             touch_candidate_level ? 1 : 0,
             touch_stable_level ? 1 : 0,
             touch_lifecycle_name(touch_state),
-            bmo_state_name(getState()));
+            joy_state_name(getState()));
     }
 
     if(touch_level != touch_candidate_level)
@@ -227,9 +227,9 @@ void button_update()
                     "Touch lifecycle: %s",
                     touch_lifecycle_name(touch_state));
 
-                if(getState() == BMOState::IDLE)
+                if(getState() == JoyState::IDLE)
                 {
-                    const BMOState state_before = getState();
+                    const JoyState state_before = getState();
                     const Face face_before = display_get_idle_face();
                     const Face face_after = display_next_touch_face();
 
@@ -241,8 +241,8 @@ void button_update()
 
                     ESP_LOGI(
                         TAG,
-                        "Touch accepted: BMO state before=%s Face before=%d Face after=%d Face render requested=%d expression_audio=1",
-                        bmo_state_name(state_before),
+                        "Touch accepted: Joy state before=%s Face before=%d Face after=%d Face render requested=%d expression_audio=1",
+                        joy_state_name(state_before),
                         (int)face_before,
                         (int)face_after,
                         1);
@@ -252,7 +252,7 @@ void button_update()
                     ESP_LOGW(
                         TAG,
                         "Touch rejected: state=%s (not IDLE)",
-                        bmo_state_name(getState()));
+                        joy_state_name(getState()));
                 }
             }
         }

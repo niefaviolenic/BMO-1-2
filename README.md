@@ -1,39 +1,39 @@
-# BMO-1-2 — ESP32-S3 Voice Assistant Hardware Client
+# Joy-1-2 — ESP32-S3 Voice Assistant Hardware Client
 
-Repository ini berisi source code firmware ESP-IDF dan dokumentasi integrasi hardware client **BMO (Be More)** berbasis **ESP32-S3** yang terhubung secara realtime ke **BMO Backend Ecosystem** melalui WebSocket dan HTTPS.
+Repository ini berisi source code firmware ESP-IDF dan dokumentasi integrasi hardware client **Joy** berbasis **ESP32-S3** yang terhubung secara realtime ke **Joy Backend Ecosystem** melalui WebSocket dan HTTPS.
 
 ---
 
 ## 1. Arsitektur Sistem & Data Flow
 
-BMO Hardware Client berkomunikasi secara bidirectional dengan BMO Backend:
+Joy Hardware Client berkomunikasi secara bidirectional dengan Joy Backend:
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant U as User
-    participant ESP as ESP32-S3 (BMO Client)
-    participant WSS as BMO Backend (API Gateway / WSS)
+    participant ESP as ESP32-S3 (Joy Client)
+    participant WSS as Joy Backend (API Gateway / WSS)
     participant Pipe as Streaming Voice Pipeline (STT -> Hermes LLM -> TTS)
     participant Audio as Temporary Audio Streamer (Chunked MP3)
 
     Note over ESP,WSS: Boot & Inisialisasi
     ESP->>ESP: Init Peripherals (Display, Audio, Wi-Fi, SNTP)
     ESP->>WSS: WSS Connect (TLS w/ Cert Bundle)
-    ESP->>WSS: {"event":"authenticate", "device_id":"bmo-001", "device_token":"..."}
+    ESP->>WSS: {"event":"authenticate", "device_id":"joy-001", "device_token":"..."}
     WSS-->>ESP: {"event":"authenticated", "status":"ok", "backend_state":"idle"}
 
     Note over U,ESP: Voice Interaction (Wake-up & Capture)
     U->>ESP: Katakan "Hi Joy" / Sentuh Sensor Touch (GPIO 14)
     ESP->>ESP: WakeNet Detect "Hi Joy"
     ESP->>U: Play Wake-up Ack Cue ("heem" / rising earcon via MAX98357A)
-    ESP->>ESP: BMOState::RECORDING (Display: LISTENING)
-    U->>ESP: Bicara: "Halo BMO, apa kabar?"
+    ESP->>ESP: JoyState::RECORDING (Display: LISTENING)
+    U->>ESP: Bicara: "Halo Joy, apa kabar?"
     ESP->>ESP: Silence VAD (800ms) -> WAV Canonical Validation (16kHz 16-bit Mono)
     Note over ESP,Pipe: Voice Processing Pipeline (Hermes Streaming)
     ESP->>WSS: POST /api/v1/voice (Content-Type: audio/wav, X-Request-Id: UUIDv4)
     WSS-->>ESP: HTTP 202 {"request_id":"...", "status":"processing"}
-    ESP->>ESP: BMOState::THINKING (Display: THINKING)
+    ESP->>ESP: JoyState::THINKING (Display: THINKING)
     WSS->>Pipe: STT Transcribe (~350ms)
     WSS-->>ESP: WS {"event":"display_status", "status":"thinking", "transcript":"..."}
     Pipe->>Pipe: Hermes SSE Stream (stream: true) -> SentenceSplitter
@@ -44,9 +44,9 @@ sequenceDiagram
     Note over ESP,U: Chunked Audio Streaming & Playback
     ESP->>Audio: HTTPS GET audio_url (Chunked Transfer Encoding)
     ESP->>ESP: Helix MP3 Decoder -> I2S MAX98357A (Display: SPEAKING)
-    ESP->>U: Putar Suara Jawaban BMO Secara Realtime
+    ESP->>U: Putar Suara Jawaban Joy Secara Realtime
     ESP->>WSS: WS {"event":"audio_playback_done", "request_id":"..."}
-    ESP->>ESP: BMOState::IDLE (Display: IDLE Expression)
+    ESP->>ESP: JoyState::IDLE (Display: IDLE Expression)
 ```
 
 > **Catatan Optimasi Pipeline**: Backend menggunakan **Hermes Streaming** (`POST /v1/chat/completions` SSE stream dengan `stream: true`), `SentenceSplitter` untuk pemotongan berbasis tanda baca kalimat/klausa, dan sintesis TTS terpipanisasi (*pipelined TTS*). Hal ini memangkas **Time-To-First-Audio (TTFA)** menjadi **~1.7 detik** tanpa mengubah kontrak WebSocket / HTTP ESP32 sedikit pun (100% kompatibel).
@@ -115,7 +115,7 @@ sequenceDiagram
 - **Optimasi Latensi (Hermes Streaming Pipeline)**: Backend menggunakan streaming SSE (`stream: true`) dengan *SentenceSplitter* dan pipelined TTS synthesis, sehingga chunk audio MP3 pertama tersedia seketika dan event WS `audio_ready` diterima dalam waktu TTFA (Time-To-First-Audio) ~1.7s. ESP32 langsung mengunduh dan men-decode chunk tersebut secara realtime menggunakan buffer 32 KB + 2 KB pre-buffer.
 - **Audio Ekspresi, Cue Lokal & Dynamic Thinking Filler Voice**:
   - **Wake-up Acknowledgment Cue**: Embedded WAV `audio_wav/wake_ack.wav` (durasi $\le 600\text{ ms}$, 16kHz 16-bit Mono PCM WAV) atau dual-tone fallback synthesizer (rising chime: 659 Hz $\to$ 880 Hz) yang diputar seketika wake word *"Hi Joy"* terdeteksi.
-  - **Dynamic Thinking Filler Voice ("Zero Dead-Air Latency Masking")**: Begitu user selesai berbicara dan upload WAV diterima oleh backend (`BMO_UPLOAD_ACCEPTED`), firmware seketika memutar salah satu dari 5 audio clip filler berpikir secara dinamis/acak (`thinking_01.wav` .. `thinking_05.wav`) melalui speaker MAX98357A:
+  - **Dynamic Thinking Filler Voice ("Zero Dead-Air Latency Masking")**: Begitu user selesai berbicara dan upload WAV diterima oleh backend (`JOY_UPLOAD_ACCEPTED`), firmware seketika memutar salah satu dari 5 audio clip filler berpikir secara dinamis/acak (`thinking_01.wav` .. `thinking_05.wav`) melalui speaker MAX98357A:
     1. `thinking_01.wav`: *"bentar aku pikir dulu"* (~1.2s, pleasant melodic thinking phrase)
     2. `thinking_02.wav`: *"aku lagi proses dulu pertanyaannya"* (~1.4s, pleasant harmonic phrase)
     3. `thinking_03.wav`: *"tunggu sebentar ya"* (~1.0s, pleasant melodic phrase)
@@ -160,7 +160,7 @@ Firmware mengelola state tersinkronisasi antara FreeRTOS Task, LCD Display, dan 
                           └───────────────────────────────────┘
 ```
 
-| Firmware State (`BMOState`) | Display UI Mode (`DisplayMode`) | Keterangan & Tindakan |
+| Firmware State (`JoyState`) | Display UI Mode (`DisplayMode`) | Keterangan & Tindakan |
 |---|---|---|
 | `IDLE` | `IDLE` | Menampilkan animasi wajah aktif (Happy, Cute, Sad, dll.), standby listening untuk wakeword ("Hi Joy"). Saat terdeteksi, memainkan wake ack cue ("heem") sebelum masuk ke RECORDING. |
 | `RECORDING` | `LISTENING` | Mikrofon aktif merekam suara user ke RAM buffer setelah wake ack cue selesai dimainkan. |
@@ -178,11 +178,11 @@ Firmware mengelola state tersinkronisasi antara FreeRTOS Task, LCD Display, dan 
 - **Handshake Autentikasi**:
   Setelah WSS terhubung, ESP mengirim pesan pertama dalam $\le 5$ detik:
   ```json
-  {"event":"authenticate", "device_id":"bmo-001", "device_token":"<PRODUCTION_TOKEN>"}
+  {"event":"authenticate", "device_id":"joy-001", "device_token":"<PRODUCTION_TOKEN>"}
   ```
 - **Backend Response**:
   ```json
-  {"event":"authenticated", "status":"ok", "device_id":"bmo-001", "backend_state":"idle", "active_request_id":null}
+  {"event":"authenticated", "status":"ok", "device_id":"joy-001", "backend_state":"idle", "active_request_id":null}
   ```
 
 ### B. Protokol Pairing (PIN 6-Digit)
@@ -191,7 +191,7 @@ Firmware mengelola state tersinkronisasi antara FreeRTOS Task, LCD Display, dan 
    ```json
    {"event":"pairing_code", "code":"123564", "expires_at":"2026-08-26T12:00:00Z"}
    ```
-   ESP merender kode 6-digit pada LCD display (atau di-suppress saat development menggunakan flag `BMO_DEV_SUPPRESS_PAIRING_UI=ON`).
+   ESP merender kode 6-digit pada LCD display (atau di-suppress saat development menggunakan flag `JOY_DEV_SUPPRESS_PAIRING_UI=ON`).
 3. **Konfirmasi Selesai**:
    ```json
    {"event":"pairing_completed", "status":"ok"}
@@ -209,11 +209,11 @@ Firmware mengelola state tersinkronisasi antara FreeRTOS Task, LCD Display, dan 
 ### B. Langkah Konfigurasi Credential
 1. Salin template environment:
    ```bash
-   cp .env.example bmo-production.env
+   cp .env.example joy-production.env
    ```
-2. Isi kredensial device pada `bmo-production.env` (pastikan file ini **tidak di-commit** ke Git):
+2. Isi kredensial device pada `joy-production.env` (pastikan file ini **tidak di-commit** ke Git):
    ```ini
-   DEVICE_ID=bmo-001
+   DEVICE_ID=joy-001
    DEVICE_TOKEN=your_production_secure_token_here
    ```
 3. Set konfigurasi Wi-Fi di `esp/main/wifi.cpp` atau via menuconfig.
@@ -235,7 +235,7 @@ idf.py -p /dev/ttyUSB0 flash monitor
 
 *Build dengan opsi Development Pairing Suppression:*
 ```bash
-idf.py -D BMO_DEV_SUPPRESS_PAIRING_UI=ON build flash monitor
+idf.py -D JOY_DEV_SUPPRESS_PAIRING_UI=ON build flash monitor
 ```
 
 ---
@@ -263,7 +263,7 @@ OK (100% Passing)
 .
 ├── .env.example                        # Contoh file konfigurasi environment root
 ├── IMPLEMENTATION_CHANGELOG.md         # Catatan detail perubahan arsitektur & firmware
-├── README.md                           # Dokumentasi utama proyek BMO-1-2 (file ini)
+├── README.md                           # Dokumentasi utama proyek Joy-1-2 (file ini)
 ├── docs-config-ESPtoBACKEND/           # Dokumen spesifikasi kontrak & log pengujian
 │   ├── 00-PROGRESS.md                  # Tracker pengujian historis
 │   ├── 01-PRODUCTION-CONTRACT.md       # Spesifikasi kontrak produksi backend <-> ESP32
@@ -286,7 +286,7 @@ OK (100% Passing)
     │   ├── network.cpp / network.h     # FreeRTOS network event synchronization
     │   ├── pairing.cpp / pairing.h     # Device pairing controller state machine
     │   ├── playback.cpp / playback.h   # Shared playback task & arbitration
-    │   ├── state.cpp / state.h         # BMO core state machine
+    │   ├── state.cpp / state.h         # Joy core state machine
     │   ├── wakeword.cpp / wakeword.h   # INMP441 I2S mic & WakeNet "Hi Joy" engine
     │   ├── wifi.cpp / wifi.h           # Wi-Fi station & SNTP time sync
     │   └── audio_wav/                  # Embedded WAV clips (01.wav - 10.wav, wake_ack.wav, thinking_*.wav)

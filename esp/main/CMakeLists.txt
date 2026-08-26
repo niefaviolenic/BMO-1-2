@@ -18,7 +18,7 @@ idf_component_register(
         "audio_wav/thinking_03.wav"
         "audio_wav/thinking_04.wav"
         "audio_wav/thinking_05.wav"
-    PRIV_INCLUDE_DIRS "${BMO_CREDENTIAL_INCLUDE_DIR}"
+    PRIV_INCLUDE_DIRS "${JOY_CREDENTIAL_INCLUDE_DIR}"
     REQUIRES
         driver
         esp_timer

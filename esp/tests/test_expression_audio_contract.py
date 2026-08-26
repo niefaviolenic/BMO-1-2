@@ -50,11 +50,11 @@ class ExpressionAudioContractTest(unittest.TestCase):
         source = STATE_SOURCE.read_text(encoding="utf-8")
         task = function_body(
             source,
-            r"static\s+void\s+bmo_state_machine_task\s*\([^)]*\)",
+            r"static\s+void\s+joy_state_machine_task\s*\([^)]*\)",
         )
         recording = function_body(
             task,
-            r"case\s+BMOState::RECORDING\s*:",
+            r"case\s+JoyState::RECORDING\s*:",
         )
 
         self.assertNotIn("audio_playExpressionChange();", recording)

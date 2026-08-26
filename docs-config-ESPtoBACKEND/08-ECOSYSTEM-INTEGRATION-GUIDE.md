@@ -1,16 +1,16 @@
-# BMO Ecosystem End-to-End Integration Guide
+# Joy Ecosystem End-to-End Integration Guide
 > **STATUS: CANONICAL / PRODUCTION-ALIGNED**
-> Panduan integrasi komprehensif antara **ESP32-S3 Hardware Client (BMO-1-2)**, **Joy Mobile App (joy-mobile)**, dan **BMO Backend Ecosystem (P9 Platform + Streaming Voice Pipeline)**.
+> Panduan integrasi komprehensif antara **ESP32-S3 Hardware Client (Joy-1-2)**, **Joy Mobile App (joy-mobile)**, dan **Joy Backend Ecosystem (P9 Platform + Streaming Voice Pipeline)**.
 
 ---
 
 ## 1. Arsitektur Komprehensif Ekosistem
 
-Ekosistem BMO terdiri atas tiga pilar utama yang saling terintegrasi:
+Ekosistem Joy terdiri atas tiga pilar utama yang saling terintegrasi:
 
 ```mermaid
 graph TD
-    subgraph Hardware ["Hardware Layer (ESP32-S3 / BMO-1-2)"]
+    subgraph Hardware ["Hardware Layer (ESP32-S3 / Joy-1-2)"]
         ESP[ESP32-S3 Microcontroller]
         MIC[INMP441 I2S Mic] --> ESP
         ESP --> AMP[MAX98357A I2S Amp / Speaker]
@@ -19,7 +19,7 @@ graph TD
         BTN[GPIO 15/16 Vol Up/Down] --> ESP
     end
 
-    subgraph Backend ["BMO Backend Ecosystem (VPS bmo-vps)"]
+    subgraph Backend ["Joy Backend Ecosystem (VPS joy-vps)"]
         CADDY[Caddy Reverse Proxy :443 / TLS]
         GATEWAY[Node.js 22 Express Gateway :3000]
         CADDY --> GATEWAY
@@ -65,7 +65,7 @@ graph TD
 
 | Komponen | Protokol | Endpoint / Port | Fungsi Utama | Kredensial & Autentikasi |
 |---|---|---|---|---|
-| **ESP32 Hardware WSS** | `wss://` | `wss://api.personalbmo.web.id/ws` | Event stream hardware, display status, audio ready, pairing code | `{"event":"authenticate", "device_id":"bmo-001", "device_token":"..."}` |
+| **ESP32 Hardware WSS** | `wss://` | `wss://api.personalbmo.web.id/ws` | Event stream hardware, display status, audio ready, pairing code | `{"event":"authenticate", "device_id":"joy-001", "device_token":"..."}` |
 | **ESP32 Audio Upload** | `https://` | `POST https://api.personalbmo.web.id/api/v1/voice` | Upload Canonical WAV (16kHz 16-bit Mono PCM) | Header: `X-Device-Id`, `X-Device-Token`, `X-Request-Id: UUIDv4` |
 | **ESP32 Audio Download** | `https://` | `GET https://api.personalbmo.web.id/audio/:audioId.mp3` | MP3 Audio Stream (Chunked / Direct Transfer Encoding) | Tokenless public ephemeral URL ($\text{TTL} = 300\text{s}$) |
 | **Joy Mobile WSS** | `wss://` | `wss://api.personalbmo.web.id/api/v1/ws` | Event stream mobile, chat thinking, notifications, integrations | `{"event":"authenticate", "accessToken":"<JWT>"}` |
@@ -80,7 +80,7 @@ graph TD
 sequenceDiagram
     autonumber
     participant U as User
-    participant ESP as ESP32-S3 (BMO-1-2)
+    participant ESP as ESP32-S3 (Joy-1-2)
     participant WSS as Backend Device WSS (/ws)
     participant Pipe as Voice Pipeline (Hermes + SentenceSplitter)
     participant Audio as Audio Service (STT + TTS)
@@ -90,7 +90,7 @@ sequenceDiagram
     U->>ESP: Ucapkan "Hi Joy" / Sentuh GPIO 14
     ESP->>ESP: WakeNet Detect "Hi Joy"
     ESP->>U: Play Wake-up Ack Cue ("wake_ack.wav" / 659->880Hz chime) via Core 0 worker
-    ESP->>ESP: BMOState::RECORDING (Display: LISTENING)
+    ESP->>ESP: JoyState::RECORDING (Display: LISTENING)
     Note over ESP: Rolling circular pre-roll buffer (~512ms) mengalirkan audio tanpa jeda
 
     Note over U,ESP: 2. Voice Capture & VAD
@@ -100,7 +100,7 @@ sequenceDiagram
     Note over ESP,Pipe: 3. Audio Upload & Dynamic Thinking Filler
     ESP->>WSS: POST /api/v1/voice (Content-Type: audio/wav, X-Request-Id: UUID)
     WSS-->>ESP: HTTP 202 {"request_id":"...", "status":"processing"}
-    ESP->>ESP: BMOState::THINKING (Display: THINKING)
+    ESP->>ESP: JoyState::THINKING (Display: THINKING)
     ESP->>U: Putar Dynamic Thinking Filler Clip ("bentar aku pikir dulu", dll.)
 
     Note over Pipe,Audio: 4. Hermes Streaming & Pipelined TTS
@@ -114,9 +114,9 @@ sequenceDiagram
     Note over ESP,U: 5. Playback & Playback Completion
     ESP->>Stream: HTTPS GET audio_url (Chunked MP3 Streaming)
     ESP->>ESP: Helix MP3 Decoder -> I2S MAX98357A (Display: SPEAKING)
-    ESP->>U: Suara BMO keluar dari speaker
+    ESP->>U: Suara Joy keluar dari speaker
     ESP->>WSS: WS {"event":"audio_playback_done", "request_id":"..."}
-    ESP->>ESP: BMOState::IDLE (Display: Face Expression)
+    ESP->>ESP: JoyState::IDLE (Display: Face Expression)
 ```
 
 ---
@@ -132,16 +132,16 @@ sequenceDiagram
     participant Mob as Joy Mobile App
 
     Note over ESP,WSS: 1. Unbound Device Connection
-    ESP->>WSS: WSS Connect & Authenticate (device_id: bmo-001)
+    ESP->>WSS: WSS Connect & Authenticate (device_id: joy-001)
     WSS->>DB: Check Device Binding status
     DB-->>WSS: Device is UNBOUND
     WSS-->>ESP: WS {"event":"pairing_code", "code":"123564", "expires_at":"..."}
-    ESP->>ESP: Render 6-digit PIN pada LCD (atau suppress jika BMO_DEV_SUPPRESS_PAIRING_UI=ON)
+    ESP->>ESP: Render 6-digit PIN pada LCD (atau suppress jika JOY_DEV_SUPPRESS_PAIRING_UI=ON)
 
     Note over Mob,WSS: 2. Mobile User Claims Device
     Mob->>Mob: User input PIN "123564" pada RobotPairSheet
     Mob->>WSS: POST /api/v1/pairing/claim {"code":"123564"} (with Bearer Token)
-    WSS->>DB: Bind Device `bmo-001` to User Account
+    WSS->>DB: Bind Device `joy-001` to User Account
     DB-->>WSS: Binding SUCCESS
     WSS-->>Mob: HTTP 200 {"device": {"id":"...", "name":"Joy", "pairedAt":"..."}}
 
@@ -164,7 +164,7 @@ sequenceDiagram
 ### B. WhatsApp Hermes Integration
 - **Pairing & QR**: `GET /api/v1/integrations/whatsapp/qr` mengembalikan QR string untuk di-scan via WhatsApp Linked Devices.
 - **Konfirmasi**: `POST /api/v1/integrations/whatsapp/confirm` mengaktifkan status bridge WhatsApp.
-- **Notification Rules**: `GET` / `PUT /api/v1/integrations/whatsapp/rules` mengatur forwarding pesan WhatsApp penting ke BMO.
+- **Notification Rules**: `GET` / `PUT /api/v1/integrations/whatsapp/rules` mengatur forwarding pesan WhatsApp penting ke Joy.
 
 ### C. Long-Term Memory & Summaries
 - **Memory Settings**: `GET` / `PATCH /api/v1/settings/memory` (mengatur preferensi penyimpanan memori).
@@ -218,5 +218,5 @@ npm test
 ### C. Backend Test Suite
 Backend dilengkapi dengan unit & integration tests pada directory `backend/tests/`:
 ```bash
-ssh bmo-vps "sudo -iu bmo-admin bash -c 'cd /opt/bmo/app/backend && npm test'"
+ssh joy-vps "sudo -iu bmo-admin bash -c 'cd /opt/bmo/app/backend && npm test'"
 ```

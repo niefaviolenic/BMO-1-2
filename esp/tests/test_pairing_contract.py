@@ -106,7 +106,9 @@ class PairingControllerTest(unittest.TestCase):
             "display.h",
             "wifi.h",
             "audio.h",
+            "joy_credentials.h",
             "bmo_credentials.h",
+            "JOY_DEVICE_TOKEN",
             "BMO_DEVICE_TOKEN",
             "esp_websocket_client",
         )
@@ -128,6 +130,7 @@ class PairingControllerTest(unittest.TestCase):
             "fprintf",
             "ESP_LOG",
             "printf(",
+            "JOY_DEVICE_TOKEN",
             "BMO_DEVICE_TOKEN",
         ):
             self.assertNotIn(forbidden_operation, source)
@@ -616,10 +619,10 @@ class PairingDisplayOverlayTest(unittest.TestCase):
         source = self.read_required(STATE_SOURCE)
         task = function_body(
             source,
-            r"static\s+void\s+bmo_state_machine_task\s*\([^)]*\)",
+            r"static\s+void\s+joy_state_machine_task\s*\([^)]*\)",
         )
         recording_case = re.search(
-            r"case\s+BMOState::RECORDING\s*:(?P<body>.*?)case\s+BMOState::THINKING\s*:",
+            r"case\s+JoyState::RECORDING\s*:(?P<body>.*?)case\s+JoyState::THINKING\s*:",
             task,
             re.DOTALL,
         )
@@ -627,11 +630,11 @@ class PairingDisplayOverlayTest(unittest.TestCase):
         self.assertIsNotNone(recording_case, "RECORDING display branch not found")
         body = recording_case.group("body")
         self.assertTrue(
-            "setState(BMOState::THINKING)" in body or "display_set_mode(DisplayMode::IDLE)" in body,
+            "setState(JoyState::THINKING)" in body or "display_set_mode(DisplayMode::IDLE)" in body,
             "RECORDING completion must release LISTENING before upload",
         )
-        if "setState(BMOState::THINKING)" in body:
-            thinking = body.index("setState(BMOState::THINKING)")
+        if "setState(JoyState::THINKING)" in body:
+            thinking = body.index("setState(JoyState::THINKING)")
             upload = body.index("api_upload_audio_and_process()")
             self.assertLess(thinking, upload)
 
@@ -705,9 +708,10 @@ class PairingWebSocketIntegrationTest(unittest.TestCase):
         )
         self.assertIn("ws_send_text(json_str, true)", sender)
         for forbidden in (
+            "JOY_DEVICE_ID",
+            "JOY_DEVICE_TOKEN",
             "BMO_DEVICE_ID",
             "BMO_DEVICE_TOKEN",
-            '"device_id"',
             '"device_token"',
             '"request_id"',
             '"code"',

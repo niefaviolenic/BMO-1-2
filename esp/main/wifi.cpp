@@ -137,8 +137,8 @@ static void start_time_sync_after_ip()
 }
 
 // Ganti dengan SSID dan Password WiFi kamu
-#define BMO_WIFI_SSID "LAUNDRY BINER"
-#define BMO_WIFI_PASS "yongga1818"
+#define JOY_WIFI_SSID "LAUNDRY BINER"
+#define JOY_WIFI_PASS "yongga1818"
 
 static const char *wifi_disconnect_reason_to_string(uint8_t reason)
 {
@@ -175,7 +175,7 @@ static void event_handler(
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
     {
-        ESP_LOGI(WIFI_TAG, "Connecting to WiFi SSID \"%s\"...", BMO_WIFI_SSID);
+        ESP_LOGI(WIFI_TAG, "Connecting to WiFi SSID \"%s\"...", JOY_WIFI_SSID);
         esp_err_t err = esp_wifi_connect();
         if (err != ESP_OK)
         {
@@ -185,7 +185,7 @@ static void event_handler(
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_CONNECTED)
     {
         network_set_wifi_connected(true);
-        ESP_LOGI(WIFI_TAG, "Connected to AP \"%s\", waiting for IP...", BMO_WIFI_SSID);
+        ESP_LOGI(WIFI_TAG, "Connected to AP \"%s\", waiting for IP...", JOY_WIFI_SSID);
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
@@ -200,7 +200,7 @@ static void event_handler(
 
         if (reason == WIFI_REASON_NO_AP_FOUND)
         {
-            ESP_LOGW(WIFI_TAG, "No AP found for SSID \"%s\". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.", BMO_WIFI_SSID);
+            ESP_LOGW(WIFI_TAG, "No AP found for SSID \"%s\". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.", JOY_WIFI_SSID);
         }
 
         esp_err_t err = esp_wifi_connect();
@@ -279,8 +279,8 @@ void wifi_init()
              esp_err_to_name(sntp_event_register_err), (int)sntp_event_register_err);
 
     wifi_config_t wifi_config = {};
-    strncpy((char*)wifi_config.sta.ssid, BMO_WIFI_SSID, sizeof(wifi_config.sta.ssid));
-    strncpy((char*)wifi_config.sta.password, BMO_WIFI_PASS, sizeof(wifi_config.sta.password));
+    strncpy((char*)wifi_config.sta.ssid, JOY_WIFI_SSID, sizeof(wifi_config.sta.ssid));
+    strncpy((char*)wifi_config.sta.password, JOY_WIFI_PASS, sizeof(wifi_config.sta.password));
     wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
 
     ESP_LOGI(

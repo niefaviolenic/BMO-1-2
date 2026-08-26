@@ -44,7 +44,7 @@ File utama: `esp/main/wifi.cpp` atau helper initialization yang memang dipanggil
 
 File/config yang mungkin terdampak: `esp/main/api.cpp`, build configuration, provisioning/NVS yang sudah tersedia, atau mekanisme secret lokal project.
 
-- `device_id` tetap `bmo-001`.
+- `device_id` tetap `joy-001`.
 - Token production harus diberikan operator secara out-of-band.
 - Simpan token pada mekanisme yang tidak masuk repository dan tidak dicetak ke log.
 - Bila implementasi hari ini memakai build-time define lokal, define itu harus berasal dari file untracked/secret build dan bukan literal placeholder di source tracked.

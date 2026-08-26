@@ -14,46 +14,46 @@ static const char *TAG = "STATE";
 
 static constexpr uint32_t RECORDING_STATE_WATCHDOG_MS = 65000;
 
-BMOState currentState = BMOState::IDLE;
+JoyState currentState = JoyState::IDLE;
 static portMUX_TYPE state_mux = portMUX_INITIALIZER_UNLOCKED;
 
-static const char *state_name(BMOState state)
+static const char *state_name(JoyState state)
 {
     switch(state)
     {
-        case BMOState::IDLE: return "IDLE";
-        case BMOState::RECORDING: return "RECORDING";
-        case BMOState::THINKING: return "THINKING";
-        case BMOState::SPEAKING: return "SPEAKING";
-        case BMOState::ERROR_STATE: return "ERROR";
+        case JoyState::IDLE: return "IDLE";
+        case JoyState::RECORDING: return "RECORDING";
+        case JoyState::THINKING: return "THINKING";
+        case JoyState::SPEAKING: return "SPEAKING";
+        case JoyState::ERROR_STATE: return "ERROR";
         default: return "UNKNOWN";
     }
 }
 
-static void apply_state_display(BMOState state)
+static void apply_state_display(JoyState state)
 {
     switch (state) {
-        case BMOState::IDLE:
+        case JoyState::IDLE:
             display_set_mode(DisplayMode::IDLE);
             break;
-        case BMOState::RECORDING:
+        case JoyState::RECORDING:
             display_set_mode(DisplayMode::LISTENING);
             break;
-        case BMOState::THINKING:
+        case JoyState::THINKING:
             display_set_mode(DisplayMode::THINKING);
             break;
-        case BMOState::SPEAKING:
+        case JoyState::SPEAKING:
             display_set_mode(DisplayMode::SPEAKING);
             break;
-        case BMOState::ERROR_STATE:
+        case JoyState::ERROR_STATE:
             display_set_mode(DisplayMode::ERROR);
             break;
     }
 }
 
-void setState(BMOState state)
+void setState(JoyState state)
 {
-    BMOState previous_state;
+    JoyState previous_state;
 
     portENTER_CRITICAL(&state_mux);
     previous_state = currentState;
@@ -71,10 +71,10 @@ void setState(BMOState state)
     apply_state_display(state);
 }
 
-bool trySetState(BMOState expected, BMOState next)
+bool trySetState(JoyState expected, JoyState next)
 {
     bool changed = false;
-    BMOState actual_state;
+    JoyState actual_state;
 
     portENTER_CRITICAL(&state_mux);
     actual_state = currentState;
@@ -106,37 +106,36 @@ bool trySetState(BMOState expected, BMOState next)
     return true;
 }
 
-BMOState getState()
+JoyState getState()
 {
     portENTER_CRITICAL(&state_mux);
-    BMOState state = currentState;
+    JoyState state = currentState;
     portEXIT_CRITICAL(&state_mux);
     return state;
 }
 
-static void bmo_state_machine_task(void *pvParameters)
+static void joy_state_machine_task(void *pvParameters)
 {
     ESP_LOGI(TAG, "State machine orchestrator task started");
-
     while (true)
     {
-        BMOState current = getState();
+        JoyState current = getState();
 
         switch (current)
         {
-            case BMOState::IDLE:
+            case JoyState::IDLE:
                 // Menunggu trigger dari Wake Word (yang merubah state ke RECORDING)
                 vTaskDelay(pdMS_TO_TICKS(20));
                 break;
 
-            case BMOState::RECORDING: {
+            case JoyState::RECORDING: {
                 ESP_LOGI(TAG, "Entering RECORDING state");
                 if(!start_recording())
                 {
                     ESP_LOGE(
                         TAG,
                         "Recording start failed; upload skipped");
-                    setState(BMOState::IDLE);
+                    setState(JoyState::IDLE);
                     break;
                 }
 
@@ -165,7 +164,7 @@ static void bmo_state_machine_task(void *pvParameters)
                     // Phase 1 Thinking Transition: immediately switch expression to
                     // DisplayMode::THINKING (FACE_CONFUSED) when user finishes speaking,
                     // matching the thinking filler voice without flashing IDLE/HAPPY.
-                    setState(BMOState::THINKING);
+                    setState(JoyState::THINKING);
                     audio_startThinkingFillerLoop();
                     api_upload_audio_and_process();
                     audio_stopThinkingFillerLoop();
@@ -178,22 +177,22 @@ static void bmo_state_machine_task(void *pvParameters)
                         "Recording not uploadable: status=%d; upload skipped",
                         (int)recording_status);
                 }
-                setState(BMOState::IDLE);
+                setState(JoyState::IDLE);
                 break;
             }
 
-            case BMOState::THINKING:
+            case JoyState::THINKING:
                 ESP_LOGI(TAG, "Entering THINKING state");
                 audio_startThinkingFillerLoop();
                 // api_upload_audio_and_process mengupload, menunggu WS audio_ready, 
                 // memutar MP3 progresif secara blocking, dan mengirim completion events.
                 api_upload_audio_and_process();
                 audio_stopThinkingFillerLoop();
-                setState(BMOState::IDLE);
+                setState(JoyState::IDLE);
                 break;
 
-            case BMOState::SPEAKING:
-            case BMOState::ERROR_STATE:
+            case JoyState::SPEAKING:
+            case JoyState::ERROR_STATE:
                 // State ini dikendalikan didalam api_upload_audio_and_process
                 vTaskDelay(pdMS_TO_TICKS(100));
                 break;
@@ -201,11 +200,11 @@ static void bmo_state_machine_task(void *pvParameters)
     }
 }
 
-void bmo_state_machine_init()
+void joy_state_machine_init()
 {
     xTaskCreate(
-        bmo_state_machine_task,
-        "bmo_state_task",
+        joy_state_machine_task,
+        "joy_state_task",
         8192,
         NULL,
         4,

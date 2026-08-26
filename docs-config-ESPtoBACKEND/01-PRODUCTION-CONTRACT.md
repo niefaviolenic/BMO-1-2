@@ -4,15 +4,15 @@ Dokumen ini adalah kontrak target yang sudah diverifikasi dari backend productio
 
 ## Sumber kebenaran
 
-- Production handoff: `backend-BMO-Blabs/docs/hardware-handoff/DEPLOYMENT-CONFIG.md`
-- Hardware contract: `backend-BMO-Blabs/docs/hardware-contract/BMO-MVP-HW-INTERFACE-CONTRACT-v1.0.5.md`
-- Upload route: `backend-BMO-Blabs/backend/src/http/voice.route.ts`
-- Audio route: `backend-BMO-Blabs/backend/src/http/audio.route.ts`
-- WebSocket events: `backend-BMO-Blabs/backend/src/websocket/events.ts`
-- WebSocket server: `backend-BMO-Blabs/backend/src/websocket/websocket.server.ts`
-- Pipeline: `backend-BMO-Blabs/backend/src/services/voice-pipeline.service.ts`
-- WAV validator: `backend-BMO-Blabs/backend/src/utils/wav-validator.ts`
-- Production environment rules: `backend-BMO-Blabs/backend/src/config/env.ts`
+- Production handoff: `backend-Joy-Blabs/docs/hardware-handoff/DEPLOYMENT-CONFIG.md`
+- Hardware contract: `backend-Joy-Blabs/docs/hardware-contract/JOY-MVP-HW-INTERFACE-CONTRACT-v1.0.5.md`
+- Upload route: `backend-Joy-Blabs/backend/src/http/voice.route.ts`
+- Audio route: `backend-Joy-Blabs/backend/src/http/audio.route.ts`
+- WebSocket events: `backend-Joy-Blabs/backend/src/websocket/events.ts`
+- WebSocket server: `backend-Joy-Blabs/backend/src/websocket/websocket.server.ts`
+- Pipeline: `backend-Joy-Blabs/backend/src/services/voice-pipeline.service.ts`
+- WAV validator: `backend-Joy-Blabs/backend/src/utils/wav-validator.ts`
+- Production environment rules: `backend-Joy-Blabs/backend/src/config/env.ts`
 
 ## Production endpoint
 
@@ -32,7 +32,7 @@ ESP tidak boleh memakai `192.168.1.100`, `localhost`, port `3000`, HTTP plaintex
 
 Nilai production:
 
-- `device_id`: `bmo-001`
+- `device_id`: `joy-001`
 - `device_token`: diberikan out-of-band oleh operator; tidak ada token valid di repository.
 
 Token yang sama digunakan pada dua tempat:
@@ -40,13 +40,13 @@ Token yang sama digunakan pada dua tempat:
 1. WebSocket JSON pertama setelah connection open:
 
    ```json
-   {"event":"authenticate","device_id":"bmo-001","device_token":"<PRODUCTION_TOKEN>"}
+   {"event":"authenticate","device_id":"joy-001","device_token":"<PRODUCTION_TOKEN>"}
    ```
 
 2. Header upload HTTP:
 
    ```text
-   X-Device-Id: bmo-001
+   X-Device-Id: joy-001
    X-Device-Token: <PRODUCTION_TOKEN>
    ```
 
@@ -62,7 +62,7 @@ Request:
 POST /api/v1/voice HTTP/1.1
 Content-Type: audio/wav
 Content-Length: <exact byte count>
-X-Device-Id: bmo-001
+X-Device-Id: joy-001
 X-Device-Token: <PRODUCTION_TOKEN>
 X-Request-Id: <UUIDv4>
 
@@ -127,7 +127,7 @@ Backend memproses suara menggunakan arsitektur real-time streaming pipeline:
    - Saat wake word terdeteksi, pre-roll buffer langsung dikomit ke `record_buffer` sehingga kata perintah lanjutan (misal *"Hi Joy jam berapa sekarang"*) tidak terpotong sama sekali.
 
 3. **Dynamic Thinking Filler Voice Speech (Zero Dead-Air Latency Masking)**:
-   - Begitu upload WAV diterima oleh backend (`202 Accepted` / `BMO_UPLOAD_ACCEPTED`), firmware seketika memutar salah satu dari 5 audio clip filler berpikir secara dinamis/acak (`thinking_01.wav` .. `thinking_05.wav`) melalui speaker.
+   - Begitu upload WAV diterima oleh backend (`202 Accepted` / `JOY_UPLOAD_ACCEPTED`), firmware seketika memutar salah satu dari 5 audio clip filler berpikir secara dinamis/acak (`thinking_01.wav` .. `thinking_05.wav`) melalui speaker.
    - Menghilangkan keheningan canggung (*dead air*) selama backend memproses STT, Hermes LLM, dan TTS synthesis.
 
 4. **Shared Playback Job Architecture (`PlaybackJob`)**:

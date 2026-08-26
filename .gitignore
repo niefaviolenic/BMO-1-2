@@ -46,6 +46,8 @@ Desktop.ini
 !**/*.example
 **/bmo_credentials.h
 **/bmo_dev_config.h
+**/joy_credentials.h
+**/joy_dev_config.h
 **/secrets.h
 **/credentials.h
 

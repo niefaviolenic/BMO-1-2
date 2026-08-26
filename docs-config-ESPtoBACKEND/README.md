@@ -63,7 +63,7 @@ Tidak termasuk: perubahan backend, refactor arsitektur besar, redesign state mac
 
 ## Definition of Done
 
-Plan ini dianggap berhasil diimplementasikan bila satu ESP fisik dengan `device_id=bmo-001` dapat, dari jaringan publik:
+Plan ini dianggap berhasil diimplementasikan bila satu ESP fisik dengan `device_id=joy-001` dapat, dari jaringan publik:
 
 - membuka WSS dan menerima `authenticated` dengan `backend_state` yang valid;
 - mengelola siklus pairing (`pairing_code`, `pairing_completed`) atau autentikasi langsung;

@@ -1,4 +1,4 @@
-# BMO Firmware Progress
+# Joy Firmware Progress
 
 ## Current status - 2026-08-26 15:30:00 +07:00
 
@@ -9,7 +9,7 @@
 
 - Implemented rolling circular pre-roll buffer in `wakeword.cpp` (`PREROLL_BUFFER_SAMPLES = 8192`, ~512ms at 16kHz mono) during IDLE state.
 - Removed blocking `audio_playWakeAck()` from the critical microphone path in `wakeword_listener_task` to prevent freezing the I2S microphone loop during user speech.
-- Updated `wakeword_task()` to immediately trigger `start_recording()` and transition to `BMOState::RECORDING` with 0ms delay, instantly updating LCD to `DisplayMode::LISTENING`.
+- Updated `wakeword_task()` to immediately trigger `start_recording()` and transition to `JoyState::RECORDING` with 0ms delay, instantly updating LCD to `DisplayMode::LISTENING`.
 - Enhanced `start_recording()` to drain the pre-roll buffer in chronological order into `record_buffer` and operate idempotently.
 - Pre-allocated `record_buffer` in PSRAM during `wakeword_init()`.
 - Updated contract test `test_wake_ack_contract.py` with `test_wakeword_seamless_single_breath_contract`.
@@ -25,51 +25,51 @@
 
 - Static review passed for the minimal changes in `main/wakeword.cpp` and `main/audio.cpp`: direct millisecond arguments for all six new I2S read/write calls, 3-second no-sample-progress timeout, timestamp-based WakeNet cooldown, and neutral `Voice capture requested` wording.
 - Sample rate, frame geometry, mic pins, silence threshold/duration, 60-second maximum, touch/debounce logic, WAV contract, backend, WiFi, router, and credentials were not changed by this patch.
-- The single official command exited `2` before compilation because it was invoked from `D:/BMO/all_bmo` and reported `CMakeLists.txt not found in project directory D:\BMO\all_bmo`; the project directory is `D:/BMO/all_bmo/esp`. Source fingerprint remained unchanged. No retry, Ninja, dry-run, incremental verification, fullclean, or flash was performed.
-- Existing installed artifacts remain unchanged: `all_bmo.bin` SHA-256 `EE19260C30DC567A73CE03B3B4E86708C8E24C156DA630FABC6CEBE6271AA452`; `all_bmo.elf` SHA-256 `12E05D55F3C71CEFBE17FB2C9CF69893A53DA39D2D9F056CEEDD73D55407A74F`.
-- Logs: `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/step4-i2s-timeout-corrective-static-review-2026-08-18-sanitized.log` and `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/build-step4-i2s-timeout-corrective-2026-08-18-sanitized.log`.
+- The single official command exited `2` before compilation because it was invoked from `D:/Joy/all_joy` and reported `CMakeLists.txt not found in project directory D:\Joy\all_joy`; the project directory is `D:/Joy/all_joy/esp`. Source fingerprint remained unchanged. No retry, Ninja, dry-run, incremental verification, fullclean, or flash was performed.
+- Existing installed artifacts remain unchanged: `all_joy.bin` SHA-256 `EE19260C30DC567A73CE03B3B4E86708C8E24C156DA630FABC6CEBE6271AA452`; `all_joy.elf` SHA-256 `12E05D55F3C71CEFBE17FB2C9CF69893A53DA39D2D9F056CEEDD73D55407A74F`.
+- Logs: `D:/Joy/all_joy/docs-config-ESPtoBACKEND/step4-i2s-timeout-corrective-static-review-2026-08-18-sanitized.log` and `D:/Joy/all_joy/docs-config-ESPtoBACKEND/build-step4-i2s-timeout-corrective-2026-08-18-sanitized.log`.
 
 ## Authorized 2.4 GHz Gate 4 retest - 2026-08-18 11:10:52 +07:00
 
 - Installed artifact hashes and COM7 were verified read-only; no source/build/flash/network change was made.
 - Sanitized monitor was active, but the ESP recorded 27 `NO_AP_FOUND` results and obtained no IP. SNTP, TLS, WSS authentication, `backend_state=idle`, and wake-word testing were not reached.
 - Gate 4 remains `PENDING / BLOCKED_BY_2_4_GHZ_AP_AVAILABILITY`; the authorized 2.4 GHz AP was not observable by the ESP in this capture. Historical `RECORDING_NOT_COMPLETING` remains separate.
-- Logs: `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/serial-gate4-retest-2026-08-18-authorized-2p4-sanitized.log` and `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/gate4-retest-authorized-2p4-2026-08-18-sanitized.log`.
+- Logs: `D:/Joy/all_joy/docs-config-ESPtoBACKEND/serial-gate4-retest-2026-08-18-authorized-2p4-sanitized.log` and `D:/Joy/all_joy/docs-config-ESPtoBACKEND/gate4-retest-authorized-2p4-2026-08-18-sanitized.log`.
 
 ## Controlled local-only recording lifecycle retest - 2026-08-18 16:06:19 +07:00
 
 - Scope was local recorder behavior only. No source, build, flash, WiFi, router, credential, backend, or network probe was performed; IP/WSS was not a prerequisite.
-- Corrective artifact hashes were verified read-only: `all_bmo.bin` `EE19260C30DC567A73CE03B3B4E86708C8E24C156DA630FABC6CEBE6271AA452`; `all_bmo.elf` `12E05D55F3C71CEFBE17FB2C9CF69893A53DA39D2D9F056CEEDD73D55407A74F`.
+- Corrective artifact hashes were verified read-only: `all_joy.bin` `EE19260C30DC567A73CE03B3B4E86708C8E24C156DA630FABC6CEBE6271AA452`; `all_joy.elf` `12E05D55F3C71CEFBE17FB2C9CF69893A53DA39D2D9F056CEEDD73D55407A74F`.
 - COM7/ESP32-S3 monitor was active and mic/WakeNet initialized. Recording entered and produced rate-limited `i2s_timeout` progress through `59160 ms` with `samples=0`.
 - The corrective lifecycle terminated bounded with `reason=max_duration`, skipped upload as not uploadable, and returned to state `0`. This proves watchdog/safe-state behavior and closes historical `RECORDING_NOT_COMPLETING` for the local lifecycle.
 - No WAV header/finalization or local WAV validation was observed; classify the remaining local recorder evidence as `I2S_TIMEOUT_ZERO_SAMPLES`. No HTTP, request ID, upload bytes, backend transaction, or playback evidence occurred.
 - Result: corrective recording lifecycle `PASS_LOCAL_OFFLINE` (bounded terminal/safe-state scope only); Gate 4 remains `PENDING / DEFERRED_NETWORK_DEPENDENT_E2E`, with no playback PASS.
-- Sanitized log: `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/serial-gate4-local-offline-2026-08-18-sanitized.log`; summary: `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/gate4-local-offline-2026-08-18-sanitized.log`.
+- Sanitized log: `D:/Joy/all_joy/docs-config-ESPtoBACKEND/serial-gate4-local-offline-2026-08-18-sanitized.log`; summary: `D:/Joy/all_joy/docs-config-ESPtoBACKEND/gate4-local-offline-2026-08-18-sanitized.log`.
 
 ## Latest Gate 4 physical retest - 2026-08-18 09:43:54 +07:00
 
-- Read-only artifact verification matched the installed corrective firmware: `all_bmo.bin` SHA-256 `EE19260C30DC567A73CE03B3B4E86708C8E24C156DA630FABC6CEBE6271AA452`; `all_bmo.elf` SHA-256 `12E05D55F3C71CEFBE17FB2C9CF69893A53DA39D2D9F056CEEDD73D55407A74F`.
+- Read-only artifact verification matched the installed corrective firmware: `all_joy.bin` SHA-256 `EE19260C30DC567A73CE03B3B4E86708C8E24C156DA630FABC6CEBE6271AA452`; `all_joy.elf` SHA-256 `12E05D55F3C71CEFBE17FB2C9CF69893A53DA39D2D9F056CEEDD73D55407A74F`.
 - COM7 was present as `USB-Enhanced-SERIAL CH343`; sanitized serial monitor was active.
 - Repeated `NO_AP_FOUND` prevented IP, SNTP, TLS, WSS authentication, and `backend_state=idle`. No operator trigger was requested; no recording/upload/playback evidence was produced.
 - Retest classification: `BLOCKED_BY_2_4_GHZ_AP_AVAILABILITY`. The target SSID matches the host network, but host evidence is 5 GHz/channel 40 and ESP32-S3 supports 2.4 GHz only; no 2.4 GHz instance was evidenced. Gate 4 remains `PENDING / BLOCKED_BY_2_4_GHZ_AP_AVAILABILITY`; historical `RECORDING_NOT_COMPLETING` remains separate and is not claimed against the corrective artifact.
 - Resume only after an authorized 2.4 GHz AP is confirmed. Same SSID/password: reuse the installed artifact without build/flash. Different SSID/password: stop and request authorization before credential change and one new build/flash. Do not alter router configuration independently; backend remains read-only.
-- Logs: `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/serial-gate4-retest-2026-08-18-sanitized.log` and `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/gate4-retest-2026-08-18-sanitized.log`.
+- Logs: `D:/Joy/all_joy/docs-config-ESPtoBACKEND/serial-gate4-retest-2026-08-18-sanitized.log` and `D:/Joy/all_joy/docs-config-ESPtoBACKEND/gate4-retest-2026-08-18-sanitized.log`.
 
 ## Previous execution verification note - 2026-08-14 14:01:52 +07:00
 
 Build firmware: `BLOCKED` - official ESP-IDF build in the exact `build` directory completed with exit code `0` and regenerated the application artifacts, but the required post-build Ninja no-work gate did not pass. Official build output did not show `Access is denied`; a subsequent direct incremental Ninja check was stopped at the first `CreateProcess failed: The system cannot find the file specified.` No flash or serial monitor was performed.
 
-Command: `cmd.exe /d /c call "C:\esp\v6.0.1\esp-idf\export.bat" && set "PYTHONUTF8=1" && set "PYTHONIOENCODING=utf-8" && "C:\Users\violenic\.espressif\python_env\idf6.0_py3.13_env\Scripts\python.exe" "C:\esp\v6.0.1\esp-idf\tools\idf.py" -B "D:\BMO\all_bmo\esp\build" build`
+Command: `cmd.exe /d /c call "C:\esp\v6.0.1\esp-idf\export.bat" && set "PYTHONUTF8=1" && set "PYTHONIOENCODING=utf-8" && "C:\Users\violenic\.espressif\python_env\idf6.0_py3.13_env\Scripts\python.exe" "C:\esp\v6.0.1\esp-idf\tools\idf.py" -B "D:\Joy\all_joy\esp\build" build`
 
 Evidence:
 
 - `BUILD_EXIT_CODE=0`; source fingerprint count `1,768`; source unchanged during build.
-- `build/all_bmo.bin`: 1,244,688 bytes / `2026-08-14 13:59:59 +07:00` / SHA-256 `4368032D9E7CA84B61F6A62F0D17F78B3771FCC3F2B64717EE46908F8285C43A`.
-- `build/all_bmo.elf`: 12,550,764 bytes / `2026-08-14 13:59:59 +07:00` / SHA-256 `C2CF7B6F479D1E5A98554CB479EEDA7E62A19E82287C8ADA00745A92FF7AE3A1`.
+- `build/all_joy.bin`: 1,244,688 bytes / `2026-08-14 13:59:59 +07:00` / SHA-256 `4368032D9E7CA84B61F6A62F0D17F78B3771FCC3F2B64717EE46908F8285C43A`.
+- `build/all_joy.elf`: 12,550,764 bytes / `2026-08-14 13:59:59 +07:00` / SHA-256 `C2CF7B6F479D1E5A98554CB479EEDA7E62A19E82287C8ADA00745A92FF7AE3A1`.
 - Both application artifacts are newer than all fingerprinted relevant source files; all `flasher_args.json` references are present.
 - Official activation selected `C:\Users\violenic\.espressif\tools\ninja\1.12.1\ninja.exe`; its dry-run returned exit `0` but still listed 1,281 commands instead of `no work to do`.
 - The stopped incremental check first failed at `esp-idf/esp_http_server/.../httpd_txrx.c.obj`; parent `ninja.exe`, child command `ccache ... xtensa-esp32s3-elf-gcc.exe`; error: `CreateProcess failed: The system cannot find the file specified.` The direct check lacked the activated ESP-IDF environment, so no workaround or retry was attempted.
-- Sanitized logs: `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/build-official-2026-08-14-sanitized.log` and `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/build-incremental-2026-08-14-sanitized.log`.
+- Sanitized logs: `D:/Joy/all_joy/docs-config-ESPtoBACKEND/build-official-2026-08-14-sanitized.log` and `D:/Joy/all_joy/docs-config-ESPtoBACKEND/build-incremental-2026-08-14-sanitized.log`.
 
 Next action: stop; do not flash. Resolve the official build-environment/Ninja state so a post-build no-work check passes in the same activated environment, then repeat the required verification before any COM7 operation.
 
@@ -82,21 +82,21 @@ Verified official flash inputs:
 - `build/bootloader/bootloader.bin`: 21,056 bytes / SHA-256 `E0B92A021C68DEA0AC4D2E91A61E05CFAE1238780719E29355E2A9FDA79EF9E3`.
 - `build/partition_table/partition-table.bin`: 3,072 bytes / SHA-256 `DE50DD8816B5BC7D3C48E6363EBAC66B0D0986F55B460D932842C82205C5F428`.
 - `build/srmodels/srmodels.bin`: 291,036 bytes / SHA-256 `B9B234189DB01EAA5123438225860726023D33BA3789515118298EB73493933C`.
-- `build/all_bmo.bin`: 1,244,688 bytes / SHA-256 `4368032D9E7CA84B61F6A62F0D17F78B3771FCC3F2B64717EE46908F8285C43A`.
-- `build/all_bmo.elf`: 12,550,764 bytes / SHA-256 `C2CF7B6F479D1E5A98554CB479EEDA7E62A19E82287C8ADA00745A92FF7AE3A1`.
+- `build/all_joy.bin`: 1,244,688 bytes / SHA-256 `4368032D9E7CA84B61F6A62F0D17F78B3771FCC3F2B64717EE46908F8285C43A`.
+- `build/all_joy.elf`: 12,550,764 bytes / SHA-256 `C2CF7B6F479D1E5A98554CB479EEDA7E62A19E82287C8ADA00745A92FF7AE3A1`.
 - `build/flash_args` is present and references only the exact official artifact set.
 
 Next action: official build/hash gate and Step 1 hardware/serial verification are complete. Do not run any build or Ninja command; continue only with the next explicitly requested firmware acceptance step.
 
 ## Latest flash and serial verification - 2026-08-14 14:29:57 +07:00
 
-Exact official artifact set in `D:/BMO/all_bmo/esp/build` was verified read-only immediately before flash. `all_bmo.bin` is 1,244,688 bytes with SHA-256 `4368032D9E7CA84B61F6A62F0D17F78B3771FCC3F2B64717EE46908F8285C43A`; `all_bmo.elf` is 12,550,764 bytes with SHA-256 `C2CF7B6F479D1E5A98554CB479EEDA7E62A19E82287C8ADA00745A92FF7AE3A1`. Bootloader, partition table, and srmodels hashes also matched the recorded official set; `flash_args` was present.
+Exact official artifact set in `D:/Joy/all_joy/esp/build` was verified read-only immediately before flash. `all_joy.bin` is 1,244,688 bytes with SHA-256 `4368032D9E7CA84B61F6A62F0D17F78B3771FCC3F2B64717EE46908F8285C43A`; `all_joy.elf` is 12,550,764 bytes with SHA-256 `C2CF7B6F479D1E5A98554CB479EEDA7E62A19E82287C8ADA00745A92FF7AE3A1`. Bootloader, partition table, and srmodels hashes also matched the recorded official set; `flash_args` was present.
 
-`COM7` was identified as `USB-Enhanced-SERIAL CH343 (COM7)` and esptool identified the chip as `ESP32-S3 (QFN56)`, revision `v0.2`. Exact command, run from `D:/BMO/all_bmo/esp/build` with the same ESP-IDF Python environment:
+`COM7` was identified as `USB-Enhanced-SERIAL CH343 (COM7)` and esptool identified the chip as `ESP32-S3 (QFN56)`, revision `v0.2`. Exact command, run from `D:/Joy/all_joy/esp/build` with the same ESP-IDF Python environment:
 
 `C:/Users/violenic/.espressif/python_env/idf6.0_py3.13_env/Scripts/python.exe -m esptool --chip esp32s3 --port COM7 --before default-reset --after hard-reset write-flash @flash_args`
 
-Flash exit code was `0`; all four flash inputs reported `Hash of data verified.` The bounded sanitized serial log then showed AP association, IP `192.168.10.40`, valid SNTP time, certificate validation, production WebSocket connection, authenticate send, and authenticated receive. Logs: `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/flash-2026-08-14.log` and `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/serial-2026-08-14.log`.
+Flash exit code was `0`; all four flash inputs reported `Hash of data verified.` The bounded sanitized serial log then showed AP association, IP `192.168.10.40`, valid SNTP time, certificate validation, production WebSocket connection, authenticate send, and authenticated receive. Logs: `D:/Joy/all_joy/docs-config-ESPtoBACKEND/flash-2026-08-14.log` and `D:/Joy/all_joy/docs-config-ESPtoBACKEND/serial-2026-08-14.log`.
 
 The official build remains the only firmware build. The later incremental `ccache` environment failure was an unnecessary verification attempt, produced no new application, and does not invalidate the official artifacts. No backend, source, credential, ESP-IDF, managed component, project configuration, or antivirus/EDR state was changed.
 
@@ -106,12 +106,12 @@ Step 2 core evidence: `PASS`. Only `esp/main/api.cpp` changed. The patch adds te
 
 The single official Step 2 build completed with exit code `0`; no second build, Ninja dry-run, incremental build, or flash retry was performed. New artifacts:
 
-- `build/all_bmo.bin`: 1,245,120 bytes / `2026-08-14 14:46:36 +07:00` / SHA-256 `BD0FED12D169EBE5403854A32CA01DE8ED98FECB1A8477E2A86F33FECA0FBF07`.
+- `build/all_joy.bin`: 1,245,120 bytes / `2026-08-14 14:46:36 +07:00` / SHA-256 `BD0FED12D169EBE5403854A32CA01DE8ED98FECB1A8477E2A86F33FECA0FBF07`.
 - `build/all_bmo.elf`: 12,552,136 bytes / `2026-08-14 14:46:35 +07:00` / SHA-256 `B7EAD67A816938F440484FCB919D801B44B82D84B1D52F3701787896CE3C1FFE`.
 - Source files were unchanged during build and artifacts were newer than all `esp/main` sources.
-- Build log: `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/build-step2-official-2026-08-14-sanitized.log`.
+- Build log: `D:/Joy/all_joy/docs-config-ESPtoBACKEND/build-step2-official-2026-08-14-sanitized.log`.
 
-The exact artifact set was flashed once to the verified ESP32-S3 on COM7 using `esptool @flash_args`; exit code `0`, with four write-hash verifications. Flash log: `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/flash-step2-2026-08-14-sanitized.log`.
+The exact artifact set was flashed once to the verified ESP32-S3 on COM7 using `esptool @flash_args`; exit code `0`, with four write-hash verifications. Flash log: `D:/Joy/all_joy/docs-config-ESPtoBACKEND/flash-step2-2026-08-14-sanitized.log`.
 
 Acceptance results:
 
@@ -128,11 +128,11 @@ Operator reclassification: Step 2 implementation is `PASS` and Gate 2 is `PASS` 
 
 Step 3 implementation static review: `PASS`. Only `esp/main/api.cpp` was changed; `api.h` and `wakeword.cpp/.h` remained unchanged. The firmware now validates canonical WAV bytes before POST, sends the complete body with bounded write handling, validates bounded JSON response identity/status, uses typed upload results, preserves one UUID/body across retries, and uses a 300-second pipeline timeout. No backend, credential, project configuration, or network change was made.
 
-Official ESP-IDF build: `PASS`, exit code `0`; source fingerprint was unchanged during the build. `build/all_bmo.bin` is 1,248,864 bytes with SHA-256 `D16AA1A31F39D520E485EF56F8046A7C304474CF1464F38D621A84327B9FC3B1` and `2026-08-14 15:28:47 +07:00`. `build/all_bmo.elf` is 12,576,636 bytes with SHA-256 `ACA55866A1D15613164278F61325BB05EF3FA84D94A7B35B7F4C09C466DAE052` and `2026-08-14 15:28:46 +07:00`. Build log: `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/build-step3-official-2026-08-14-sanitized.log`. No EDR CreateProcess/PermissionDenied/Access-is-denied error appeared; no post-build Ninja/dry-run was run.
+Official ESP-IDF build: `PASS`, exit code `0`; source fingerprint was unchanged during the build. `build/all_joy.bin` is 1,248,864 bytes with SHA-256 `D16AA1A31F39D520E485EF56F8046A7C304474CF1464F38D621A84327B9FC3B1` and `2026-08-14 15:28:47 +07:00`. `build/all_joy.elf` is 12,576,636 bytes with SHA-256 `ACA55866A1D15613164278F61325BB05EF3FA84D94A7B35B7F4C09C466DAE052` and `2026-08-14 15:28:46 +07:00`. Build log: `D:/Joy/all_joy/docs-config-ESPtoBACKEND/build-step3-official-2026-08-14-sanitized.log`. No E...
 
-COM7 was present as CH343 and esptool identified ESP32-S3 (QFN56), revision v0.2. Exact `esptool @flash_args` flash exit code was `0`, with four write-hash verifications. Flash log: `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/flash-step3-2026-08-14-sanitized.log`.
+COM7 was present as CH343 and esptool identified ESP32-S3 (QFN56), revision v0.2. Exact `esptool @flash_args` flash exit code was `0`, with four write-hash verifications. Flash log: `D:/Joy/all_joy/docs-config-ESPtoBACKEND/flash-step3-2026-08-14-sanitized.log`.
 
-Gate 3 runtime status: `READY_FOR_VERIFY`, not `PASS`. The bounded serial capture on COM7 contained microphone peak lines only; no wake detection, WAV validation, POST, request ID, response, or upload marker was observed. This is an incomplete operator-triggered capture, not evidence of a firmware failure. Serial log: `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/serial-step3-2026-08-14-sanitized.log`.
+Gate 3 runtime status: `READY_FOR_VERIFY`, not `PASS`. The bounded serial capture on COM7 contained microphone peak lines only; no wake detection, WAV validation, POST, request ID, response, or upload marker was observed. This is an incomplete operator-triggered capture, not evidence of a firmware failure. Serial log: `D:/Joy/all_joy/docs-config-ESPtoBACKEND/serial-step3-2026-08-14-sanitized.log`.
 
 ## Historical physical Gate 3 acceptance - 2026-08-14 15:44:53 +07:00
 
@@ -151,22 +151,22 @@ The validator-only correction in `main/api.cpp` passed static review and one cor
 - Fresh capture: `Hi Joy` detected; recording started/ended; WAV metadata `format=1 channels=1 sample_rate=16000 byte_rate=32000 block_align=2 bits=16`; local validation `PASS`.
 - Request ID `727675d7-46d2-424d-ab6f-5c3898f04c96`; body write `80940/80940` bytes; HTTP `202`; accepted `processing`; response request-ID equality `PASS` by the firmware response parser; response body length `75` bytes.
 - Downstream occurred naturally as `request_failed` and an error tone due the backend noise classification. Gate 4 remains pending and is not claimed PASS.
-- Gate 3 status: `PASS`. Sanitized log: `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/serial-step3-corrective-gate3-2026-08-14-sanitized.log`.
+- Gate 3 status: `PASS`. Sanitized log: `D:/Joy/all_joy/docs-config-ESPtoBACKEND/serial-step3-corrective-gate3-2026-08-14-sanitized.log`.
 
-Sanitized log: `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/serial-step3-gate3-2026-08-14-sanitized.log`.
+Sanitized log: `D:/Joy/all_joy/docs-config-ESPtoBACKEND/serial-step3-gate3-2026-08-14-sanitized.log`.
 
 ## Latest Step 4 implementation/build/flash/physical capture - 2026-08-15 20:54:00 +07:00
 
-Step 4 static review: `PASS`. The minimal source scope was `main/api.cpp`, `main/audio.cpp`, and `main/audio.h`. The revision enforces MP3 response integrity and completeness, expiry-aware failure/retry classification, strict decoder/playback failure handling, and task-side callback processing. No backend, credential, router, or configuration change was made. Static review: `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/step4-static-review-2026-08-14-sanitized.log`.
+Step 4 static review: `PASS`. The minimal source scope was `main/api.cpp`, `main/audio.cpp`, and `main/audio.h`. The revision enforces MP3 response integrity and completeness, expiry-aware failure/retry classification, strict decoder/playback failure handling, and task-side callback processing. No backend, credential, router, or configuration change was made. Static review: `D:/Joy/all_joy/docs-config-ESPtoBACKEND/step4-static-review-2026-08-14-sanitized.log`.
 
 One corrective official ESP-IDF build completed with exit code `0`; no second build, Ninja, dry-run, CMake, incremental verification, fullclean, or build-folder deletion was performed. Application artifacts from that build:
 
 - `build/all_bmo.bin`: 1,252,016 bytes / `2026-08-14T16:29:26.0486689+07:00` / SHA-256 `F5B9A7DBAB57719573E901838A8841EDEC00C10114A37A38670751B87E2A8F62`.
 - `build/all_bmo.elf`: 12,588,132 bytes / `2026-08-14T16:29:25.3964342+07:00` / SHA-256 `97F9111FDA32E01D4652B97289BA47987A89659F7549978C51B4AA0B5AB5BD47`.
 
-The exact set was flashed once through `esptool @flash_args` to ESP32-S3/COM7; exit code `0`, with `4/4` hash verifications. Logs: `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/board-step4-com7-sanitized.log` and `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/flash-step4-2026-08-14-sanitized.log`.
+The exact set was flashed once through `esptool @flash_args` to ESP32-S3/COM7; exit code `0`, with `4/4` hash verifications. Logs: `D:/Joy/all_joy/docs-config-ESPtoBACKEND/board-step4-com7-sanitized.log` and `D:/Joy/all_joy/docs-config-ESPtoBACKEND/flash-step4-2026-08-14-sanitized.log`.
 
-Physical Gate 4 evidence is incomplete. The first fresh capture reached authenticated WSS and detected `Hi Joy`/recording start, then ended before recording completion; no WAV/download/playback evidence is claimed. The second fresh capture was active but repeatedly reported AP `NO_AP_FOUND`, so it never reached IP/SNTP/WSS and no audio transaction was attempted. Status: `PENDING / BLOCKED_BY_NETWORK_AUTHORITY`, not a firmware failure. Logs: `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/serial-step4-gate4-interrupted-2026-08-14-sanitized.log` and `D:/BMO/all_bmo/docs-config-ESPtoBACKEND/serial-step4-gate4-network-blocked-2026-08-15-sanitized.log`.
+Physical Gate 4 evidence is incomplete. The first fresh capture reached authenticated WSS and detected `Hi Joy`/recording start, then ended before recording completion; no WAV/download/playback evidence is claimed. The second fresh capture was active but repeatedly reported AP `NO_AP_FOUND`, so it never reached IP/SNTP/WSS and no audio transaction was attempted. Status: `PENDING / BLOCKED_BY_NETWORK_AUTHORITY`, not a firmware failure. Logs: `D:/Joy/all_joy/docs-config-ESPtoBACKEND/serial-step4-gate4-inte...
 
 ## Latest WiFi credential revision build/flash/Gate 4 capture - 2026-08-15 21:31:00 +07:00
 

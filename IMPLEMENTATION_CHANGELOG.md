@@ -1,4 +1,4 @@
-# BMO ESP32-S3 Implementation / Change Log
+# Joy ESP32-S3 Implementation / Change Log
 
 Date: 2026-08-23
 Branch: `cenna`
@@ -63,17 +63,17 @@ No pairing/display/Wi-Fi/sdkconfig/backend behavior was changed as part of this 
 
 Goal: Add one explicit development-only compile-time flag that suppresses only LCD rendering of the six-digit pairing code while keeping the pairing protocol and lifecycle active.
 
-Files/functions affected: root `CMakeLists.txt` (the `BMO_DEV_SUPPRESS_PAIRING_UI` cache option and generated `bmo_dev_config.h`); `esp/main/api.cpp` (`process_pairing_actions()` and the generated-config include); `esp/tests/test_pairing_ui_suppression_contract.py` (focused contracts).
+Files/functions affected: root `CMakeLists.txt` (the `JOY_DEV_SUPPRESS_PAIRING_UI` cache option and generated `joy_dev_config.h`); `esp/main/api.cpp` (`process_pairing_actions()` and the generated-config include); `esp/tests/test_pairing_ui_suppression_contract.py` (focused contracts).
 
 Behavior before: every accepted `PAIRING_ACTION_SHOW_UI` action called `display_set_pairing_code()`; there was no project-level switch for development firmware to suppress that rendering.
 
-Behavior after: the default `OFF` configuration preserves the existing display call. When `BMO_DEV_SUPPRESS_PAIRING_UI=ON`, the `SHOW_UI` action is consumed without calling the LCD renderer; pairing code validation/storage, expiry, recovery/reissue, completion cleanup, pairing-mode request, reconnect, and re-authentication paths remain active.
+Behavior after: the default `OFF` configuration preserves the existing display call. When `JOY_DEV_SUPPRESS_PAIRING_UI=ON`, the `SHOW_UI` action is consumed without calling the LCD renderer; pairing code validation/storage, expiry, recovery/reissue, completion cleanup, pairing-mode request, reconnect, and re-authentication paths remain active.
 
 Reason: allow development firmware to exercise pairing internally without exposing the code on the LCD, without changing the protocol, credentials, renderer, orientation, or playback/proactive implementation.
 
 Regression risk: a preprocessor guard in the action processor could accidentally suppress protocol actions or alter production behavior if the default is wrong. Mitigations are an explicit default-off generated macro, focused source contracts, default and suppression-mode builds, and the full existing test suite.
 
-Verification evidence: focused suppression contracts pass; full `python -m unittest discover -s tests -v` passed 56/56; `idf.py -D BMO_DEV_SUPPRESS_PAIRING_UI=ON build` passed with generated macro `1`; final default `idf.py build` passed with generated macro `0` and CMake cache `OFF`. COM12 dev image flash passed, and serial monitoring observed stable boot, WSS authentication, and internal `pairing_code` receipt without logging the code. LCD visual output was not directly observable in this setup, so no visual claim is made; no pairing completion was claimed without a backend claim.
+Verification evidence: focused suppression contracts pass; full `python -m unittest discover -s tests -v` passed 56/56; `idf.py -D JOY_DEV_SUPPRESS_PAIRING_UI=ON build` passed with generated macro `1`; final default `idf.py build` passed with generated macro `0` and CMake cache `OFF`. COM12 dev image flash passed, and serial monitoring observed stable boot, WSS authentication, and internal `pairing_code` receipt without logging the code. LCD visual output was not directly observable in this setup, so no visual claim is made; no pairing completion was claimed without a backend claim.
 
 ## Change — Wake-Up Acknowledgment Audio Cue ("heem" / rising earcon)
 
@@ -85,8 +85,8 @@ Verification evidence: focused suppression contracts pass; full `python -m unitt
   - `esp/main/CMakeLists.txt` (embedding `audio_wav/wake_ack.wav` into the firmware binary).
   - `esp/main/audio_wav/wake_ack.wav` (embedded wake acknowledgment audio asset, $\le 600\text{ ms}$, 16kHz mono 16-bit PCM WAV).
   - `esp/tests/test_wake_ack_contract.py` (contract tests validating function declaration, implementation symbols, CMake EMBED_FILES registration, WAV format/duration $\le 600\text{ ms}$, invocation order before `wakeword_task()`, and state machine isolation).
-- Behavior before: upon detecting "Hi Joy", the firmware transitioned directly into `wakeword_task()` and `BMOState::RECORDING` with only visual LCD indication (`LISTENING`), without an acoustic wake acknowledgment cue.
-- Behavior after: upon `WAKENET_DETECTED`, `audio_playWakeAck()` is executed immediately to play the embedded `wake_ack.wav` (or fallback dual-tone synthesized earcon) through the MAX98357A I2S speaker at `SPEAKER_SAMPLE_RATE`. Voice capture and transition to `BMOState::RECORDING` occurs only after cue playback finishes, ensuring the INMP441 microphone does not capture the cue sound.
+- Behavior before: upon detecting "Hi Joy", the firmware transitioned directly into `wakeword_task()` and `JoyState::RECORDING` with only visual LCD indication (`LISTENING`), without an acoustic wake acknowledgment cue.
+- Behavior after: upon `WAKENET_DETECTED`, `audio_playWakeAck()` is executed immediately to play the embedded `wake_ack.wav` (or fallback dual-tone synthesized earcon) through the MAX98357A I2S speaker at `SPEAKER_SAMPLE_RATE`. Voice capture and transition to `JoyState::RECORDING` occurs only after cue playback finishes, ensuring the INMP441 microphone does not capture the cue sound.
 - Reason: improves conversational voice assistant UX by immediately acknowledging wake word detection with a pleasant, low-latency earcon sound before listening.
 - Regression risk: playing audio during microphone capture could contaminate the user audio recording buffer with the cue tone; playing an excessively long cue would introduce noticeable interaction latency. Mitigations include strict sequential invocation before `wakeword_task()`, concise audio duration ($\le 600\text{ ms}$), fallback dual-tone synthesis if WAV is missing or corrupt, and dedicated contract tests in `test_wake_ack_contract.py`.
 - Verification evidence: `test_wake_ack_contract.py` passes 6/6 tests; full contract suite passes 83/83 tests (`python3 -m unittest discover -s esp/tests`).
@@ -119,13 +119,13 @@ Verification evidence: focused suppression contracts pass; full `python -m unitt
 - Files/functions affected:
   - `esp/main/audio.h` (`audio_playThinkingFiller(int index)` and `audio_playRandomThinkingFiller()` declarations).
   - `esp/main/audio.cpp` (`_binary_thinking_01_wav_start` .. `_binary_thinking_05_wav_end` extern symbols, `thinking_clips` array, `thinking_phrase` lookup table, `audio_playThinkingFiller(int index)` with fallback synthesized chime tones, `audio_playRandomThinkingFiller()`).
-  - `esp/main/api.cpp` (invoking `audio_playRandomThinkingFiller()` immediately when voice upload is accepted with `BMO_UPLOAD_ACCEPTED`).
+  - `esp/main/api.cpp` (invoking `audio_playRandomThinkingFiller()` immediately when voice upload is accepted with `JOY_UPLOAD_ACCEPTED`).
   - `esp/main/CMakeLists.txt` (registering `audio_wav/thinking_01.wav` .. `audio_wav/thinking_05.wav` in `EMBED_FILES`).
   - `esp/main/audio_wav/generate_thinking_clips.py` (canonical WAV synthesis script for 16kHz 16-bit mono PCM thinking filler clips).
   - `esp/main/audio_wav/thinking_01.wav` .. `thinking_05.wav` (embedded WAV assets: "bentar aku pikir dulu", "aku lagi proses dulu pertanyaannya", "tunggu sebentar ya", "hmm coba aku cari tahu dulu", "bentar ya joy lagi mikir").
   - `esp/tests/test_thinking_filler_contract.py` (contract tests validating function declarations, implementation symbols, phrases, CMake registration, WAV format/duration, and upload acceptance trigger).
-- Behavior before: After user finished speaking and the WAV was uploaded, the device transitioned to `BMOState::THINKING` with visual LCD update only, leaving ~1.7s of dead-air silence while waiting for backend `audio_ready`.
-- Behavior after: Upon `BMO_UPLOAD_ACCEPTED`, `audio_playRandomThinkingFiller()` immediately selects and plays one of the 5 thinking filler clips (or fallback melodic earcon) through the MAX98357A I2S speaker, masking backend processing latency and providing natural conversational responsiveness.
+- Behavior before: After user finished speaking and the WAV was uploaded, the device transitioned to `JoyState::THINKING` with visual LCD update only, leaving ~1.7s of dead-air silence while waiting for backend `audio_ready`.
+- Behavior after: Upon `JOY_UPLOAD_ACCEPTED`, `audio_playRandomThinkingFiller()` immediately selects and plays one of the 5 thinking filler clips (or fallback melodic earcon) through the MAX98357A I2S speaker, masking backend processing latency and providing natural conversational responsiveness.
 - Reason: Enhances conversational AI UX by eliminating silence latency between user input and assistant response.
 - Regression risk: If a WAV clip is corrupted or unavailable, playback falls back safely to synthesized chime tones (`speaker_write_tone`). The filler playback does not block HTTP streaming when `audio_ready` arrives.
 

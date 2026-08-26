@@ -73,7 +73,7 @@ class SharedPlaybackContractTest(unittest.TestCase):
 
         downloader = function_body(
             api,
-            r"static\s+BMOPlaybackResult\s+download_and_play_mp3\s*\([^)]*\)",
+            r"static\s+JoyPlaybackResult\s+download_and_play_mp3\s*\([^)]*\)",
         )
         self.assertIn("playback_is_expired", downloader)
         self.assertIn("job->audio_url", downloader)
@@ -140,7 +140,7 @@ class SharedPlaybackContractTest(unittest.TestCase):
         api = self.read(API_SOURCE)
         downloader = function_body(
             api,
-            r"static\s+BMOPlaybackResult\s+download_and_play_mp3\s*\([^)]*\)",
+            r"static\s+JoyPlaybackResult\s+download_and_play_mp3\s*\([^)]*\)",
         )
         self.assertIn("esp_http_client_is_chunked_response", downloader)
         self.assertIn("!is_chunked && content_length <= 0", downloader)

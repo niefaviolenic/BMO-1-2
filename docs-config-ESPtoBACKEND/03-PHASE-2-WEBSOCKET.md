@@ -59,7 +59,7 @@ File utama: `esp/main/api.cpp`.
 
 ## Verifikasi
 
-1. Koneksi fresh menerima `authenticated` dengan `device_id=bmo-001`, `backend_state=idle`, dan `active_request_id=null`.
+1. Koneksi fresh menerima `authenticated` dengan `device_id=joy-001`, `backend_state=idle`, dan `active_request_id=null`.
 2. Credential salah menghasilkan `authentication_failed`/close `4003`; ESP tidak masuk loop upload.
 3. WS diputus saat idle; ESP reconnect, re-authenticate, dan kembali ready.
 4. WS diputus saat backend state `thinking`; setelah reconnect ESP menerima/reconcile `display_status` atau state aktif yang sesuai.
