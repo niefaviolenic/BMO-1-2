@@ -1375,6 +1375,7 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
     
     // MP3 Buffer configuration
     #define MP3_STREAM_BUF_SIZE (32 * 1024) // 32 KB buffer
+    #define MP3_STREAM_PREBUFFER_BYTES 2048 // 2 KB low-latency pre-buffer threshold
     uint8_t *mp3_stream_buf = (uint8_t *)malloc(MP3_STREAM_BUF_SIZE);
     if (mp3_stream_buf == NULL) {
         ESP_LOGE(TAG, "Failed to allocate MP3 streaming buffer");
@@ -1509,8 +1510,8 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
             }
         }
         
-        // 3. Initial buffering requirement (16 KB)
-        if (!playback_started && bytes_left < 16384 && !is_eof) {
+        // 3. Initial buffering requirement (2 KB low-latency threshold)
+        if (!playback_started && bytes_left < MP3_STREAM_PREBUFFER_BYTES && !is_eof) {
             // Keep buffering
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
@@ -2256,8 +2257,8 @@ void api_upload_audio_and_process() {
     int wait_timer_ms = 0;
 
     while (playback_state == BMO_PLAYBACK_WAITING && wait_timer_ms < TOTAL_PIPELINE_TIMEOUT_MS) {
-        vTaskDelay(pdMS_TO_TICKS(100));
-        wait_timer_ms += 100;
+        vTaskDelay(pdMS_TO_TICKS(20));
+        wait_timer_ms += 20;
     }
 
     if (playback_state == BMO_PLAYBACK_WAITING) {

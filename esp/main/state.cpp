@@ -126,7 +126,7 @@ static void bmo_state_machine_task(void *pvParameters)
         {
             case BMOState::IDLE:
                 // Menunggu trigger dari Wake Word (yang merubah state ke RECORDING)
-                vTaskDelay(pdMS_TO_TICKS(100));
+                vTaskDelay(pdMS_TO_TICKS(20));
                 break;
 
             case BMOState::RECORDING: {
@@ -153,7 +153,7 @@ static void bmo_state_machine_task(void *pvParameters)
                         break;
                     }
 
-                    vTaskDelay(pdMS_TO_TICKS(50));
+                    vTaskDelay(pdMS_TO_TICKS(10));
                 }
 
                 // Recording is terminal now; release the local listening UI

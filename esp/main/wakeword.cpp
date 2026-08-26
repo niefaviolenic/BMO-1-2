@@ -46,8 +46,9 @@ static const char *TAG = "WAKE";
 
 #define RECORD_BUFFER_SIZE (RECORD_MAX_SAMPLES + WAV_HEADER_SAMPLES)
 
-#define SILENCE_THRESHOLD 800
-#define RECORD_SILENCE_DURATION_MS 2500
+#define SILENCE_THRESHOLD 250
+#define RECORD_SILENCE_DURATION_MS 1500
+#define RECORD_MIN_SPEECH_DURATION_MS 1500
 #define RECORD_I2S_READ_TIMEOUT_MS 100
 #define RECORD_NO_SAMPLE_PROGRESS_TIMEOUT_MS 3000
 #define RECORD_DIAGNOSTIC_INTERVAL_MS 1000
@@ -590,9 +591,13 @@ static void wakeword_listener_task(
                         (size_t)samples_to_copy * sizeof(int16_t));
                     record_index += samples_to_copy;
                     recording_last_sample_tick = now;
+                    bool min_duration_reached =
+                        (record_index - WAV_HEADER_SAMPLES) >=
+                        (RECORD_SAMPLE_RATE * RECORD_MIN_SPEECH_DURATION_MS / 1000);
                     silence_reached =
-                        silence_samples >=
-                        (RECORD_SAMPLE_RATE * RECORD_SILENCE_DURATION_MS / 1000);
+                        min_duration_reached &&
+                        (silence_samples >=
+                         (RECORD_SAMPLE_RATE * RECORD_SILENCE_DURATION_MS / 1000));
                 }
             }
 
@@ -614,7 +619,7 @@ static void wakeword_listener_task(
 
             log_recording_progress_if_due(now, "samples");
 
-            // Check stop conditions: 2.5 seconds of silence OR 60 seconds duration.
+            // Check stop conditions: 1500 ms of silence (after minimum speech duration) OR 60 seconds duration.
             if (silence_reached)
             {
                 finalize_recording("silence_detected");
