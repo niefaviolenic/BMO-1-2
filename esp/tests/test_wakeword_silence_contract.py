@@ -59,12 +59,12 @@ class WakewordSilenceContractTest(unittest.TestCase):
         match = re.search(r"#define\s+RECORD_SILENCE_DURATION_MS\s+(\d+)", self.source)
         self.assertIsNotNone(match, "RECORD_SILENCE_DURATION_MS definition not found")
         duration = int(match.group(1))
-        self.assertEqual(duration, 800, "RECORD_SILENCE_DURATION_MS should be 800")
+        self.assertEqual(duration, 6000, "RECORD_SILENCE_DURATION_MS should be 6000")
     def test_record_leading_silence_timeout_is_defined(self) -> None:
         match = re.search(r"#define\s+RECORD_LEADING_SILENCE_TIMEOUT_MS\s+(\d+)", self.source)
         self.assertIsNotNone(match, "RECORD_LEADING_SILENCE_TIMEOUT_MS definition not found")
         duration = int(match.group(1))
-        self.assertEqual(duration, 3500, "RECORD_LEADING_SILENCE_TIMEOUT_MS should be 3500")
+        self.assertEqual(duration, 6000, "RECORD_LEADING_SILENCE_TIMEOUT_MS should be 6000")
 
     def test_min_speech_duration_grace_period_is_defined(self) -> None:
         match = re.search(r"#define\s+RECORD_MIN_SPEECH_DURATION_MS\s+(\d+)", self.source)

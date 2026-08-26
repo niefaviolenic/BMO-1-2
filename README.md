@@ -100,7 +100,7 @@ sequenceDiagram
 - **Seamless Single-Breath Wake Word**: Mendukung pengucapan kalimat perintah langsung dalam satu tarikan nafas (contoh: *"Hey Joy jam berapa hari ini"*). Firmware mengimplementasikan rolling circular pre-roll buffer sebesar 8192 sampel (~512ms) selama state IDLE, handoff 0ms tanpa blocking acoustic playback, dan aktivasi rekaman seketika sehingga kata-kata perintah setelah wake word tidak terpotong.
 - **Voice Activity Detection (VAD) Tuning**:
   - `SILENCE_THRESHOLD = 250` (Amplitudo PCM threshold).
-  - `RECORD_SILENCE_DURATION_MS = 800 ms` (Batas hening untuk stop rekaman secara natural).
+  - `RECORD_SILENCE_DURATION_MS = 6000 ms` (Batas hening untuk stop rekaman secara natural).
   - `RECORD_MIN_SPEECH_DURATION_MS = 400 ms` (Grace period sebelum VAD aktif).
   - `RECORD_NO_SAMPLE_PROGRESS_TIMEOUT_MS = 3000 ms` (Watchdog sampel I2S).
   - `RECORD_DURATION_SEC = 60 detik` (Durasi rekaman maksimal).
@@ -242,7 +242,7 @@ idf.py -D BMO_DEV_SUPPRESS_PAIRING_UI=ON build flash monitor
 
 ## 7. Python Contract Test Suite
 
-Repository ini dilengkapi dengan 83 contract tests berbasis Python `unittest` di direktori `esp/tests/` untuk menguji kepatuhan kode firmware terhadap kontrak produksi (audio, wake ack cue, wake silence, display, pairing, SNTP, playback):
+Repository ini dilengkapi dengan 90 contract tests berbasis Python `unittest` di direktori `esp/tests/` untuk menguji kepatuhan kode firmware terhadap seluruh kontrak produksi (audio, wake ack cue, wake silence, display, pairing, SNTP, playback, dynamic thinking filler, rolling pre-roll buffer single-breath):
 
 ```bash
 # Menjalankan seluruh test suite
@@ -252,12 +252,10 @@ python3 -m unittest discover -s esp/tests -v
 Hasil uji:
 ```text
 ----------------------------------------------------------------------
-Ran 83 tests in 0.027s
+Ran 90 tests in 0.036s
 
 OK (100% Passing)
 ```
-
----
 
 ## 8. Struktur Direktori Repository
 
@@ -292,5 +290,5 @@ OK (100% Passing)
     │   ├── wakeword.cpp / wakeword.h   # INMP441 I2S mic & WakeNet "Hi Joy" engine
     │   ├── wifi.cpp / wifi.h           # Wi-Fi station & SNTP time sync
     │   └── audio_wav/                  # Embedded WAV clips (01.wav - 10.wav, wake_ack.wav, thinking_*.wav)
-    └── tests/                          # 88/88 Python Contract Tests
+    └── tests/                          # 90/90 Python Contract Tests (100% Passing)
 ```

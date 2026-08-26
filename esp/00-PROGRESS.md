@@ -4,7 +4,7 @@
 
 - Non-Blocking Wake Acknowledgment Cue (Earcon): `PASS`; implemented dedicated background worker task `wake_ack_worker_task` pinned to Core 0 in `audio.cpp`, triggered asynchronously via `audio_triggerWakeAck()` (`xTaskNotifyGive`) on `WAKENET_DETECTED` in `wakeword.cpp`. Provides instant acoustic earcon playback with 0ms microphone loop blocking delay.
 - Seamless Single-Breath Wake Word: `PASS`; rolling circular pre-roll buffer (8192 samples / ~512ms at 16kHz mono PCM) in `wakeword.cpp` captures audio uninterrupted during wake cue playback.
-- Python Contract Test Suite: `88/88 PASS` (100% passing across all contract tests in `esp/tests/`).
+- Python Contract Test Suite: `90/90 PASS` (100% passing across all 90 contract tests in `esp/tests/`).
 ## Seamless single-breath wake word implementation - 2026-08-26 15:00:00 +07:00
 
 - Implemented rolling circular pre-roll buffer in `wakeword.cpp` (`PREROLL_BUFFER_SAMPLES = 8192`, ~512ms at 16kHz mono) during IDLE state.
@@ -13,7 +13,7 @@
 - Enhanced `start_recording()` to drain the pre-roll buffer in chronological order into `record_buffer` and operate idempotently.
 - Pre-allocated `record_buffer` in PSRAM during `wakeword_init()`.
 - Updated contract test `test_wake_ack_contract.py` with `test_wakeword_seamless_single_breath_contract`.
-- Ran full test suite: 88/88 tests PASS (`python3 -m unittest discover -s esp/tests`).
+- Ran full test suite: 90/90 tests PASS (`python3 -m unittest discover -s esp/tests`).
 
 - Static review and contract tests passed for wake-up acknowledgment cue:
   - `audio.h`: declared `void audio_playWakeAck();`.

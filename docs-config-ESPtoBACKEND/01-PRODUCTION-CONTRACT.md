@@ -16,18 +16,18 @@ Dokumen ini adalah kontrak target yang sudah diverifikasi dari backend productio
 
 ## Production endpoint
 
-| Fungsi | Nilai wajib |
-|---|---|
-| Base URL | `https://api.personalbmo.web.id` |
-| Health | `GET https://api.personalbmo.web.id/health` |
-| WebSocket | `wss://api.personalbmo.web.id/ws` |
-| Upload | `POST https://api.personalbmo.web.id/api/v1/voice` |
-| Audio | `GET https://api.personalbmo.web.id/audio/<audio-uuid>.mp3` |
-| Public port | TCP `443` melalui Caddy |
-| Backend origin | `127.0.0.1:3000`, bukan endpoint yang boleh diakses ESP |
+| Fungsi | Nilai wajib | Keterangan |
+|---|---|---|
+| Base URL | `https://api.personalbmo.web.id` | HTTPS REST Gateway |
+| Health | `GET https://api.personalbmo.web.id/health` | Health Check Endpoint |
+| Hardware WebSocket | `wss://api.personalbmo.web.id/ws` | Dedicated WSS untuk ESP32-S3 Hardware Client |
+| Mobile WebSocket | `wss://api.personalbmo.web.id/api/v1/ws` | Dedicated WSS untuk Joy Mobile App Client |
+| Audio Upload | `POST https://api.personalbmo.web.id/api/v1/voice` | Upload Canonical WAV (16kHz 16-bit Mono) |
+| Audio Download | `GET https://api.personalbmo.web.id/audio/<audio-uuid>.mp3` | MP3 Streaming (Direct / Chunked) |
+| Public port | TCP `443` melalui Caddy | TLS 1.2 / 1.3 |
+| Backend origin | `127.0.0.1:3000` (Private) | Bukan endpoint yang boleh diakses langsung |
 
 ESP tidak boleh memakai `192.168.1.100`, `localhost`, port `3000`, HTTP plaintext, atau WS plaintext untuk production.
-
 ## Device authentication
 
 Nilai production:
@@ -116,19 +116,37 @@ Backend memproses suara menggunakan arsitektur real-time streaming pipeline:
 6. **Time-To-First-Audio (TTFA)**: Latensi dari selesai upload sampai `audio_ready` terpangkas menjadi **~1.7 detik**.
 
 > **Penting**: Seluruh optimasi pipeline streaming ini **100% kompatibel** dengan kontrak ESP32 yang sudah ada. ESP32 tetap menerima event `audio_ready` standar, melakukan HTTP GET ke `audio_url` dengan dukungan Chunked Transfer Encoding (`Transfer-Encoding: chunked`), men-decode stream MP3 via Helix MP3 Decoder secara bertahap, dan mengirim `audio_playback_done` saat tuntas.
+## Fitur Akustik & Audio UX Firmware
+
+1. **Non-Blocking Wake Acknowledgment Cue**:
+   - Begitu WakeNet mendeteksi wake word *"Hi Joy"*, task background Core 0 (`wake_ack_worker_task`) seketika memainkan `wake_ack.wav` ($\le 600\text{ ms}$, 16kHz 16-bit Mono PCM) atau fallback dual-tone earcon (659 Hz $\to$ 880 Hz) melalui amplifier MAX98357A.
+   - Microphone capture task (`wakeword_listener_task`) tidak terblokir (0ms blocking delay).
+
+2. **Seamless Single-Breath Wake Word**:
+   - Rolling circular pre-roll buffer sebesar 8192 sampel (~512ms pada 16kHz mono) aktif selama state `IDLE`.
+   - Saat wake word terdeteksi, pre-roll buffer langsung dikomit ke `record_buffer` sehingga kata perintah lanjutan (misal *"Hi Joy jam berapa sekarang"*) tidak terpotong sama sekali.
+
+3. **Dynamic Thinking Filler Voice Speech (Zero Dead-Air Latency Masking)**:
+   - Begitu upload WAV diterima oleh backend (`202 Accepted` / `BMO_UPLOAD_ACCEPTED`), firmware seketika memutar salah satu dari 5 audio clip filler berpikir secara dinamis/acak (`thinking_01.wav` .. `thinking_05.wav`) melalui speaker.
+   - Menghilangkan keheningan canggung (*dead air*) selama backend memproses STT, Hermes LLM, dan TTS synthesis.
+
+4. **Shared Playback Job Architecture (`PlaybackJob`)**:
+   - Abstraksi `PlaybackJob` di `playback.cpp` mengatur hak kepemilikan speaker DAC tunggal (arbitrasi eksklusif).
+   - Memberikan prioritas utama pada Voice Playback dan mengisolasi Proactive Delivery dari konflik pemutaran suara.
+
 ## Urutan transaksi
 
-1. Wi-Fi tersambung dan waktu valid.
+1. Wi-Fi tersambung dan waktu valid (SNTP).
 2. ESP membuka `wss://.../ws` dan mengirim `authenticate` dalam 5 detik.
 3. ESP menunggu `authenticated`.
-4. ESP merekam WAV canonical.
-5. ESP mengirim upload HTTP dengan header dan `X-Request-Id`.
-6. Backend menerima `202` atau duplicate `200`, lalu memproses asynchronous.
-7. Backend mengirim `display_status` (`thinking`) dan kemudian `audio_ready`, atau `request_failed`.
-8. ESP GET `audio_url` MP3 (direct atau chunked transfer encoding, 16kHz/24kHz), melewati ID3 header, men-decode via Helix MP3 decoder, lalu playback ke I2S DAC.
-9. Setelah playback benar-benar selesai, ESP mengirim `audio_playback_done`.
-10. Jika download, decode, atau playback gagal, ESP mengirim event `audio_playback_failed` dengan reason yang tepat.
-
+4. ESP mendeteksi wake word *"Hi Joy"* -> memutar wake ack cue secara non-blocking dan mengaktifkan rekaman dengan rolling pre-roll buffer (~512ms).
+5. ESP merekam WAV canonical (16kHz 16-bit Mono).
+6. ESP mengirim upload HTTP dengan header `X-Device-Id`, `X-Device-Token`, dan `X-Request-Id`.
+7. Backend menerima `202 Accepted` -> ESP langsung memutar dynamic thinking filler clip secara lokal.
+8. Backend memproses via Hermes Streaming SSE + SentenceSplitter + Pipelined TTS -> mengirim `display_status` (`thinking`) lalu `audio_ready`.
+9. ESP GET `audio_url` MP3 (direct atau chunked transfer encoding, 16kHz/24kHz), melewati ID3 header, men-decode via Helix MP3 decoder, lalu playback ke I2S DAC.
+10. Setelah playback benar-benar selesai, ESP mengirim `audio_playback_done`.
+11. Jika download, decode, atau playback gagal, ESP mengirim event `audio_playback_failed` dengan reason yang tepat (`DOWNLOAD_FAILED`, `DECODE_FAILED`, `PLAYBACK_FAILED`).
 ## Timeout, heartbeat, dan lifecycle
 
 - WebSocket auth: 5 detik.

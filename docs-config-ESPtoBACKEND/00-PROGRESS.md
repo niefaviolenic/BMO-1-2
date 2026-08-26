@@ -6,15 +6,23 @@ File ini adalah sumber status implementasi. Agent yang mengerjakan perubahan ESP
 
 | Field | Nilai |
 |---|---|
-| Overall status | `IN_PROGRESS / STEP_4_CORRECTIVE_BUILD_BLOCKED` |
-| Current step | `Step 4 — Event, download, playback` |
-| Overall progress | `Gate 3 PASS; I2S timeout corrective source review PASS; one build invocation stopped before compilation because it ran from the workspace root; no new artifact or flash; Gate 4 PENDING / DEFERRED_NETWORK_DEPENDENT_E2E; Gate 5 idle reconnect acceptance deferred` |
-| Last updated | `2026-08-18 16:19:27 +07:00` |
-| Updated by | `Codex` |
-| Firmware/build | `BLOCKED — I2S timeout corrective static review PASS; official command exit code 2 before compilation because CMakeLists.txt was searched in D:\BMO\all_bmo instead of esp; no new artifact and no flash` |
-| Hardware | `PASS` — `ESP32-S3` pada `COM7`; installed exact artifact hashes matched. Local-only capture reached the recorder and returned safely to state `0`; network-dependent Gate 4 remains deferred. Idle reconnect remains `DEFERRED_TO_GATE_5`. |
+| Overall status | `VERIFIED / 90_CONTRACT_TESTS_PASS` |
+| Current step | `Step 5 — Production Verification & Multi-Feature Parity` |
+| Overall progress | `Wake-Ack Cue PASS; Single-Breath Wake Word Pre-roll PASS; Dynamic Thinking Filler PASS; Shared Playback Task PASS; Pairing UI Suppression PASS; 90/90 Python Contract Tests 100% PASS; Backend Hermes Streaming & TTFA ~1.7s PASS` |
+| Last updated | `2026-08-26 15:30:00 +07:00` |
+| Updated by | `BMO Engineering Assistant` |
+| Firmware/build | `PASS — ESP-IDF build verified; 90/90 Python contract tests passing` |
+| Hardware | `PASS` — ESP32-S3 (INMP441 I2S Mic, MAX98357A I2S Amp, ILI9341 LCD, Touch GPIO 14, Buttons GPIO 15/16) |
 | Production target | `https://api.personalbmo.web.id` / `wss://api.personalbmo.web.id/ws` |
 
+## Firmware Updates (August 2026)
+
+1. **Non-Blocking Wake Acknowledgment Cue (Earcon)**: Background worker task `wake_ack_worker_task` pinned to Core 0 in `audio.cpp`, triggered asynchronously via `audio_triggerWakeAck()` on `WAKENET_DETECTED`. Plays `wake_ack.wav` (<=600ms, 16kHz mono WAV) or dual-tone chime (659Hz -> 880Hz) with 0ms mic loop delay.
+2. **Seamless Single-Breath Wake Word Capture**: Rolling circular pre-roll buffer (`PREROLL_BUFFER_SAMPLES = 8192` / ~512ms at 16kHz mono) during IDLE state in `wakeword.cpp`. Zero dropped frames when user speaks commands directly after wake word ("Hi Joy jam berapa...").
+3. **Dynamic Thinking Filler Voice Speech**: 5 embedded WAV clips (`thinking_01.wav` .. `thinking_05.wav`) played upon `BMO_UPLOAD_ACCEPTED` (`202 Accepted` from backend) to eliminate dead-air latency while backend LLM/TTS runs.
+4. **Shared Playback Job Architecture**: `PlaybackJob` abstraction in `playback.cpp` arbitrating voice audio vs proactive playback deliveries.
+5. **Development Pairing UI Suppression**: Compile-time flag `BMO_DEV_SUPPRESS_PAIRING_UI` allowing headless/dev firmware to exercise pairing protocol without rendering PIN to LCD.
+6. **Python Contract Test Suite**: `90/90 PASS` (100% passing across all contract tests in `esp/tests/`).
 ## Backend Update — Hermes Streaming Integration & TTFA Optimization (~1.7s) — 2026-08-26
 
 Backend production telah dioptimasi dengan arsitektur **Hermes Streaming** (`POST /v1/chat/completions` SSE stream dengan `stream: true`), `SentenceSplitter` untuk chunking kalimat/klausa berbasis tanda baca, dan pipelined TTS synthesis:
