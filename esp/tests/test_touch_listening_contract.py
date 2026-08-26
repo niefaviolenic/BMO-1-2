@@ -112,7 +112,7 @@ class TouchListeningContractTest(unittest.TestCase):
         self.assertIn("touch_candidate_level != touch_stable_level", update)
         self.assertIn("display_next_touch_face", update)
         self.assertIn("audio_playExpressionAudio", update)
-        self.assertIn("audio_setVolume(100)", update)
+        self.assertRegex(update, r"audio_setVolume\((?:100|SPEAKER_DEFAULT_VOLUME)\)")
         self.assertIn("getState() == BMOState::IDLE", update)
 
     def test_touch_action_is_one_shot_and_expression_audio_follows_face_render(self) -> None:

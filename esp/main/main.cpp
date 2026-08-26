@@ -54,7 +54,7 @@ extern "C" void app_main()
              (unsigned long)((xTaskGetTickCount() - lcd_diag_start) * portTICK_PERIOD_MS));
 
     audio_init();
-    audio_setVolume(100);
+    audio_setVolume(SPEAKER_DEFAULT_VOLUME);
     ESP_LOGI(TAG, "OUTPUT_DIAG speaker begin: volume=%d", audio_getVolume());
     TickType_t speaker_diag_start = xTaskGetTickCount();
     audio_playHello();

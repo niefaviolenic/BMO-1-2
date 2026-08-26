@@ -43,7 +43,7 @@ class ExpressionAudioContractTest(unittest.TestCase):
         self.assertIn("melody_hz", cue)
         self.assertGreaterEqual(cue.count("speaker_write_tone"), 1)
         self.assertIn("speaker_write_silence", cue)
-        self.assertIn("SPEAKER_DEFAULT_VOLUME 100", source)
+        self.assertRegex(header + source, r"SPEAKER_DEFAULT_VOLUME\s+100")
 
     def test_expression_cue_is_owned_by_touch_not_voice_recording(self) -> None:
         button = (ROOT / "main" / "button.cpp").read_text(encoding="utf-8")
@@ -81,7 +81,7 @@ class ExpressionAudioContractTest(unittest.TestCase):
             "aku confused",
         ):
             self.assertIn(phrase, source)
-        self.assertIn("audio_setVolume(100);", playback)
+        self.assertRegex(playback, r"audio_setVolume\((?:100|SPEAKER_DEFAULT_VOLUME)\);")
 
 
 if __name__ == "__main__":

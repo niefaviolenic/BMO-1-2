@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#define SPEAKER_DEFAULT_VOLUME 100
+
 void audio_init();
 
 void audio_playHello();

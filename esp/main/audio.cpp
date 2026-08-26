@@ -23,7 +23,9 @@ static const char *TAG = "AUDIO";
 //--------------------------------------------------
 
 #define SPEAKER_SAMPLE_RATE 16000
+#ifndef SPEAKER_DEFAULT_VOLUME
 #define SPEAKER_DEFAULT_VOLUME 100
+#endif
 #define SPEAKER_CHUNK_FRAMES 256
 #define SPEAKER_OUTPUT_CHUNK_FRAMES 64
 
@@ -33,6 +35,7 @@ static bool speaker_ready = false;
 
 static volatile int volume = SPEAKER_DEFAULT_VOLUME;
 
+static uint32_t current_sample_rate = SPEAKER_SAMPLE_RATE;
 extern "C" {
 extern const uint8_t _binary_01_wav_start[];
 extern const uint8_t _binary_01_wav_end[];
@@ -129,18 +132,28 @@ static int speaker_volume_percent()
 
 //--------------------------------------------------
 
+static inline int16_t speaker_soft_clip(int32_t x)
+{
+    if (x > 32767) return 32767;
+    if (x < -32768) return -32768;
+    return (int16_t)x;
+}
+
 static int16_t speaker_scale_sample(
     int16_t sample,
     int safe_volume)
 {
-    return (int16_t)(((int32_t)sample * safe_volume) / 100);
+    // Digital pre-amp gain multiplier (1.6x = ~+4.1dB)
+    int32_t boosted = (int32_t)sample * 16 / 10;
+    int32_t scaled = (boosted * safe_volume) / 100;
+    return speaker_soft_clip(scaled);
 }
 
 //--------------------------------------------------
 
 static int16_t speaker_amplitude()
 {
-    return (int16_t)(speaker_volume_percent() * 55);
+    return (int16_t)(speaker_volume_percent() * 180);
 }
 
 //--------------------------------------------------
@@ -154,17 +167,18 @@ static esp_err_t speaker_write_tone(
 
     int16_t samples[SPEAKER_OUTPUT_CHUNK_FRAMES * 2];
 
+    uint32_t rate = current_sample_rate ? current_sample_rate : SPEAKER_SAMPLE_RATE;
+
     int total_frames =
-        (SPEAKER_SAMPLE_RATE * duration_ms) / 1000;
+        (rate * duration_ms) / 1000;
 
     int phase = 0;
 
     int period =
-        SPEAKER_SAMPLE_RATE / frequency_hz;
+        rate / frequency_hz;
 
     if(period < 2)
         period = 2;
-
     while(total_frames > 0)
     {
         int frames =
@@ -221,8 +235,13 @@ static esp_err_t speaker_write_silence(
 
     int16_t samples[SPEAKER_OUTPUT_CHUNK_FRAMES * 2] = {};
 
+    uint32_t rate = current_sample_rate ? current_sample_rate : SPEAKER_SAMPLE_RATE;
+
     int total_frames =
-        (SPEAKER_SAMPLE_RATE * duration_ms) / 1000;
+        (rate * duration_ms) / 1000;
+
+    if(total_frames <= 0)
+        total_frames = SPEAKER_OUTPUT_CHUNK_FRAMES;
 
     while(total_frames > 0)
     {
@@ -262,7 +281,8 @@ void audio_init()
         I2S_CHANNEL_DEFAULT_CONFIG(
             I2S_NUM_AUTO,
             I2S_ROLE_MASTER);
-
+    channel_config.auto_clear_after_cb = true;
+    channel_config.auto_clear_before_cb = true;
     esp_err_t result =
         i2s_new_channel(
             &channel_config,
@@ -345,6 +365,10 @@ void audio_init()
 
     speaker_ready = true;
 
+    // Flush and prime DMA TX buffers with digital silence to prevent DC offset
+    // or underrun screams before any tone/clip starts.
+    (void)speaker_write_silence(50);
+
     ESP_LOGI(
         TAG,
         "MAX98357A ready: BCLK=%d WS=%d DIN=%d volume=%d",
@@ -389,6 +413,11 @@ void audio_playHello()
             1040,
             150);
 
+    // Trailing silence ensures DMA pipeline drains clean zero samples
+    // and prevents underrun noise or DC offset on MAX98357A
+    result |=
+        speaker_write_silence(
+            50);
     if(result != ESP_OK)
     {
         ESP_LOGW(
@@ -546,18 +575,21 @@ static bool audio_play_embedded_wav(int expression_index)
         pcm_bytes / sizeof(int16_t),
         channels,
         (int)sample_rate);
-
     if(!played)
         ESP_LOGE(TAG, "Embedded expression WAV %02d playback failed", expression_index + 1);
+    else
+        (void)speaker_write_silence(50);
 
     return played;
 }
 
+//--------------------------------------------------
+
 void audio_playExpressionAudio(int expression_index)
 {
-    // Expression voice clips are always played at the requested full volume,
+    // Expression voice clips are played at default volume (100),
     // even if a previous volume-button event lowered the runtime setting.
-    audio_setVolume(100);
+    audio_setVolume(SPEAKER_DEFAULT_VOLUME);
 
     if(!audio_play_embedded_wav(expression_index))
     {
@@ -642,9 +674,9 @@ void audio_play_pcm(const int16_t *mono_samples, size_t sample_count)
 
         i += chunk_samples;
     }
-}
 
-static uint32_t current_sample_rate = SPEAKER_SAMPLE_RATE;
+    (void)speaker_write_silence(30);
+}
 
 bool audio_set_sample_rate(uint32_t sample_rate)
 {
@@ -850,7 +882,7 @@ void audio_play_error()
     result |= speaker_write_tone(330, 150);
     result |= speaker_write_silence(50);
     result |= speaker_write_tone(220, 250);
-
+    result |= speaker_write_silence(50);
     if(result != ESP_OK)
     {
         ESP_LOGW(TAG, "Error beep skipped: %s", esp_err_to_name(result));

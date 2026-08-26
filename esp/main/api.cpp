@@ -903,6 +903,14 @@ static void handle_ws_message(const char *payload, int len) {
     else if (strcmp(event, "display_status") == 0) {
         cJSON *req_id_node = cJSON_GetObjectItem(root, "request_id");
         cJSON *status_node = cJSON_GetObjectItem(root, "status");
+        cJSON *transcript_node = cJSON_GetObjectItem(root, "transcript");
+        if (transcript_node == NULL) {
+            transcript_node = cJSON_GetObjectItem(root, "user_transcript");
+        }
+        if (transcript_node != NULL && cJSON_IsString(transcript_node) &&
+            transcript_node->valuestring != NULL && transcript_node->valuestring[0] != '\0') {
+            ESP_LOGI(TAG, "🎤 [User STT]: %s", transcript_node->valuestring);
+        }
         if (req_id_node != NULL && cJSON_IsString(req_id_node) &&
             status_node != NULL && cJSON_IsString(status_node) &&
             strcmp(status_node->valuestring, "thinking") == 0 &&
@@ -924,6 +932,20 @@ static void handle_ws_message(const char *payload, int len) {
         cJSON *url_node = cJSON_GetObjectItem(root, "audio_url");
         cJSON *format_node = cJSON_GetObjectItem(root, "format");
         cJSON *expires_node = cJSON_GetObjectItem(root, "expires_in_seconds");
+        cJSON *transcript_node = cJSON_GetObjectItem(root, "transcript");
+        if (transcript_node == NULL) {
+            transcript_node = cJSON_GetObjectItem(root, "user_transcript");
+        }
+        if (transcript_node == NULL) {
+            transcript_node = cJSON_GetObjectItem(root, "stt");
+        }
+        cJSON *resp_text_node = cJSON_GetObjectItem(root, "response_text");
+        if (resp_text_node == NULL) {
+            resp_text_node = cJSON_GetObjectItem(root, "text");
+        }
+        if (resp_text_node == NULL) {
+            resp_text_node = cJSON_GetObjectItem(root, "ai_response");
+        }
         PlaybackJob voice_job = {};
         uint32_t expires_in_seconds = 0;
         bool expires_value_valid = expires_node != NULL && cJSON_IsNumber(expires_node) &&
@@ -946,6 +968,14 @@ static void handle_ws_message(const char *payload, int len) {
             adopt_recovered_request(req_id_node->valuestring);
 
         if (valid_audio_ready) {
+            if (transcript_node != NULL && cJSON_IsString(transcript_node) &&
+                transcript_node->valuestring != NULL && transcript_node->valuestring[0] != '\0') {
+                ESP_LOGI(TAG, "🎤 [User STT]: %s", transcript_node->valuestring);
+            }
+            if (resp_text_node != NULL && cJSON_IsString(resp_text_node) &&
+                resp_text_node->valuestring != NULL && resp_text_node->valuestring[0] != '\0') {
+                ESP_LOGI(TAG, "🤖 [BMO AI]: %s", resp_text_node->valuestring);
+            }
             strncpy(backend_state, "audio_ready", sizeof(backend_state) - 1);
             backend_state[sizeof(backend_state) - 1] = '\0';
             if (playback_state == BMO_PLAYBACK_DONE_PENDING_SEND ||
@@ -1301,7 +1331,7 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
     esp_http_client_config_t config = {};
     config.url = job->audio_url;
     config.method = HTTP_METHOD_GET;
-    config.timeout_ms = 10000;
+    config.timeout_ms = 4000;
     config.event_handler = mp3_http_event_handler;
     config.user_data = content_type;
     config.crt_bundle_attach = esp_crt_bundle_attach;
@@ -1375,6 +1405,10 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
     int64_t playback_wall_start_us = 0;
     int64_t last_progress_log_us = 0;
     
+    static constexpr int64_t MP3_STREAM_READ_TIMEOUT_US = 5000000LL;
+    static constexpr int64_t MP3_STREAM_UNDERRUN_MAX_US = 4000000LL;
+    int64_t last_receive_time_us = esp_timer_get_time();
+    
     short *out_pcm = (short *)malloc(1152 * 2 * sizeof(short)); // Helix frame capacity
     if (out_pcm == NULL) {
         ESP_LOGE(TAG, "Failed to allocate frame PCM output buffer");
@@ -1388,8 +1422,10 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
     BMOPlaybackResult result = BMO_PLAYBACK_DOWNLOAD_FAILED;
     
     while (true) {
+        int64_t now_us = esp_timer_get_time();
+
         if (audio_deadline_expired() ||
-            playback_is_expired(esp_timer_get_time() / 1000)) {
+            playback_is_expired(now_us / 1000LL)) {
             result = BMO_PLAYBACK_EXPIRED;
             break;
         }
@@ -1401,17 +1437,32 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
             break;
         }
 
+        if (!is_eof && (now_us - last_receive_time_us) >= MP3_STREAM_READ_TIMEOUT_US) {
+            ESP_LOGW(TAG, "MP3 stream stall timeout: no bytes received for %lld ms",
+                     (long long)((now_us - last_receive_time_us) / 1000LL));
+            read_failed = true;
+            result = BMO_PLAYBACK_DOWNLOAD_FAILED;
+            break;
+        }
+
+        if (playback_started && (now_us - playback_wall_start_us) >= (int64_t)(decoded_media_us + MP3_STREAM_UNDERRUN_MAX_US)) {
+            ESP_LOGW(TAG, "MP3 playback underrun timeout: wall_ms=%lld media_ms=%llu",
+                     (long long)((now_us - playback_wall_start_us) / 1000LL),
+                     (unsigned long long)(decoded_media_us / 1000ULL));
+            result = BMO_PLAYBACK_PLAYBACK_FAILED;
+            break;
+        }
         // 1. Fetch more data if space is available
-        int space_avail = MP3_STREAM_BUF_SIZE - (read_ptr - mp3_stream_buf) - bytes_left;
-        if (space_avail > 1024 && !is_eof) {
-            // Shift remaining un-decoded bytes to the beginning of the buffer
-            if (bytes_left > 0 && read_ptr != mp3_stream_buf) {
-                memmove(mp3_stream_buf, read_ptr, bytes_left);
-            }
+        if (bytes_left > 0 && read_ptr != mp3_stream_buf) {
+            memmove(mp3_stream_buf, read_ptr, bytes_left);
             read_ptr = mp3_stream_buf;
-            
-            int bytes_to_read = space_avail;
-            if (bytes_to_read > 4096) bytes_to_read = 4096;
+        } else if (bytes_left == 0) {
+            read_ptr = mp3_stream_buf;
+        }
+
+        int space_avail = MP3_STREAM_BUF_SIZE - bytes_left;
+        if (space_avail > 1024 && !is_eof) {
+            int bytes_to_read = space_avail < 4096 ? space_avail : 4096;
             
             int r = esp_http_client_read(http_client, (char *)(read_ptr + bytes_left), bytes_to_read);
             if (r < 0) {
@@ -1422,6 +1473,7 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
             } else if (r == 0) {
                 is_eof = true;
             } else {
+                last_receive_time_us = esp_timer_get_time();
                 received_bytes += (uint64_t)r;
                 if (received_bytes > (uint64_t)content_length) {
                     ESP_LOGE(TAG, "MP3 body exceeded Content-Length expected=%lld received=%llu",
@@ -1441,6 +1493,7 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
             int skipped = 0;
             if (skip_id3_tag(http_client, read_ptr, bytes_left, &skipped,
                              &received_bytes) == 0) {
+                last_receive_time_us = esp_timer_get_time();
                 if (received_bytes > (uint64_t)content_length) {
                     ESP_LOGE(TAG, "MP3 ID3 skip exceeded Content-Length");
                     read_failed = true;
@@ -1465,12 +1518,6 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
         
         // 4. Check EOF done condition
         if (is_eof && bytes_left == 0) {
-            break;
-        }
-
-        if (is_eof && bytes_left < 10) {
-            ESP_LOGE(TAG, "MP3 EOF left partial frame bytes=%d", bytes_left);
-            result = BMO_PLAYBACK_DECODE_FAILED;
             break;
         }
         
@@ -1532,7 +1579,11 @@ static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
             bytes_left = orig_bytes_left;
             
             if (is_eof) {
-                result = BMO_PLAYBACK_DECODE_FAILED;
+                if (playback_started && decoded_frames > 0) {
+                    result = BMO_PLAYBACK_SUCCESS;
+                } else {
+                    result = BMO_PLAYBACK_DECODE_FAILED;
+                }
                 break;
             }
             vTaskDelay(pdMS_TO_TICKS(10));

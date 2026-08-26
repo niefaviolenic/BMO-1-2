@@ -57,7 +57,8 @@ static const char *TAG = "DISPLAY";
 //--------------------------------------------------
 
 static esp_lcd_panel_handle_t panel_handle = NULL;
-static uint16_t *draw_buffer = NULL;
+static uint16_t *draw_buffers[2] = {NULL, NULL};
+static uint16_t *frame_buffer = NULL;
 
 static SemaphoreHandle_t display_mutex = NULL;
 
@@ -195,6 +196,43 @@ static void unlock_display()
 
 //--------------------------------------------------
 
+static void flush_framebuffer_locked()
+{
+    if(!display_ready || panel_handle == NULL)
+        return;
+
+    if(frame_buffer != NULL && draw_buffers[0] != NULL && draw_buffers[1] != NULL)
+    {
+        int buf_idx = 0;
+        for(int row = 0; row < LCD_V_RES; row += LCD_DRAW_LINES)
+        {
+            int rows = LCD_V_RES - row;
+            if(rows > LCD_DRAW_LINES)
+                rows = LCD_DRAW_LINES;
+
+            uint16_t *current_draw_buffer = draw_buffers[buf_idx];
+
+            memcpy(
+                current_draw_buffer,
+                &frame_buffer[row * LCD_H_RES],
+                (size_t)LCD_H_RES * rows * sizeof(uint16_t));
+
+            ESP_ERROR_CHECK(
+                esp_lcd_panel_draw_bitmap(
+                    panel_handle,
+                    0,
+                    row,
+                    LCD_H_RES,
+                    row + rows,
+                    current_draw_buffer));
+
+            buf_idx = 1 - buf_idx;
+        }
+    }
+}
+
+//--------------------------------------------------
+
 static void fill_rect(
     int x,
     int y,
@@ -216,6 +254,22 @@ static void fill_rect(
     if(y1 <= y0)
         return;
 
+    if(frame_buffer != NULL)
+    {
+        int width = x1 - x0;
+        for(int row = y0; row < y1; row++)
+        {
+            uint16_t *dst = &frame_buffer[row * LCD_H_RES + x0];
+            for(int col = 0; col < width; col++)
+            {
+                dst[col] = color;
+            }
+        }
+        return;
+    }
+    if(draw_buffers[0] == NULL)
+        return;
+
     int width = x1 - x0;
     int height = y1 - y0;
 
@@ -230,7 +284,7 @@ static void fill_rect(
 
         for(int i = 0; i < pixels; i++)
         {
-            draw_buffer[i] = color;
+            draw_buffers[0][i] = color;
         }
 
         ESP_ERROR_CHECK(
@@ -240,7 +294,7 @@ static void fill_rect(
                 y0 + row,
                 x1,
                 y0 + row + rows,
-                draw_buffer));
+                draw_buffers[0]));
     }
 }
 
@@ -251,6 +305,15 @@ static void pixel(
     int y,
     uint16_t color)
 {
+    if(frame_buffer != NULL)
+    {
+        if(x >= 0 && x < LCD_H_RES && y >= 0 && y < LCD_V_RES)
+        {
+            frame_buffer[y * LCD_H_RES + x] = color;
+        }
+        return;
+    }
+
     fill_rect(x, y, 1, 1, color);
 }
 
@@ -591,8 +654,9 @@ static void draw_pairing_overlay_locked()
             PAIRING_START_Y,
             static_cast<uint8_t>(pairing_code[index] - '0'));
     }
-}
 
+    flush_framebuffer_locked();
+}
 //--------------------------------------------------
 
 static void clear_face_panel()
@@ -721,13 +785,12 @@ static void mouth_flat()
 
 static void draw_microphone_indicator()
 {
-    const int x = FACE_CX + 82;
-    const int y = FACE_CY + 28;
+    // Sound wave arcs indicating listening / audio capture
+    draw_curve(42, 42, 34, 54, 42, 66, COLOR_BLUE, 2);
+    draw_curve(37, 36, 27, 54, 37, 72, COLOR_BLUE, 2);
 
-    fill_round_rect(x - 7, y, 14, 24, 7, COLOR_BLUE);
-    thick_line(x - 15, y + 24, x + 15, y + 24, COLOR_BLUE, 3);
-    thick_line(x, y + 24, x, y + 35, COLOR_BLUE, 3);
-    fill_round_rect(x - 8, y + 34, 16, 4, 2, COLOR_BLUE);
+    draw_curve(278, 42, 286, 54, 278, 66, COLOR_BLUE, 2);
+    draw_curve(283, 36, 293, 54, 283, 72, COLOR_BLUE, 2);
 }
 
 //--------------------------------------------------
@@ -762,13 +825,28 @@ static void face_listening()
 {
     clear_face_panel();
 
-    eye_big_cute(FACE_CX - 55, FACE_CY - 35);
-    eye_big_cute(FACE_CX + 55, FACE_CY - 35);
+    // Cute perked-up ears (outer black, inner pink)
+    fill_triangle(58, 36, 40, 68, 80, 65, COLOR_BLACK);
+    fill_triangle(59, 43, 46, 64, 74, 62, COLOR_PINK);
 
-    thick_line(FACE_CX - 78, FACE_CY - 68, FACE_CX - 34, FACE_CY - 60, COLOR_BLACK, 3);
-    thick_line(FACE_CX + 34, FACE_CY - 60, FACE_CX + 78, FACE_CY - 68, COLOR_BLACK, 3);
+    fill_triangle(262, 36, 280, 68, 240, 65, COLOR_BLACK);
+    fill_triangle(261, 43, 274, 64, 246, 62, COLOR_PINK);
 
+    // Inquisitive / alert eyebrows
+    thick_line(FACE_CX - 70, FACE_CY - 53, FACE_CX - 36, FACE_CY - 45, COLOR_BLACK, 3);
+    thick_line(FACE_CX + 36, FACE_CY - 45, FACE_CX + 70, FACE_CY - 53, COLOR_BLACK, 3);
+
+    // Cute big sparkling eyes
+    eye_big_cute(FACE_CX - 55, FACE_CY - 25);
+    eye_big_cute(FACE_CX + 55, FACE_CY - 25);
+
+    // Rosy blush cheeks
+    blush();
+
+    // Cute open small mouth
     mouth_open_small();
+
+    // Subtle sound wave listening indicator
     draw_microphone_indicator();
 }
 
@@ -948,6 +1026,8 @@ static void draw_face_locked(
             break;
     }
 
+    flush_framebuffer_locked();
+
     ESP_LOGI(TAG, "Face actually rendered: %s(%d)", face_name(face), (int)face);
 }
 
@@ -1018,7 +1098,7 @@ void display_init()
     io_config.dc_gpio_num = LCD_PIN_DC;
     io_config.spi_mode = 0;
     io_config.pclk_hz = LCD_PIXEL_CLOCK_HZ;
-    io_config.trans_queue_depth = 10;
+    io_config.trans_queue_depth = 4;
     io_config.lcd_cmd_bits = LCD_CMD_BITS;
     io_config.lcd_param_bits = LCD_PARAM_BITS;
 
@@ -1064,17 +1144,56 @@ void display_init()
             LCD_MIRROR_X,
             LCD_MIRROR_Y));
 
-    draw_buffer =
+    draw_buffers[0] =
         (uint16_t*)heap_caps_malloc(
             LCD_H_RES *
             LCD_DRAW_LINES *
             sizeof(uint16_t),
             MALLOC_CAP_DMA);
 
-    if(draw_buffer == NULL)
+    draw_buffers[1] =
+        (uint16_t*)heap_caps_malloc(
+            LCD_H_RES *
+            LCD_DRAW_LINES *
+            sizeof(uint16_t),
+            MALLOC_CAP_DMA);
+
+    if(draw_buffers[0] == NULL || draw_buffers[1] == NULL)
     {
         ESP_LOGE(TAG, "DMA buffer failed");
+        if(draw_buffers[0] != NULL)
+        {
+            free(draw_buffers[0]);
+            draw_buffers[0] = NULL;
+        }
+        if(draw_buffers[1] != NULL)
+        {
+            free(draw_buffers[1]);
+            draw_buffers[1] = NULL;
+        }
         return;
+    }
+
+    frame_buffer =
+        (uint16_t*)heap_caps_malloc(
+            LCD_H_RES *
+            LCD_V_RES *
+            sizeof(uint16_t),
+            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+
+    if(frame_buffer == NULL)
+    {
+        ESP_LOGW(TAG, "Frame buffer SPIRAM failed, trying internal malloc");
+        frame_buffer =
+            (uint16_t*)malloc(
+                LCD_H_RES *
+                LCD_V_RES *
+                sizeof(uint16_t));
+    }
+
+    if(frame_buffer != NULL)
+    {
+        memset(frame_buffer, 0, LCD_H_RES * LCD_V_RES * sizeof(uint16_t));
     }
 
     display_ready = true;
@@ -1106,6 +1225,8 @@ void display_sleep()
         LCD_V_RES,
         COLOR_BLACK);
 
+    flush_framebuffer_locked();
+
     display_on = true;
 
     ESP_LOGI(TAG, "Display sleep screen");
@@ -1128,17 +1249,20 @@ void display_test_pattern()
     display_wake();
 
     fill_rect(0, 0, LCD_H_RES, LCD_V_RES, COLOR_RED);
+    flush_framebuffer_locked();
     vTaskDelay(pdMS_TO_TICKS(700));
 
     fill_rect(0, 0, LCD_H_RES, LCD_V_RES, COLOR_YELLOW);
+    flush_framebuffer_locked();
     vTaskDelay(pdMS_TO_TICKS(700));
 
     fill_rect(0, 0, LCD_H_RES, LCD_V_RES, COLOR_BLUE);
+    flush_framebuffer_locked();
     vTaskDelay(pdMS_TO_TICKS(700));
 
     fill_rect(0, 0, LCD_H_RES, LCD_V_RES, COLOR_WHITE);
+    flush_framebuffer_locked();
     vTaskDelay(pdMS_TO_TICKS(700));
-
     unlock_display();
 }
 
@@ -1254,6 +1378,7 @@ void display_set_mode(DisplayMode mode)
             display_wake();
             draw_screen_base();
             face_listening();
+            flush_framebuffer_locked();
             ESP_LOGI(TAG, "Face actually rendered: LISTENING");
             break;
         case DisplayMode::THINKING:

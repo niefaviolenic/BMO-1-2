@@ -16,11 +16,23 @@ static const char *WIFI_TAG = "WIFI";
 
 static TaskHandle_t time_sync_task_handle = NULL;
 
+static bool system_time_is_valid()
+{
+    time_t now = 0;
+    time(&now);
+    return now >= 1704067200; // 2024-01-01T00:00:00Z
+}
+
 static void sntp_time_sync_callback(struct timeval *tv)
 {
     ESP_LOGI(WIFI_TAG, "SNTP sync callback invoked: event_data=%s epoch_sec=%lld",
              tv != NULL ? "available" : "unavailable",
              tv != NULL ? (long long)tv->tv_sec : 0LL);
+    if (system_time_is_valid())
+    {
+        network_set_time_synced(true);
+        ESP_LOGI(WIFI_TAG, "SNTP time synced via callback; readiness_bit=1");
+    }
 }
 
 static void sntp_event_handler(
@@ -35,14 +47,12 @@ static void sntp_event_handler(
         ESP_LOGI(WIFI_TAG, "SNTP time-sync event received: event_data=%s epoch_sec=%lld",
                  event != NULL ? "available" : "unavailable",
                  event != NULL ? (long long)event->tv.tv_sec : 0LL);
+        if (system_time_is_valid())
+        {
+            network_set_time_synced(true);
+            ESP_LOGI(WIFI_TAG, "SNTP time synced via event handler; readiness_bit=1");
+        }
     }
-}
-
-static bool system_time_is_valid()
-{
-    time_t now = 0;
-    time(&now);
-    return now >= 1704067200; // 2024-01-01T00:00:00Z
 }
 
 static void time_sync_task(void *param)
@@ -58,9 +68,17 @@ static void time_sync_task(void *param)
                  esp_err_to_name(err), (int)err);
         if (err != ESP_OK)
         {
-            network_set_time_synced(false);
-            ESP_LOGW(WIFI_TAG, "SNTP sync timeout/failure: return_code=%s(%d)",
-                     esp_err_to_name(err), (int)err);
+            if (system_time_is_valid())
+            {
+                network_set_time_synced(true);
+                ESP_LOGI(WIFI_TAG, "SNTP wait returned error/timeout but system time is valid; readiness_bit=1");
+            }
+            else
+            {
+                network_set_time_synced(false);
+                ESP_LOGW(WIFI_TAG, "SNTP sync timeout/failure: return_code=%s(%d)",
+                         esp_err_to_name(err), (int)err);
+            }
             time_sync_task_handle = NULL;
             vTaskDelete(NULL);
             return;
@@ -85,11 +103,20 @@ static void time_sync_task(void *param)
 static void start_time_sync_after_ip()
 {
     ESP_LOGI(WIFI_TAG, "SNTP start requested after IP acquisition");
-    network_set_time_synced(false);
+
+    if (system_time_is_valid())
+    {
+        network_set_time_synced(true);
+        ESP_LOGI(WIFI_TAG, "System time is already valid on IP acquisition; readiness_bit=1");
+    }
+    else
+    {
+        network_set_time_synced(false);
+    }
 
     esp_err_t err = esp_netif_sntp_start();
     ESP_LOGI(WIFI_TAG, "SNTP start return_code=%s(%d)", esp_err_to_name(err), (int)err);
-    if (err != ESP_OK)
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
     {
         ESP_LOGW(WIFI_TAG, "Failed to start SNTP: %s", esp_err_to_name(err));
         return;
@@ -110,8 +137,8 @@ static void start_time_sync_after_ip()
 }
 
 // Ganti dengan SSID dan Password WiFi kamu
-#define BMO_WIFI_SSID "pesatu"
-#define BMO_WIFI_PASS "kutungguaku"
+#define BMO_WIFI_SSID "LAUNDRY BINER"
+#define BMO_WIFI_PASS "yongga1818"
 
 static const char *wifi_disconnect_reason_to_string(uint8_t reason)
 {

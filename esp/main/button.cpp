@@ -19,13 +19,15 @@
 
 #define VOLUME_STEP 5
 #define BUTTON_REPEAT_US 180000LL
+#define BUTTON_DEBOUNCE_US 30000LL
 #define TOUCH_DEBOUNCE_US 30000LL
 
 static const char *TAG="BUTTON";
 
 static int64_t last_up_us = 0;
 static int64_t last_down_us = 0;
-
+static int64_t vol_up_press_start_us = 0;
+static int64_t vol_down_press_start_us = 0;
 enum class TouchLifecycleState
 {
     TOUCH_ARMED,
@@ -128,34 +130,52 @@ void button_update()
 {
     int64_t now = esp_timer_get_time();
 
-    bool volume_up_pressed =
+    bool volume_up_raw =
         gpio_get_level(BTN_VOL_UP) == 0;
 
-    bool volume_down_pressed =
+    bool volume_down_raw =
         gpio_get_level(BTN_VOL_DOWN) == 0;
 
-    if(volume_up_pressed &&
-       now - last_up_us > BUTTON_REPEAT_US)
+    if(volume_up_raw)
     {
-        last_up_us = now;
-        audio_adjustVolume(VOLUME_STEP);
+        if(vol_up_press_start_us == 0)
+            vol_up_press_start_us = now;
+        else if(now - vol_up_press_start_us >= BUTTON_DEBOUNCE_US &&
+                now - last_up_us > BUTTON_REPEAT_US)
+        {
+            last_up_us = now;
+            audio_adjustVolume(VOLUME_STEP);
 
-        ESP_LOGI(
-            TAG,
-            "Volume up: %d",
-            audio_getVolume());
+            ESP_LOGI(
+                TAG,
+                "Volume up: %d",
+                audio_getVolume());
+        }
+    }
+    else
+    {
+        vol_up_press_start_us = 0;
     }
 
-    if(volume_down_pressed &&
-       now - last_down_us > BUTTON_REPEAT_US)
+    if(volume_down_raw)
     {
-        last_down_us = now;
-        audio_adjustVolume(-VOLUME_STEP);
+        if(vol_down_press_start_us == 0)
+            vol_down_press_start_us = now;
+        else if(now - vol_down_press_start_us >= BUTTON_DEBOUNCE_US &&
+                now - last_down_us > BUTTON_REPEAT_US)
+        {
+            last_down_us = now;
+            audio_adjustVolume(-VOLUME_STEP);
 
-        ESP_LOGI(
-            TAG,
-            "Volume down: %d",
-            audio_getVolume());
+            ESP_LOGI(
+                TAG,
+                "Volume down: %d",
+                audio_getVolume());
+        }
+    }
+    else
+    {
+        vol_down_press_start_us = 0;
     }
 
     bool touch_level =
@@ -216,7 +236,7 @@ void button_update()
                     // Touch is an expression selector, not a voice-capture
                     // trigger. Keep the cue local so it cannot create a
                     // delayed backend response or overwrite the selected face.
-                    audio_setVolume(100);
+                    audio_setVolume(SPEAKER_DEFAULT_VOLUME);
                     audio_playExpressionAudio((int)face_after);
 
                     ESP_LOGI(

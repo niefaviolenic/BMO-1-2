@@ -27,11 +27,11 @@ def app_main_body(source: str) -> str:
 
 
 class BootAudioTest(unittest.TestCase):
-    def test_boot_runs_speaker_self_test_at_full_volume(self) -> None:
+    def test_boot_runs_speaker_self_test_at_configured_volume(self) -> None:
         body = app_main_body(MAIN_CPP.read_text(encoding="utf-8"))
 
         self.assertIn("audio_init();", body)
-        self.assertIn("audio_setVolume(100);", body)
+        self.assertRegex(body, r"audio_setVolume\((?:100|SPEAKER_DEFAULT_VOLUME)\);")
         self.assertIn("audio_playHello();", body)
         self.assertIn("OUTPUT_DIAG speaker", body)
 
