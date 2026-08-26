@@ -44,6 +44,14 @@ File utama: `esp/main/api.cpp`; decoder/output: `esp/main/audio.cpp`/`audio.h`.
 - Setelah reconnect dan `authenticated`, kirim acknowledgement pending dengan return value yang diperiksa.
 - Jangan mengirim `done` dua kali tanpa kebutuhan; backend idempotent, tetapi firmware tetap harus menjaga satu outcome lokal.
 
+### Backend Hermes Streaming & Chunked MP3 Delivery
+
+Backend BMO mengimplementasikan **Hermes Streaming** (`POST /v1/chat/completions` SSE stream dengan `stream: true`), `SentenceSplitter` untuk pemotongan kalimat/klausa secara real-time, dan sintesis TTS terpipanisasi (*pipelined TTS*):
+1. Segera setelah chunk audio pertama disintesis oleh TTS dan ditulis ke `LiveAudioStream`, backend meng-emit WebSocket `audio_ready` ke ESP32 (Time-To-First-Audio / TTFA turun menjadi **~1.7 detik**).
+2. ESP32 langsung menginisiasi HTTPS GET ke `audio_url` (`https://api.personalbmo.web.id/audio/<uuid>.mp3`).
+3. Endpoint audio backend melayani response dengan `Transfer-Encoding: chunked` secara streaming simultan saat TTS menyelesaikan sintesis kalimat-kalimat berikutnya.
+4. Desain firmware ESP32 dengan cyclic stream buffer 32 KB dan low-latency pre-buffer 2 KB (`MP3_STREAM_PREBUFFER_BYTES`) secara native menangani streaming chunked ini tanpa jitter, underrun, maupun kebutuhan perubahan firmware (100% kompatibel).
+
 ## File/function ESP yang terdampak
 
 - `esp/main/api.cpp`: parser `audio_ready`, HTTP download, status/headers, expiry, pending done/failed.

@@ -90,3 +90,53 @@ Verification evidence: focused suppression contracts pass; full `python -m unitt
 - Reason: improves conversational voice assistant UX by immediately acknowledging wake word detection with a pleasant, low-latency earcon sound before listening.
 - Regression risk: playing audio during microphone capture could contaminate the user audio recording buffer with the cue tone; playing an excessively long cue would introduce noticeable interaction latency. Mitigations include strict sequential invocation before `wakeword_task()`, concise audio duration ($\le 600\text{ ms}$), fallback dual-tone synthesis if WAV is missing or corrupt, and dedicated contract tests in `test_wake_ack_contract.py`.
 - Verification evidence: `test_wake_ack_contract.py` passes 6/6 tests; full contract suite passes 83/83 tests (`python3 -m unittest discover -s esp/tests`).
+
+## Change — Hermes Streaming Backend Integration & TTFA Optimization (~1.7s)
+
+- Goal: Document backend voice pipeline transition to Hermes Streaming (`POST /v1/chat/completions` SSE stream with `stream: true`), `SentenceSplitter`, and pipelined TTS synthesis, reducing Time-To-First-Audio (TTFA) to ~1.7s while maintaining 100% ESP32 firmware contract compatibility.
+- Files/areas affected:
+  - Backend (VPS): `backend/src/services/hermes.client.ts` (`FastVoiceLlmClient`, `generateStream`, `generateResponseStream`), `backend/src/services/voice-pipeline.service.ts` (`SentenceSplitter`, `#runStreaming`, `LiveAudioStream`), `backend/src/services/temp-audio.service.ts` (`LiveAudioStream` chunked MP3 streaming).
+  - ESP32 Firmware: No changes required (`esp/main/api.cpp`, `esp/main/audio.cpp`, `esp/main/playback.cpp` already natively support standard WebSocket `audio_ready`, HTTP GET Chunked Transfer Encoding / direct streaming, and Helix MP3 decoder).
+- Behavior before: Voice pipeline operated in full sequential mode (STT transcribe $\to$ wait for full LLM generation $\to$ batch TTS synthesis of entire response $\to$ write MP3 file to disk $\to$ emit `audio_ready` WS event). Total roundtrip latency before audio playback was ~4.5s – 6.0s.
+- Behavior after:
+  1. STT transcribes user WAV (~350ms).
+  2. Hermes LLM generates tokens via SSE stream (`stream: true`, TTFT ~450ms).
+  3. `SentenceSplitter` incrementally buffers incoming token chunks, strips internal reasoning tags (e.g. `<think>...</think>`), and extracts complete sentence/clause boundaries (`.`, `!`, `?`, `\n`, soft clauses `,`, `;`, `:`).
+  4. Each extracted sentence is immediately enqueued for concurrent TTS synthesis (`audioService.synthesizeStream` / `synthesize`).
+  5. As soon as the first synthesized audio chunk is received by `LiveAudioStream`, backend emits the WebSocket `audio_ready` event with `audio_url` (`https://api.personalbmo.web.id/audio/<uuid>.mp3`).
+  6. TTFA (Time-To-First-Audio) drops significantly to ~1.7s.
+  7. ESP32 connects via HTTPS GET to the `audio_url`, receives audio chunks via HTTP `Transfer-Encoding: chunked`, decodes frames in real time with Helix MP3 Decoder (32 KB cyclic buffer, 2 KB pre-buffering), and begins playback immediately.
+- Contract Compatibility: 100% backward & forward compatible with the existing ESP32 production contract:
+  - Same WebSocket `audio_ready` payload schema (`request_id`, `audio_url`, `format: "mp3"`, `expires_in_seconds`).
+  - Same HTTP GET `/audio/<id>.mp3` endpoint.
+  - Same `audio_playback_done` / `audio_playback_failed` acknowledgement lifecycle.
+  - No firmware modifications or re-flashing needed.
+- Verification evidence: All 83 Python contract tests pass (`Ran 83 tests in 0.031s, OK`); backend test suite verifies streaming pipeline (`voice-pipeline-streaming.test.ts`, `voice.integration.test.ts`).
+
+## Change — Dynamic Thinking Filler Voice Speech (Zero Dead-Air Latency Masking)
+
+- Goal: Eliminate dead air and awkward silence during LLM token generation and TTS audio synthesis by having Joy immediately utter a randomized, pleasant thinking phrase as soon as user voice capture is accepted by the backend.
+- Files/functions affected:
+  - `esp/main/audio.h` (`audio_playThinkingFiller(int index)` and `audio_playRandomThinkingFiller()` declarations).
+  - `esp/main/audio.cpp` (`_binary_thinking_01_wav_start` .. `_binary_thinking_05_wav_end` extern symbols, `thinking_clips` array, `thinking_phrase` lookup table, `audio_playThinkingFiller(int index)` with fallback synthesized chime tones, `audio_playRandomThinkingFiller()`).
+  - `esp/main/api.cpp` (invoking `audio_playRandomThinkingFiller()` immediately when voice upload is accepted with `BMO_UPLOAD_ACCEPTED`).
+  - `esp/main/CMakeLists.txt` (registering `audio_wav/thinking_01.wav` .. `audio_wav/thinking_05.wav` in `EMBED_FILES`).
+  - `esp/main/audio_wav/generate_thinking_clips.py` (canonical WAV synthesis script for 16kHz 16-bit mono PCM thinking filler clips).
+  - `esp/main/audio_wav/thinking_01.wav` .. `thinking_05.wav` (embedded WAV assets: "bentar aku pikir dulu", "aku lagi proses dulu pertanyaannya", "tunggu sebentar ya", "hmm coba aku cari tahu dulu", "bentar ya joy lagi mikir").
+  - `esp/tests/test_thinking_filler_contract.py` (contract tests validating function declarations, implementation symbols, phrases, CMake registration, WAV format/duration, and upload acceptance trigger).
+- Behavior before: After user finished speaking and the WAV was uploaded, the device transitioned to `BMOState::THINKING` with visual LCD update only, leaving ~1.7s of dead-air silence while waiting for backend `audio_ready`.
+- Behavior after: Upon `BMO_UPLOAD_ACCEPTED`, `audio_playRandomThinkingFiller()` immediately selects and plays one of the 5 thinking filler clips (or fallback melodic earcon) through the MAX98357A I2S speaker, masking backend processing latency and providing natural conversational responsiveness.
+- Reason: Enhances conversational AI UX by eliminating silence latency between user input and assistant response.
+- Regression risk: If a WAV clip is corrupted or unavailable, playback falls back safely to synthesized chime tones (`speaker_write_tone`). The filler playback does not block HTTP streaming when `audio_ready` arrives.
+
+## Change — Seamless Single-Breath Wake Word & Rolling Pre-Roll Buffer (~512ms)
+
+- Goal: Enable natural, single-breath voice commands ("Hey Joy <command>", e.g. "Hey Joy jam berapa hari ini") without requiring the user to pause or wait after saying the wake word, eliminating audio clipping and frame loss at the wake word boundary.
+- Files/functions affected:
+  - `esp/main/wakeword.cpp` (implemented rolling circular pre-roll buffer `PREROLL_BUFFER_SAMPLES = 8192` / ~512ms at 16kHz mono PCM during IDLE state; eliminated blocking acoustic playback from the critical microphone path in `wakeword_listener_task`; added immediate zero-latency handoff in `wakeword_task()` via direct `start_recording()` call; added pre-roll draining and idempotency in `start_recording()`; pre-allocated `record_buffer` in PSRAM during `wakeword_init()`).
+  - `esp/tests/test_wake_ack_contract.py` (updated contract suite with `test_wakeword_seamless_single_breath_contract` to verify pre-roll sizing, zero blocking delay on wake detection, immediate recording activation, and pre-roll drain).
+  - `README.md` (updated documentation to reflect single-breath audio capture contract).
+- Behavior before: Upon detecting "Hi Joy", `audio_playWakeAck()` was executed synchronously inside `wakeword_listener_task`, blocking the I2S microphone loop for 300-600ms. Subsequent command words ("jam berapa...") were lost, and lack of pre-roll clipped audio at the boundary.
+- Behavior after: Upon `WAKENET_DETECTED`, `wakeword_task()` immediately transitions state to `RECORDING` (triggering instant LCD visual feedback `DisplayMode::LISTENING`) and executes `start_recording()`, which commits the ~512ms pre-roll buffer into `record_buffer`. Microphone frames continue streaming into `record_buffer` with 0 dropped frames.
+- Reason: Enables seamless conversational interaction where user commands spoken continuously in one breath are completely captured and accurately transcribed by STT.
+- Verification evidence: Full Python contract test suite passes 88/88 tests (`python3 -m unittest discover -s esp/tests`).

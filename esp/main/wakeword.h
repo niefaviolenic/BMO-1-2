@@ -7,6 +7,20 @@
 
 #define WAV_HEADER_SAMPLES 22  // Number of int16 samples used by WAV header
 
+// Digital gain settings for far-field microphone optimization (INMP441 MEMS)
+// Boost multiplier: 2.5x (~+8dB boost) using fixed-point numerator / denominator
+#ifndef MIC_GAIN_NUMERATOR
+#define MIC_GAIN_NUMERATOR 5
+#endif
+
+#ifndef MIC_GAIN_DENOMINATOR
+#define MIC_GAIN_DENOMINATOR 2
+#endif
+
+#ifndef MIC_DIGITAL_GAIN_FACTOR
+#define MIC_DIGITAL_GAIN_FACTOR 2.5f
+#endif
+
 enum class RecordingStatus : uint8_t
 {
     IDLE,

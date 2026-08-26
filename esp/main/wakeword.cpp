@@ -48,7 +48,17 @@ static const char *TAG = "WAKE";
 #define RECORD_BUFFER_SIZE (RECORD_MAX_SAMPLES + WAV_HEADER_SAMPLES)
 #define PREROLL_BUFFER_SAMPLES 24000 // ~1.5s at 16kHz mono circular pre-roll buffer
 
-#define SILENCE_THRESHOLD 250
+#ifndef MIC_GAIN_NUMERATOR
+#define MIC_GAIN_NUMERATOR 5
+#endif
+#ifndef MIC_GAIN_DENOMINATOR
+#define MIC_GAIN_DENOMINATOR 2
+#endif
+#ifndef MIC_DIGITAL_GAIN_FACTOR
+#define MIC_DIGITAL_GAIN_FACTOR 2.5f
+#endif
+
+#define SILENCE_THRESHOLD 400
 #define RECORD_LEADING_SILENCE_TIMEOUT_MS 3500
 #define RECORD_SILENCE_DURATION_MS 800
 #define RECORD_MIN_SPEECH_DURATION_MS 400
@@ -396,6 +406,26 @@ static int sample_peak(
 
 //--------------------------------------------------
 
+static inline int16_t apply_mic_gain(
+    int16_t sample)
+{
+    int32_t amplified =
+        ((int32_t)sample * MIC_GAIN_NUMERATOR) / MIC_GAIN_DENOMINATOR;
+
+    if(amplified > 32767)
+    {
+        return 32767;
+    }
+    else if(amplified < -32768)
+    {
+        return -32768;
+    }
+
+    return (int16_t)amplified;
+}
+
+//--------------------------------------------------
+
 static esp_err_t wakeword_i2s_init(
     int sample_rate)
 {
@@ -468,12 +498,14 @@ static esp_err_t wakeword_i2s_init(
 
     ESP_LOGI(
         TAG,
-        "I2S mic ready: BCLK=%d WS=%d DIN=%d rate=%d",
+        "I2S mic ready: BCLK=%d WS=%d DIN=%d rate=%d gain=%.1fx (%d/%d)",
         WAKEWORD_I2S_BCLK,
         WAKEWORD_I2S_WS,
         WAKEWORD_I2S_DIN,
-        sample_rate);
-
+        sample_rate,
+        (double)MIC_DIGITAL_GAIN_FACTOR,
+        MIC_GAIN_NUMERATOR,
+        MIC_GAIN_DENOMINATOR);
     return ESP_OK;
 }
 
@@ -570,8 +602,10 @@ static void wakeword_listener_task(
 
         for(int i = 0; i < wakeword_chunk_size; i++)
         {
-            sample_buffer[i] =
+            int16_t raw_sample =
                 (int16_t)(raw_i2s_buffer[i] >> 16);
+            sample_buffer[i] =
+                apply_mic_gain(raw_sample);
         }
 
         frame_count++;

@@ -104,6 +104,18 @@ Nilai `reason` hanya: `DOWNLOAD_FAILED`, `DECODE_FAILED`, `PLAYBACK_FAILED`.
 `request_failed.code` dapat berupa `NO_SPEECH`, `INVALID_AUDIO`, `STT_FAILED`, `HERMES_FAILED`, `TTS_FAILED`, `AUDIO_EXPIRED`, `PIPELINE_TIMEOUT`, atau `INTERNAL_ERROR`.
 
 Backend dapat mengirim `display_status` sebelum atau sesudah HTTP `202` terlihat oleh ESP. Jangan mengandalkan urutan lintas HTTP dan WebSocket; korelasikan semuanya dengan `request_id`.
+
+### Backend Voice Pipeline & Hermes Streaming
+
+Backend memproses suara menggunakan arsitektur real-time streaming pipeline:
+1. **STT Transcribe**: Mengonversi WAV masukan menjadi teks (~350ms).
+2. **Hermes Streaming LLM**: Membuka koneksi SSE stream (`stream: true`) ke endpoint Hermes (`POST /v1/chat/completions`), dengan Time-To-First-Token (TTFT) ~450ms.
+3. **SentenceSplitter**: Mem-buffer token LLM yang masuk secara inkremental, menghapus tag internal/thinking (`<think>...</think>`), dan membagi teks berdasarkan batas kalimat/klausa (`.`, `!`, `?`, `\n`, `,`, `;`, `:`).
+4. **Pipelined TTS Synthesis**: Kalimat pertama langsung dikirim ke service TTS secara terpipanisasi tanpa menunggu LLM menyelesaikan seluruh respons.
+5. **Early `audio_ready` & Chunked MP3 Streaming**: Begitu chunk audio MP3 pertama dihasilkan oleh TTS dan ditulis ke `LiveAudioStream`, backend seketika mengirimkan WebSocket event `audio_ready` ke ESP32.
+6. **Time-To-First-Audio (TTFA)**: Latensi dari selesai upload sampai `audio_ready` terpangkas menjadi **~1.7 detik**.
+
+> **Penting**: Seluruh optimasi pipeline streaming ini **100% kompatibel** dengan kontrak ESP32 yang sudah ada. ESP32 tetap menerima event `audio_ready` standar, melakukan HTTP GET ke `audio_url` dengan dukungan Chunked Transfer Encoding (`Transfer-Encoding: chunked`), men-decode stream MP3 via Helix MP3 Decoder secara bertahap, dan mengirim `audio_playback_done` saat tuntas.
 ## Urutan transaksi
 
 1. Wi-Fi tersambung dan waktu valid.

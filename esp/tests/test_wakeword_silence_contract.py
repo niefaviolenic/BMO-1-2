@@ -34,12 +34,27 @@ class WakewordSilenceContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self.source = WAKEWORD_SOURCE.read_text(encoding="utf-8")
 
-    def test_silence_threshold_is_adjusted_for_normal_speech(self) -> None:
+    def test_silence_threshold_is_adjusted_for_boosted_speech(self) -> None:
         match = re.search(r"#define\s+SILENCE_THRESHOLD\s+(\d+)", self.source)
         self.assertIsNotNone(match, "SILENCE_THRESHOLD definition not found")
         threshold = int(match.group(1))
-        self.assertEqual(threshold, 250, "SILENCE_THRESHOLD should be 250")
+        self.assertEqual(threshold, 400, "SILENCE_THRESHOLD should be 400 (calibrated for 2.5x digital gain)")
 
+    def test_mic_digital_gain_is_configured_and_saturated(self) -> None:
+        match_num = re.search(r"#define\s+MIC_GAIN_NUMERATOR\s+(\d+)", self.source)
+        match_den = re.search(r"#define\s+MIC_GAIN_DENOMINATOR\s+(\d+)", self.source)
+        self.assertIsNotNone(match_num, "MIC_GAIN_NUMERATOR definition not found")
+        self.assertIsNotNone(match_den, "MIC_GAIN_DENOMINATOR definition not found")
+        numerator = int(match_num.group(1))
+        denominator = int(match_den.group(1))
+        gain = numerator / denominator
+        self.assertGreaterEqual(gain, 2.0, "MIC digital gain should be at least 2.0x")
+        self.assertLessEqual(gain, 3.5, "MIC digital gain should be at most 3.5x")
+
+        # Verify apply_mic_gain implementation in source
+        self.assertIn("apply_mic_gain", self.source)
+        self.assertIn("32767", self.source)
+        self.assertIn("-32768", self.source)
     def test_record_silence_duration_allows_natural_pauses(self) -> None:
         match = re.search(r"#define\s+RECORD_SILENCE_DURATION_MS\s+(\d+)", self.source)
         self.assertIsNotNone(match, "RECORD_SILENCE_DURATION_MS definition not found")

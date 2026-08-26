@@ -15,6 +15,12 @@ File ini adalah sumber status implementasi. Agent yang mengerjakan perubahan ESP
 | Hardware | `PASS` — `ESP32-S3` pada `COM7`; installed exact artifact hashes matched. Local-only capture reached the recorder and returned safely to state `0`; network-dependent Gate 4 remains deferred. Idle reconnect remains `DEFERRED_TO_GATE_5`. |
 | Production target | `https://api.personalbmo.web.id` / `wss://api.personalbmo.web.id/ws` |
 
+## Backend Update — Hermes Streaming Integration & TTFA Optimization (~1.7s) — 2026-08-26
+
+Backend production telah dioptimasi dengan arsitektur **Hermes Streaming** (`POST /v1/chat/completions` SSE stream dengan `stream: true`), `SentenceSplitter` untuk chunking kalimat/klausa berbasis tanda baca, dan pipelined TTS synthesis:
+- **Latency Reduction**: Time-To-First-Audio (TTFA) turun dari ~4.5s–6.0s menjadi **~1.7 detik**.
+- **Contract Compatibility**: 100% kompatibel dengan firmware ESP32 eksisting. Backend tetap mengirim WebSocket event `audio_ready` standar (`request_id`, `audio_url`, `format: "mp3"`), dan endpoint audio melayani HTTPS GET dengan `Transfer-Encoding: chunked` yang secara native di-decode oleh Helix MP3 Decoder ESP32 (buffer 32 KB + 2 KB pre-buffering). Tidak ada perubahan firmware ESP32 yang diperlukan.
+
 ## Latest Gate 4 physical retest — 2026-08-18 09:43:54 +07:00
 
 Read-only verification matched the corrective artifact already installed on the board:

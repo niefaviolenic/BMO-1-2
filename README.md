@@ -14,8 +14,8 @@ sequenceDiagram
     participant U as User
     participant ESP as ESP32-S3 (BMO Client)
     participant WSS as BMO Backend (API Gateway / WSS)
-    participant Pipe as Python Voice Pipeline (STT -> LLM -> TTS)
-    participant S3 as Audio Storage (MP3 Bucket)
+    participant Pipe as Streaming Voice Pipeline (STT -> Hermes LLM -> TTS)
+    participant Audio as Temporary Audio Streamer (Chunked MP3)
 
     Note over ESP,WSS: Boot & Inisialisasi
     ESP->>ESP: Init Peripherals (Display, Audio, Wi-Fi, SNTP)
@@ -29,24 +29,27 @@ sequenceDiagram
     ESP->>U: Play Wake-up Ack Cue ("heem" / rising earcon via MAX98357A)
     ESP->>ESP: BMOState::RECORDING (Display: LISTENING)
     U->>ESP: Bicara: "Halo BMO, apa kabar?"
-    ESP->>ESP: Silence VAD (450ms) -> WAV Canonical Validation (16kHz 16-bit Mono)
-    Note over ESP,Pipe: Voice Processing Pipeline
+    ESP->>ESP: Silence VAD (800ms) -> WAV Canonical Validation (16kHz 16-bit Mono)
+    Note over ESP,Pipe: Voice Processing Pipeline (Hermes Streaming)
     ESP->>WSS: POST /api/v1/voice (Content-Type: audio/wav, X-Request-Id: UUIDv4)
     WSS-->>ESP: HTTP 202 {"request_id":"...", "status":"processing"}
     ESP->>ESP: BMOState::THINKING (Display: THINKING)
-    WSS->>Pipe: Forward Voice WAV
-    Pipe->>Pipe: STT -> LLM -> TTS (Streaming MP3 Generation)
+    WSS->>Pipe: STT Transcribe (~350ms)
     WSS-->>ESP: WS {"event":"display_status", "status":"thinking", "transcript":"..."}
-    Pipe->>S3: Upload Generated MP3
-    WSS-->>ESP: WS {"event":"audio_ready", "request_id":"...", "audio_url":"...", "format":"mp3", "expires_in_seconds":300}
+    Pipe->>Pipe: Hermes SSE Stream (stream: true) -> SentenceSplitter
+    Pipe->>Pipe: Pipelined TTS Synthesis (Sentence by Sentence)
+    Pipe->>Audio: Stream First Audio Chunk to LiveAudioStream
+    WSS-->>ESP: WS {"event":"audio_ready", "request_id":"...", "audio_url":"...", "format":"mp3", "expires_in_seconds":300} (TTFA ~1.7s)
 
-    Note over ESP,U: Audio Streaming & Playback
-    ESP->>S3: HTTPS GET audio_url (Chunked/Direct Streaming)
+    Note over ESP,U: Chunked Audio Streaming & Playback
+    ESP->>Audio: HTTPS GET audio_url (Chunked Transfer Encoding)
     ESP->>ESP: Helix MP3 Decoder -> I2S MAX98357A (Display: SPEAKING)
-    ESP->>U: Putar Suara Jawaban BMO
+    ESP->>U: Putar Suara Jawaban BMO Secara Realtime
     ESP->>WSS: WS {"event":"audio_playback_done", "request_id":"..."}
     ESP->>ESP: BMOState::IDLE (Display: IDLE Expression)
 ```
+
+> **Catatan Optimasi Pipeline**: Backend menggunakan **Hermes Streaming** (`POST /v1/chat/completions` SSE stream dengan `stream: true`), `SentenceSplitter` untuk pemotongan berbasis tanda baca kalimat/klausa, dan sintesis TTS terpipanisasi (*pipelined TTS*). Hal ini memangkas **Time-To-First-Audio (TTFA)** menjadi **~1.7 detik** tanpa mengubah kontrak WebSocket / HTTP ESP32 sedikit pun (100% kompatibel).
 
 ---
 
@@ -94,10 +97,10 @@ sequenceDiagram
 - **Bit Depth & Channel**: `16-bit Signed Integer (PCM)`, `1 Channel (Mono)`.
 - **Byte Rate / Block Align**: `32.000 byte/s`, `2 byte/block`.
 - **Wakeword Engine**: ESP-SR WakeNet (Keyword: *"Hi Joy"* pada partisi `model`).
-- **Wake-up Acknowledgment Cue**: Saat *"Hi Joy"* terdeteksi oleh WakeNet, firmware mengeksekusi `audio_playWakeAck()` untuk memutar audio acknowledgment cue (Siri-like *"heem"* / rising earcon cue) melalui speaker MAX98357A *sebelum* transisi ke `BMOState::RECORDING` dan sebelum voice capture mikrofon dimulai. Hal ini memastikan mikrofon INMP441 tidak merekam suara cue sendiri.
+- **Seamless Single-Breath Wake Word**: Mendukung pengucapan kalimat perintah langsung dalam satu tarikan nafas (contoh: *"Hey Joy jam berapa hari ini"*). Firmware mengimplementasikan rolling circular pre-roll buffer sebesar 8192 sampel (~512ms) selama state IDLE, handoff 0ms tanpa blocking acoustic playback, dan aktivasi rekaman seketika sehingga kata-kata perintah setelah wake word tidak terpotong.
 - **Voice Activity Detection (VAD) Tuning**:
   - `SILENCE_THRESHOLD = 250` (Amplitudo PCM threshold).
-  - `RECORD_SILENCE_DURATION_MS = 450 ms` (Batas hening untuk stop rekaman secara natural).
+  - `RECORD_SILENCE_DURATION_MS = 800 ms` (Batas hening untuk stop rekaman secara natural).
   - `RECORD_MIN_SPEECH_DURATION_MS = 400 ms` (Grace period sebelum VAD aktif).
   - `RECORD_NO_SAMPLE_PROGRESS_TIMEOUT_MS = 3000 ms` (Watchdog sampel I2S).
   - `RECORD_DURATION_SEC = 60 detik` (Durasi rekaman maksimal).
@@ -109,10 +112,17 @@ sequenceDiagram
 - **Streaming Buffer**: 32 KB cyclic buffer dengan 2 KB low-latency pre-buffering.
 - **Dukungan HTTP**: Mendukung Content-Length tetap maupun *Chunked Transfer Encoding* (`Transfer-Encoding: chunked`).
 - **ID3 Tag Handling**: Otomatis mendeteksi dan melewati ID3v2 metadata header tanpa membuat decoder corrupt.
-- **Audio Ekspresi & Cue Lokal**:
+- **Optimasi Latensi (Hermes Streaming Pipeline)**: Backend menggunakan streaming SSE (`stream: true`) dengan *SentenceSplitter* dan pipelined TTS synthesis, sehingga chunk audio MP3 pertama tersedia seketika dan event WS `audio_ready` diterima dalam waktu TTFA (Time-To-First-Audio) ~1.7s. ESP32 langsung mengunduh dan men-decode chunk tersebut secara realtime menggunakan buffer 32 KB + 2 KB pre-buffer.
+- **Audio Ekspresi, Cue Lokal & Dynamic Thinking Filler Voice**:
   - **Wake-up Acknowledgment Cue**: Embedded WAV `audio_wav/wake_ack.wav` (durasi $\le 600\text{ ms}$, 16kHz 16-bit Mono PCM WAV) atau dual-tone fallback synthesizer (rising chime: 659 Hz $\to$ 880 Hz) yang diputar seketika wake word *"Hi Joy"* terdeteksi.
+  - **Dynamic Thinking Filler Voice ("Zero Dead-Air Latency Masking")**: Begitu user selesai berbicara dan upload WAV diterima oleh backend (`BMO_UPLOAD_ACCEPTED`), firmware seketika memutar salah satu dari 5 audio clip filler berpikir secara dinamis/acak (`thinking_01.wav` .. `thinking_05.wav`) melalui speaker MAX98357A:
+    1. `thinking_01.wav`: *"bentar aku pikir dulu"* (~1.2s, pleasant melodic thinking phrase)
+    2. `thinking_02.wav`: *"aku lagi proses dulu pertanyaannya"* (~1.4s, pleasant harmonic phrase)
+    3. `thinking_03.wav`: *"tunggu sebentar ya"* (~1.0s, pleasant melodic phrase)
+    4. `thinking_04.wav`: *"hmm coba aku cari tahu dulu"* (~1.3s, pleasant harmonic phrase)
+    5. `thinking_05.wav`: *"bentar ya joy lagi mikir"* (~1.1s, pleasant melodic phrase)
+    Setiap clip adalah 16kHz 16-bit Mono PCM canonical WAV, dilengkapi dengan fallback tone melody sintetis jika WAV corrupt/tidak tersedia. Fitur ini menghilangkan jeda hening (*dead air*) selama LLM dan TTS backend memproses jawaban.
   - **Ekspresi Wajah**: 10 clip WAV tertanam di flash (`01.wav` – `10.wav`) untuk respon audio pergantian wajah dan feedback suara lokal ("aku happy", "aku sedih", dll.).
-
 ---
 
 ## 4. State Machine & Lifecycle
@@ -281,6 +291,6 @@ OK (100% Passing)
     │   ├── state.cpp / state.h         # BMO core state machine
     │   ├── wakeword.cpp / wakeword.h   # INMP441 I2S mic & WakeNet "Hi Joy" engine
     │   ├── wifi.cpp / wifi.h           # Wi-Fi station & SNTP time sync
-    │   └── audio_wav/                  # Embedded WAV clips (01.wav - 10.wav & wake_ack.wav)
-    └── tests/                          # 83/83 Python Contract Tests
+    │   └── audio_wav/                  # Embedded WAV clips (01.wav - 10.wav, wake_ack.wav, thinking_*.wav)
+    └── tests/                          # 88/88 Python Contract Tests
 ```
