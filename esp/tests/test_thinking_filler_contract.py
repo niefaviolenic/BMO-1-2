@@ -117,27 +117,49 @@ class ThinkingFillerContractTest(unittest.TestCase):
                     f"{filename} duration should be <= 2500ms (got {duration_ms:.1f}ms)",
                 )
 
-    def test_upload_accepted_triggers_random_thinking_filler(self) -> None:
-        api_source = API_SOURCE.read_text(encoding="utf-8")
+    def test_recording_completed_triggers_random_thinking_filler(self) -> None:
         state_source = STATE_SOURCE.read_text(encoding="utf-8")
-        combined_source = api_source + "\n" + state_source
-
+        task_body = function_body(
+            state_source,
+            r"static\s+void\s+bmo_state_machine_task\s*\([^)]*\)",
+        )
         self.assertIn(
             "audio_playRandomThinkingFiller()",
-            combined_source,
-            "api.cpp or state.cpp must call audio_playRandomThinkingFiller() on upload accept / recording completion",
+            task_body,
+            "state.cpp must call audio_playRandomThinkingFiller() on recording completion",
         )
 
+        recording_case = re.search(
+            r"case\s+BMOState::RECORDING\s*:(?P<body>.*?)case\s+BMOState::THINKING\s*:",
+            task_body,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(recording_case, "RECORDING branch not found in state task")
+        body = recording_case.group("body")
+        self.assertIn(
+            "audio_playRandomThinkingFiller()",
+            body,
+            "RECORDING state completion must trigger audio_playRandomThinkingFiller() before upload",
+        )
+        filler_pos = body.index("audio_playRandomThinkingFiller()")
+        upload_pos = body.index("api_upload_audio_and_process()")
+        self.assertLess(
+            filler_pos,
+            upload_pos,
+            "audio_playRandomThinkingFiller() must be triggered before api_upload_audio_and_process()",
+        )
+
+    def test_api_does_not_duplicate_thinking_filler(self) -> None:
+        api_source = API_SOURCE.read_text(encoding="utf-8")
         upload_proc_body = function_body(
             api_source,
             r"void\s+api_upload_audio_and_process\s*\(\s*\)",
         )
-        self.assertIn(
+        self.assertNotIn(
             "audio_playRandomThinkingFiller()",
             upload_proc_body,
-            "api_upload_audio_and_process() must trigger audio_playRandomThinkingFiller() when upload is accepted",
+            "api_upload_audio_and_process() must not duplicate audio_playRandomThinkingFiller()",
         )
-
 
 if __name__ == "__main__":
     unittest.main()

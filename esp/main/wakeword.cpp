@@ -60,7 +60,7 @@ static const char *TAG = "WAKE";
 
 #define SILENCE_THRESHOLD 400
 #define RECORD_LEADING_SILENCE_TIMEOUT_MS 6000
-#define RECORD_SILENCE_DURATION_MS 6000
+#define RECORD_SILENCE_DURATION_MS 4000
 #define RECORD_MIN_SPEECH_DURATION_MS 400
 #define RECORD_I2S_READ_TIMEOUT_MS 100
 #define RECORD_NO_SAMPLE_PROGRESS_TIMEOUT_MS 3000
@@ -764,7 +764,7 @@ static void wakeword_listener_task(
                 continue;
             }
 
-            // Check stop conditions: 6000 ms trailing silence (after minimum speech duration) OR 60 seconds duration.
+            // Check stop conditions: 4000 ms trailing silence (after minimum speech duration) OR 60 seconds duration.
             if (silence_reached)
             {
                 finalize_recording("silence_detected");

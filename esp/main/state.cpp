@@ -166,6 +166,7 @@ static void bmo_state_machine_task(void *pvParameters)
                 if(recording_status == RecordingStatus::COMPLETED &&
                    get_record_size() > WAV_HEADER_SAMPLES)
                 {
+                    audio_playRandomThinkingFiller();
                     api_upload_audio_and_process();
                 }
                 else
