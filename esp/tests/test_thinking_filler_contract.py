@@ -57,6 +57,21 @@ class ThinkingFillerContractTest(unittest.TestCase):
             r"void\s+audio_playRandomThinkingFiller\s*\(\s*\)\s*;",
             "audio.h must declare void audio_playRandomThinkingFiller();",
         )
+        self.assertRegex(
+            header,
+            r"void\s+audio_startThinkingFillerLoop\s*\(\s*\)\s*;",
+            "audio.h must declare void audio_startThinkingFillerLoop();",
+        )
+        self.assertRegex(
+            header,
+            r"void\s+audio_stopThinkingFillerLoop\s*\(\s*\)\s*;",
+            "audio.h must declare void audio_stopThinkingFillerLoop();",
+        )
+        self.assertRegex(
+            header,
+            r"bool\s+audio_isThinkingFillerLoopRunning\s*\(\s*\)\s*;",
+            "audio.h must declare bool audio_isThinkingFillerLoopRunning();",
+        )
 
     def test_audio_source_embeds_thinking_clips_and_phrases(self) -> None:
         source = AUDIO_SOURCE.read_text(encoding="utf-8")
@@ -124,9 +139,9 @@ class ThinkingFillerContractTest(unittest.TestCase):
             r"static\s+void\s+bmo_state_machine_task\s*\([^)]*\)",
         )
         self.assertIn(
-            "audio_playRandomThinkingFiller()",
+            "audio_startThinkingFillerLoop()",
             task_body,
-            "state.cpp must call audio_playRandomThinkingFiller() on recording completion",
+            "state.cpp must call audio_startThinkingFillerLoop() on recording completion",
         )
 
         recording_case = re.search(
@@ -137,23 +152,23 @@ class ThinkingFillerContractTest(unittest.TestCase):
         self.assertIsNotNone(recording_case, "RECORDING branch not found in state task")
         body = recording_case.group("body")
         self.assertIn(
-            "audio_playRandomThinkingFiller()",
+            "audio_startThinkingFillerLoop()",
             body,
-            "RECORDING state completion must trigger audio_playRandomThinkingFiller() before upload",
+            "RECORDING state completion must trigger audio_startThinkingFillerLoop() before upload",
         )
-        filler_pos = body.index("audio_playRandomThinkingFiller()")
+        filler_pos = body.index("audio_startThinkingFillerLoop()")
         upload_pos = body.index("api_upload_audio_and_process()")
         self.assertLess(
             filler_pos,
             upload_pos,
-            "audio_playRandomThinkingFiller() must be triggered before api_upload_audio_and_process()",
+            "audio_startThinkingFillerLoop() must be triggered before api_upload_audio_and_process()",
         )
         self.assertIn("setState(BMOState::THINKING)", body, "Must transition to THINKING state on recording completion")
         thinking_pos = body.index("setState(BMOState::THINKING)")
         self.assertLess(
             thinking_pos,
             filler_pos,
-            "setState(BMOState::THINKING) must precede audio_playRandomThinkingFiller() so confused face renders during filler voice",
+            "setState(BMOState::THINKING) must precede audio_startThinkingFillerLoop() so confused face renders during filler voice",
         )
     def test_api_does_not_duplicate_thinking_filler(self) -> None:
         api_source = API_SOURCE.read_text(encoding="utf-8")
@@ -165,6 +180,36 @@ class ThinkingFillerContractTest(unittest.TestCase):
             "audio_playRandomThinkingFiller()",
             upload_proc_body,
             "api_upload_audio_and_process() must not duplicate audio_playRandomThinkingFiller()",
+        )
+
+    def test_audio_source_implements_loop_controls(self) -> None:
+        source = AUDIO_SOURCE.read_text(encoding="utf-8")
+        self.assertIn("void audio_startThinkingFillerLoop()", source)
+        self.assertIn("void audio_stopThinkingFillerLoop()", source)
+        self.assertIn("bool audio_isThinkingFillerLoopRunning()", source)
+        self.assertIn("thinking_filler_worker_task", source)
+        self.assertIn("audio_play_embedded_wav_clip_cancellable", source)
+
+    def test_api_stops_filler_loop_on_playback_and_errors(self) -> None:
+        api_source = API_SOURCE.read_text(encoding="utf-8")
+        handle_failed_body = function_body(
+            api_source,
+            r"static\s+void\s+handle_request_failed\s*\(\s*const\s+char\s*\*\s*code\s*\)",
+        )
+        self.assertIn(
+            "audio_stopThinkingFillerLoop()",
+            handle_failed_body,
+            "handle_request_failed must stop thinking filler loop",
+        )
+
+        download_play_body = function_body(
+            api_source,
+            r"static\s+BMOPlaybackResult\s+download_and_play_mp3\s*\(\s*const\s+PlaybackJob\s*\*\s*job\s*\)",
+        )
+        self.assertIn(
+            "audio_stopThinkingFillerLoop()",
+            download_play_body,
+            "download_and_play_mp3 must stop thinking filler loop",
         )
 
 if __name__ == "__main__":

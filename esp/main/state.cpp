@@ -166,8 +166,9 @@ static void bmo_state_machine_task(void *pvParameters)
                     // DisplayMode::THINKING (FACE_CONFUSED) when user finishes speaking,
                     // matching the thinking filler voice without flashing IDLE/HAPPY.
                     setState(BMOState::THINKING);
-                    audio_playRandomThinkingFiller();
+                    audio_startThinkingFillerLoop();
                     api_upload_audio_and_process();
+                    audio_stopThinkingFillerLoop();
                 }
                 else
                 {
@@ -183,9 +184,11 @@ static void bmo_state_machine_task(void *pvParameters)
 
             case BMOState::THINKING:
                 ESP_LOGI(TAG, "Entering THINKING state");
+                audio_startThinkingFillerLoop();
                 // api_upload_audio_and_process mengupload, menunggu WS audio_ready, 
                 // memutar MP3 progresif secara blocking, dan mengirim completion events.
                 api_upload_audio_and_process();
+                audio_stopThinkingFillerLoop();
                 setState(BMOState::IDLE);
                 break;
 

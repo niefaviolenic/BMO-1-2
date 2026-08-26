@@ -36,6 +36,10 @@ static bool speaker_ready = false;
 
 static volatile int volume = SPEAKER_DEFAULT_VOLUME;
 static TaskHandle_t wake_ack_worker_task_handle = NULL;
+static TaskHandle_t thinking_filler_task_handle = NULL;
+static volatile bool thinking_filler_running = false;
+static volatile bool thinking_filler_stop_requested = false;
+static int last_thinking_filler_index = -1;
 static uint32_t current_sample_rate = SPEAKER_SAMPLE_RATE;
 extern "C" {
 extern const uint8_t _binary_01_wav_start[];
@@ -317,6 +321,8 @@ static void wake_ack_worker_task(void *param)
     }
 }
 
+static void thinking_filler_worker_task(void *param);
+
 void audio_init()
 {
     if(speaker_ready)
@@ -435,6 +441,22 @@ void audio_init()
         {
             ESP_LOGE(TAG, "Failed to create wake_ack_worker task");
             wake_ack_worker_task_handle = NULL;
+        }
+    }
+    if(thinking_filler_task_handle == NULL)
+    {
+        BaseType_t ret = xTaskCreatePinnedToCore(
+            thinking_filler_worker_task,
+            "thinking_filler",
+            4096,
+            NULL,
+            4,
+            &thinking_filler_task_handle,
+            0);
+        if(ret != pdPASS)
+        {
+            ESP_LOGE(TAG, "Failed to create thinking_filler task");
+            thinking_filler_task_handle = NULL;
         }
     }
 }
@@ -781,6 +803,302 @@ void audio_playRandomThinkingFiller()
 {
     int index = (int)(esp_random() % 5);
     audio_playThinkingFiller(index);
+}
+
+static bool audio_play_embedded_wav_clip_cancellable(
+    const uint8_t *start,
+    const uint8_t *end,
+    const char *clip_name,
+    volatile bool *stop_flag)
+{
+    if(start == nullptr || end == nullptr || end <= start)
+    {
+        return false;
+    }
+
+    if(stop_flag && *stop_flag)
+    {
+        return false;
+    }
+
+    const uint8_t *wav = start;
+    const size_t wav_size = (size_t)(end - start);
+
+    if(wav_size < 12 || !wav_tag_is(wav, "RIFF") || !wav_tag_is(wav + 8, "WAVE"))
+    {
+        ESP_LOGE(TAG, "%s WAV has an invalid RIFF header", clip_name);
+        return false;
+    }
+
+    bool fmt_found = false;
+    bool data_found = false;
+    uint16_t audio_format = 0;
+    uint16_t channels = 0;
+    uint16_t bits_per_sample = 0;
+    uint32_t sample_rate = 0;
+    const uint8_t *pcm_data = nullptr;
+    uint32_t pcm_bytes = 0;
+
+    size_t offset = 12;
+    while(offset <= wav_size && wav_size - offset >= 8)
+    {
+        const uint8_t *chunk = wav + offset;
+        const uint32_t chunk_bytes = read_wav_le32(chunk + 4);
+        const size_t payload_offset = offset + 8;
+
+        if((size_t)chunk_bytes > wav_size - payload_offset)
+            return false;
+
+        if(wav_tag_is(chunk, "fmt "))
+        {
+            if(chunk_bytes < 16)
+                return false;
+
+            const uint8_t *fmt = wav + payload_offset;
+            audio_format = read_wav_le16(fmt + 0);
+            channels = read_wav_le16(fmt + 2);
+            sample_rate = read_wav_le32(fmt + 4);
+            bits_per_sample = read_wav_le16(fmt + 14);
+            fmt_found = true;
+        }
+        else if(wav_tag_is(chunk, "data"))
+        {
+            if(data_found || chunk_bytes == 0)
+                return false;
+
+            pcm_data = wav + payload_offset;
+            pcm_bytes = chunk_bytes;
+            data_found = true;
+        }
+
+        offset = payload_offset + chunk_bytes;
+        if((offset & 1U) != 0U)
+            offset++;
+    }
+
+    if(!fmt_found || !data_found || audio_format != 1 ||
+       (channels != 1 && channels != 2) || bits_per_sample != 16 ||
+       sample_rate == 0 || (pcm_bytes % sizeof(int16_t)) != 0)
+    {
+        ESP_LOGE(TAG,
+                 "%s WAV format rejected: format=%u channels=%u rate=%lu bits=%u bytes=%lu",
+                 clip_name,
+                 audio_format,
+                 channels,
+                 (unsigned long)sample_rate,
+                 bits_per_sample,
+                 (unsigned long)pcm_bytes);
+        return false;
+    }
+
+    if(!speaker_ready || (stop_flag && *stop_flag))
+    {
+        return false;
+    }
+
+    if(!audio_set_sample_rate(sample_rate))
+    {
+        return false;
+    }
+
+    const int16_t *samples = reinterpret_cast<const int16_t *>(pcm_data);
+    const size_t sample_count = pcm_bytes / sizeof(int16_t);
+
+    int16_t stereo_buf[SPEAKER_OUTPUT_CHUNK_FRAMES * 2];
+
+    if(channels == 1)
+    {
+        size_t i = 0;
+        while(i < sample_count)
+        {
+            if(stop_flag && *stop_flag)
+            {
+                return false;
+            }
+
+            size_t chunk_samples = sample_count - i;
+            if(chunk_samples > SPEAKER_OUTPUT_CHUNK_FRAMES)
+                chunk_samples = SPEAKER_OUTPUT_CHUNK_FRAMES;
+
+            int safe_volume = speaker_volume_percent();
+
+            for(size_t j = 0; j < chunk_samples; j++)
+            {
+                int16_t sample = samples[i + j];
+                sample = speaker_scale_sample(sample, safe_volume);
+
+                stereo_buf[j * 2] = sample;
+                stereo_buf[j * 2 + 1] = sample;
+            }
+
+            const size_t expected_bytes = chunk_samples * 2 * sizeof(int16_t);
+            size_t bytes_written = 0;
+            esp_err_t err = i2s_channel_write(
+                speaker_tx_handle,
+                stereo_buf,
+                expected_bytes,
+                &bytes_written,
+                100);
+
+            if(err != ESP_OK || bytes_written != expected_bytes)
+            {
+                return false;
+            }
+
+            i += chunk_samples;
+        }
+    }
+    else
+    {
+        size_t total_frames = sample_count / 2;
+        size_t frame_idx = 0;
+        while(frame_idx < total_frames)
+        {
+            if(stop_flag && *stop_flag)
+            {
+                return false;
+            }
+
+            size_t chunk_frames = total_frames - frame_idx;
+            if(chunk_frames > SPEAKER_OUTPUT_CHUNK_FRAMES)
+                chunk_frames = SPEAKER_OUTPUT_CHUNK_FRAMES;
+
+            int safe_volume = speaker_volume_percent();
+
+            for(size_t j = 0; j < chunk_frames; j++)
+            {
+                int16_t left = samples[(frame_idx + j) * 2];
+                int16_t right = samples[(frame_idx + j) * 2 + 1];
+
+                left = speaker_scale_sample(left, safe_volume);
+                right = speaker_scale_sample(right, safe_volume);
+
+                stereo_buf[j * 2] = left;
+                stereo_buf[j * 2 + 1] = right;
+            }
+
+            const size_t expected_bytes = chunk_frames * 2 * sizeof(int16_t);
+            size_t bytes_written = 0;
+            esp_err_t err = i2s_channel_write(
+                speaker_tx_handle,
+                stereo_buf,
+                expected_bytes,
+                &bytes_written,
+                100);
+
+            if(err != ESP_OK || bytes_written != expected_bytes)
+            {
+                return false;
+            }
+
+            frame_idx += chunk_frames;
+        }
+    }
+
+    return true;
+}
+
+static void thinking_filler_worker_task(void *param)
+{
+    while(true)
+    {
+        uint32_t count = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        if(count == 0)
+            continue;
+
+        thinking_filler_running = true;
+        thinking_filler_stop_requested = false;
+
+        audio_setVolume(SPEAKER_DEFAULT_VOLUME);
+        (void)audio_set_sample_rate(SPEAKER_SAMPLE_RATE);
+
+        ESP_LOGI(TAG, "Thinking filler loop started");
+
+        while(!thinking_filler_stop_requested)
+        {
+            int count_clips = (int)(sizeof(thinking_clips) / sizeof(thinking_clips[0]));
+            int index = (int)(esp_random() % count_clips);
+            if(count_clips > 1 && index == last_thinking_filler_index)
+            {
+                index = (index + 1) % count_clips;
+            }
+            last_thinking_filler_index = index;
+
+            char name_buf[32];
+            snprintf(name_buf, sizeof(name_buf), "thinking %02d", index + 1);
+            const EmbeddedWavClip &clip = thinking_clips[index];
+
+            ESP_LOGI(TAG, "Thinking filler loop playing %s (\"%s\")", name_buf, thinking_phrase(index));
+
+            (void)audio_play_embedded_wav_clip_cancellable(
+                clip.start,
+                clip.end,
+                name_buf,
+                &thinking_filler_stop_requested);
+
+            if(thinking_filler_stop_requested)
+            {
+                break;
+            }
+
+            // Inter-clip pause: ~1000ms pause broken into short 50ms chunks checking stop_requested
+            for(int pause_ms = 0; pause_ms < 1000 && !thinking_filler_stop_requested; pause_ms += 50)
+            {
+                vTaskDelay(pdMS_TO_TICKS(50));
+            }
+        }
+
+        // Flush and prime DMA TX buffers with digital silence to prevent DC offset
+        (void)speaker_write_silence(30);
+
+        thinking_filler_running = false;
+        ESP_LOGI(TAG, "Thinking filler loop stopped");
+    }
+}
+
+void audio_startThinkingFillerLoop()
+{
+    if(!speaker_ready)
+        return;
+
+    thinking_filler_stop_requested = false;
+
+    if(thinking_filler_running)
+    {
+        return;
+    }
+
+    if(thinking_filler_task_handle != NULL)
+    {
+        xTaskNotifyGive(thinking_filler_task_handle);
+    }
+    else
+    {
+        ESP_LOGE(TAG, "thinking_filler task not ready");
+    }
+}
+
+void audio_stopThinkingFillerLoop()
+{
+    thinking_filler_stop_requested = true;
+
+    // Wait briefly (up to 200ms) for the loop task to finish current chunk and exit
+    int wait_count = 40; // 40 * 5ms = 200ms
+    while(thinking_filler_running && wait_count > 0)
+    {
+        vTaskDelay(pdMS_TO_TICKS(5));
+        wait_count--;
+    }
+
+    if(thinking_filler_running)
+    {
+        ESP_LOGW(TAG, "Thinking filler loop did not stop within 200ms");
+    }
+}
+
+bool audio_isThinkingFillerLoopRunning()
+{
+    return thinking_filler_running;
 }
 
 //--------------------------------------------------

@@ -31,6 +31,13 @@ void audio_playExpressionAudio(int expression_index);
 void audio_playThinkingFiller(int index);
 void audio_playRandomThinkingFiller();
 
+// Start looping random thinking filler audio in background FreeRTOS task
+void audio_startThinkingFillerLoop();
+// Stop looping thinking filler audio immediately (thread-safe, short bounded wait)
+void audio_stopThinkingFillerLoop();
+// Check if filler loop is currently running
+bool audio_isThinkingFillerLoopRunning();
+
 void audio_setVolume(int vol);
 
 int audio_getVolume();

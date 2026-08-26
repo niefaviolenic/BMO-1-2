@@ -726,6 +726,7 @@ static bool flush_pending_playback_event()
 
 // Handle request_failed locally (e.g. error message sound and face display)
 static void handle_request_failed(const char *code) {
+    audio_stopThinkingFillerLoop();
     setState(BMOState::ERROR_STATE);
     audio_play_error();
     
@@ -1002,6 +1003,7 @@ static void handle_ws_message(const char *payload, int len) {
                         &voice_job, esp_timer_get_time() / 1000) != PlaybackAdmission::ACCEPTED) {
                     ESP_LOGI(TAG, "Ignore audio_ready while another playback owns the audio path");
                 } else {
+                    audio_stopThinkingFillerLoop();
                     current_playback_job = voice_job;
                     set_audio_deadline(expires_in_seconds);
                     playback_state = BMO_PLAYBACK_DOWNLOADING;
@@ -1318,6 +1320,7 @@ static esp_err_t mp3_http_event_handler(esp_http_client_event_t *event)
 // Shared MP3 downloader/decoder/player. Transport validation and voice
 // correlation happen before this physical playback path is entered.
 static BMOPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
+    audio_stopThinkingFillerLoop();
     if (job == NULL || audio_deadline_expired() ||
         playback_is_expired(esp_timer_get_time() / 1000))
     {
@@ -2129,6 +2132,7 @@ void api_upload_audio_and_process() {
 
         if (record_buf == NULL || sample_count <= WAV_HEADER_SAMPLES) {
             ESP_LOGW(TAG, "Record buffer is empty, skipping API processing");
+            audio_stopThinkingFillerLoop();
             setState(BMOState::IDLE);
             return;
         }
@@ -2357,6 +2361,7 @@ void api_upload_audio_and_process() {
             queue_pending_playback_event(current_request_id, BMO_PENDING_PLAYBACK_FAILED, failure_reason);
             flush_pending_playback_event();
 
+            audio_stopThinkingFillerLoop();
             setState(BMOState::ERROR_STATE);
             audio_play_error();
             vTaskDelay(pdMS_TO_TICKS(2000));
