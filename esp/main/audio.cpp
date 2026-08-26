@@ -7,9 +7,10 @@
 #include "driver/i2s_std.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_random.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
-
+#include "freertos/task.h"
 static const char *TAG = "AUDIO";
 
 //--------------------------------------------------
@@ -34,7 +35,7 @@ static i2s_chan_handle_t speaker_tx_handle = NULL;
 static bool speaker_ready = false;
 
 static volatile int volume = SPEAKER_DEFAULT_VOLUME;
-
+static TaskHandle_t wake_ack_worker_task_handle = NULL;
 static uint32_t current_sample_rate = SPEAKER_SAMPLE_RATE;
 extern "C" {
 extern const uint8_t _binary_01_wav_start[];
@@ -59,6 +60,16 @@ extern const uint8_t _binary_10_wav_start[];
 extern const uint8_t _binary_10_wav_end[];
 extern const uint8_t _binary_wake_ack_wav_start[];
 extern const uint8_t _binary_wake_ack_wav_end[];
+extern const uint8_t _binary_thinking_01_wav_start[];
+extern const uint8_t _binary_thinking_01_wav_end[];
+extern const uint8_t _binary_thinking_02_wav_start[];
+extern const uint8_t _binary_thinking_02_wav_end[];
+extern const uint8_t _binary_thinking_03_wav_start[];
+extern const uint8_t _binary_thinking_03_wav_end[];
+extern const uint8_t _binary_thinking_04_wav_start[];
+extern const uint8_t _binary_thinking_04_wav_end[];
+extern const uint8_t _binary_thinking_05_wav_start[];
+extern const uint8_t _binary_thinking_05_wav_end[];
 }
 
 struct EmbeddedWavClip
@@ -80,6 +91,14 @@ static const EmbeddedWavClip expression_clips[] =
     {_binary_09_wav_start, _binary_09_wav_end},
     {_binary_10_wav_start, _binary_10_wav_end},
 };
+static const EmbeddedWavClip thinking_clips[] =
+{
+    {_binary_thinking_01_wav_start, _binary_thinking_01_wav_end},
+    {_binary_thinking_02_wav_start, _binary_thinking_02_wav_end},
+    {_binary_thinking_03_wav_start, _binary_thinking_03_wav_end},
+    {_binary_thinking_04_wav_start, _binary_thinking_04_wav_end},
+    {_binary_thinking_05_wav_start, _binary_thinking_05_wav_end},
+};
 
 static const char *expression_phrase(int expression_index)
 {
@@ -96,6 +115,18 @@ static const char *expression_phrase(int expression_index)
         case 8: return "aku love";
         case 9: return "aku confused";
         default: return "unknown expression";
+    }
+}
+static const char *thinking_phrase(int index)
+{
+    switch(index)
+    {
+        case 0: return "bentar aku pikir dulu";
+        case 1: return "aku lagi proses dulu pertanyaannya";
+        case 2: return "tunggu sebentar ya";
+        case 3: return "hmm coba aku cari tahu dulu";
+        case 4: return "bentar ya joy lagi mikir";
+        default: return "unknown thinking phrase";
     }
 }
 
@@ -274,6 +305,18 @@ static esp_err_t speaker_write_silence(
 
 //--------------------------------------------------
 
+static void wake_ack_worker_task(void *param)
+{
+    while(true)
+    {
+        uint32_t count = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        if(count > 0)
+        {
+            audio_playWakeAck();
+        }
+    }
+}
+
 void audio_init()
 {
     if(speaker_ready)
@@ -378,6 +421,22 @@ void audio_init()
         SPEAKER_I2S_WS,
         SPEAKER_I2S_DIN,
         volume);
+    if(wake_ack_worker_task_handle == NULL)
+    {
+        BaseType_t ret = xTaskCreatePinnedToCore(
+            wake_ack_worker_task,
+            "wake_ack_worker",
+            4096,
+            NULL,
+            5,
+            &wake_ack_worker_task_handle,
+            0);
+        if(ret != pdPASS)
+        {
+            ESP_LOGE(TAG, "Failed to create wake_ack_worker task");
+            wake_ack_worker_task_handle = NULL;
+        }
+    }
 }
 
 //--------------------------------------------------
@@ -598,15 +657,33 @@ static bool audio_play_embedded_wav(int expression_index)
     const EmbeddedWavClip &clip = expression_clips[expression_index];
     return audio_play_embedded_wav_clip(clip.start, clip.end, name_buf);
 }
+static bool audio_play_embedded_thinking_wav(int index)
+{
+    if(index < 0 ||
+       index >= (int)(sizeof(thinking_clips) / sizeof(thinking_clips[0])))
+    {
+        return false;
+    }
+
+    char name_buf[32];
+    snprintf(name_buf, sizeof(name_buf), "thinking %02d", index + 1);
+
+    const EmbeddedWavClip &clip = thinking_clips[index];
+    return audio_play_embedded_wav_clip(clip.start, clip.end, name_buf);
+}
+
 
 //--------------------------------------------------
 
 void audio_playWakeAck()
 {
+    // Wake acknowledgment cue is played at default volume (100),
+    // even if a previous volume-button event lowered the runtime setting.
+    audio_setVolume(SPEAKER_DEFAULT_VOLUME);
+
     ESP_LOGI(
         TAG,
         "Play wake ack cue");
-
     (void)audio_set_sample_rate(SPEAKER_SAMPLE_RATE);
 
     if(audio_play_embedded_wav_clip(
@@ -633,6 +710,19 @@ void audio_playWakeAck()
     }
 }
 
+void audio_triggerWakeAck()
+{
+    if(wake_ack_worker_task_handle != NULL)
+    {
+        xTaskNotifyGive(wake_ack_worker_task_handle);
+    }
+    else
+    {
+        ESP_LOGW(TAG, "wake_ack_worker task not ready, falling back to direct playback");
+        audio_playWakeAck();
+    }
+}
+
 //--------------------------------------------------
 
 void audio_playExpressionAudio(int expression_index)
@@ -649,6 +739,48 @@ void audio_playExpressionAudio(int expression_index)
                  expression_phrase(expression_index));
         audio_playExpressionChange();
     }
+}
+//--------------------------------------------------
+
+void audio_playThinkingFiller(int index)
+{
+    // Thinking filler clips are played at default volume (100).
+    audio_setVolume(SPEAKER_DEFAULT_VOLUME);
+
+    if(!audio_play_embedded_thinking_wav(index))
+    {
+        ESP_LOGW(TAG,
+                 "Thinking WAV %02d unavailable for phrase=\"%s\"; using fallback melody",
+                 index + 1,
+                 thinking_phrase(index));
+
+        (void)audio_set_sample_rate(SPEAKER_SAMPLE_RATE);
+
+        static constexpr int melody_hz[] = { 659, 784, 880 };
+        static constexpr int melody_ms[] = { 70, 70, 110 };
+
+        esp_err_t result = ESP_OK;
+        for(size_t i = 0; i < sizeof(melody_hz) / sizeof(melody_hz[0]); i++)
+        {
+            result |= speaker_write_tone(melody_hz[i], melody_ms[i]);
+            if(i + 1 < sizeof(melody_hz) / sizeof(melody_hz[0]))
+                result |= speaker_write_silence(25);
+        }
+        result |= speaker_write_silence(35);
+
+        if(result != ESP_OK)
+        {
+            ESP_LOGW(TAG, "Thinking fallback melody skipped: %s", esp_err_to_name(result));
+        }
+    }
+}
+
+//--------------------------------------------------
+
+void audio_playRandomThinkingFiller()
+{
+    int index = (int)(esp_random() % 5);
+    audio_playThinkingFiller(index);
 }
 
 //--------------------------------------------------

@@ -12,6 +12,7 @@
 #include "driver/i2s_std.h"
 #include "esp_check.h"
 #include "esp_err.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_wn_iface.h"
 #include "esp_wn_models.h"
@@ -45,14 +46,14 @@ static const char *TAG = "WAKE";
 #define RECORD_MAX_SAMPLES (RECORD_SAMPLE_RATE * RECORD_DURATION_SEC) // 960000 samples
 
 #define RECORD_BUFFER_SIZE (RECORD_MAX_SAMPLES + WAV_HEADER_SAMPLES)
+#define PREROLL_BUFFER_SAMPLES 8192 // ~512ms at 16kHz mono circular pre-roll buffer
 
 #define SILENCE_THRESHOLD 250
-#define RECORD_SILENCE_DURATION_MS 450
+#define RECORD_SILENCE_DURATION_MS 800
 #define RECORD_MIN_SPEECH_DURATION_MS 400
 #define RECORD_I2S_READ_TIMEOUT_MS 100
 #define RECORD_NO_SAMPLE_PROGRESS_TIMEOUT_MS 3000
 #define RECORD_DIAGNOSTIC_INTERVAL_MS 1000
-
 #pragma pack(push, 1)
 struct WAVHeader {
     char riff[4];
@@ -114,6 +115,64 @@ static TickType_t recording_last_sample_tick = 0;
 static TickType_t recording_last_diag_tick = 0;
 static portMUX_TYPE recording_mux = portMUX_INITIALIZER_UNLOCKED;
 static TickType_t wakeword_cooldown_until = 0;
+static int16_t preroll_buffer[PREROLL_BUFFER_SAMPLES] = {};
+static size_t preroll_write_index = 0;
+static size_t preroll_count = 0;
+static portMUX_TYPE preroll_mux = portMUX_INITIALIZER_UNLOCKED;
+
+static void preroll_push_samples(const int16_t *samples, int count)
+{
+    if(samples == NULL || count <= 0)
+        return;
+
+    portENTER_CRITICAL(&preroll_mux);
+    for(int i = 0; i < count; i++)
+    {
+        preroll_buffer[preroll_write_index] = samples[i];
+        preroll_write_index = (preroll_write_index + 1) % PREROLL_BUFFER_SAMPLES;
+        if(preroll_count < PREROLL_BUFFER_SAMPLES)
+        {
+            preroll_count++;
+        }
+    }
+    portEXIT_CRITICAL(&preroll_mux);
+}
+
+static size_t preroll_drain_locked(int16_t *dest, size_t max_samples)
+{
+    if(dest == NULL || max_samples == 0 || preroll_count == 0)
+        return 0;
+
+    size_t count_to_copy = (preroll_count < max_samples) ? preroll_count : max_samples;
+    size_t start_index;
+
+    if(preroll_count < PREROLL_BUFFER_SAMPLES)
+    {
+        start_index = (preroll_count >= count_to_copy) ? (preroll_count - count_to_copy) : 0;
+    }
+    else
+    {
+        start_index = (preroll_write_index + PREROLL_BUFFER_SAMPLES - count_to_copy) % PREROLL_BUFFER_SAMPLES;
+    }
+
+    for(size_t i = 0; i < count_to_copy; i++)
+    {
+        size_t idx = (start_index + i) % PREROLL_BUFFER_SAMPLES;
+        dest[i] = preroll_buffer[idx];
+    }
+
+    preroll_count = 0;
+    preroll_write_index = 0;
+    return count_to_copy;
+}
+
+static void preroll_reset()
+{
+    portENTER_CRITICAL(&preroll_mux);
+    preroll_count = 0;
+    preroll_write_index = 0;
+    portEXIT_CRITICAL(&preroll_mux);
+}
 
 static bool recording_is_active_locked()
 {
@@ -521,6 +580,9 @@ static void wakeword_listener_task(
 
         if (current_state == BMOState::IDLE)
         {
+            // Maintain continuous rolling pre-roll buffer for seamless single-breath capture
+            preroll_push_samples(sample_buffer, wakeword_chunk_size);
+
             bool cooldown_active =
                 wakeword_cooldown_until != 0 &&
                 (int32_t)(now - wakeword_cooldown_until) < 0;
@@ -536,9 +598,9 @@ static void wakeword_listener_task(
                 {
                     ESP_LOGI(
                         TAG,
-                        "Hi Joy detected");
+                        "Hi Joy detected - seamless single-breath trigger");
 
-                    audio_playWakeAck();
+                    audio_triggerWakeAck();
 
                     if(wakeword_task())
                     {
@@ -621,7 +683,7 @@ static void wakeword_listener_task(
 
             log_recording_progress_if_due(now, "samples");
 
-            // Check stop conditions: 450 ms of silence (after minimum speech duration) OR 60 seconds duration.
+            // Check stop conditions: 800 ms of silence (after minimum speech duration) OR 60 seconds duration.
             if (silence_reached)
             {
                 finalize_recording("silence_detected");
@@ -789,6 +851,15 @@ void wakeword_init()
     if(wakeword_i2s_init(sample_rate) != ESP_OK)
         return;
 
+    if(record_buffer == NULL)
+    {
+        record_buffer = (int16_t *)heap_caps_malloc(RECORD_BUFFER_SIZE * sizeof(int16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if(record_buffer == NULL)
+        {
+            record_buffer = (int16_t *)malloc(RECORD_BUFFER_SIZE * sizeof(int16_t));
+        }
+    }
+
     BaseType_t task_created =
         xTaskCreatePinnedToCore(
             wakeword_listener_task,
@@ -815,14 +886,15 @@ void wakeword_init()
         "Wakeword initialized");
 }
 
-#include "esp_heap_caps.h"
-
 bool wakeword_task()
 {
     if(!trySetState(BMOState::IDLE, BMOState::RECORDING))
         return false;
 
-    ESP_LOGI(TAG, "Voice capture requested");
+    // Immediately start recording and commit pre-roll buffer to eliminate handoff gap
+    start_recording();
+
+    ESP_LOGI(TAG, "Voice capture requested (seamless single-breath)");
     return true;
 }
 
@@ -860,11 +932,17 @@ bool start_recording()
     if(recording_is_active_locked())
     {
         portEXIT_CRITICAL(&recording_mux);
-        ESP_LOGE(TAG, "Recording start rejected: already active");
-        return false;
+        return true;
     }
 
     record_index = WAV_HEADER_SAMPLES; // Offset by 22 samples for WAV Header
+
+    // Drain pre-roll circular buffer into record_buffer so speech during/before wake detection is preserved
+    portENTER_CRITICAL(&preroll_mux);
+    size_t preroll_copied = preroll_drain_locked(&record_buffer[record_index], RECORD_BUFFER_SIZE - record_index);
+    portEXIT_CRITICAL(&preroll_mux);
+
+    record_index += preroll_copied;
     silence_samples = 0;
     recording_started_tick = now;
     recording_last_sample_tick = now;
@@ -873,7 +951,7 @@ bool start_recording()
 
     portEXIT_CRITICAL(&recording_mux);
 
-    ESP_LOGI(TAG, "Recording started");
+    ESP_LOGI(TAG, "Recording started (preroll_samples=%lu)", (unsigned long)preroll_copied);
     return true;
 }
 

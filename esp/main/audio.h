@@ -11,9 +11,11 @@ void audio_init();
 void audio_playHello();
 
 // Short pleasant wake-up acknowledgment cue ("heem" / rising earcon)
-// played immediately when the wake word ("Hi Joy") is detected,
-// before voice capture begins so the microphone does not record the cue.
+// played when the wake word ("Hi Joy") is detected.
+// Synchronous direct playback:
 void audio_playWakeAck();
+// Non-blocking asynchronous trigger dispatched to dedicated worker task on Core 0:
+void audio_triggerWakeAck();
 
 // Short musical cue used when the device changes into an active expression
 // before microphone capture begins.
@@ -23,6 +25,11 @@ void audio_playExpressionChange();
 // including "aku happy" for FACE_HAPPY and "aku sedih" for FACE_SAD.
 // Falls back to the short melody when the requested clip is unavailable.
 void audio_playExpressionAudio(int expression_index);
+
+// Play a dynamic thinking filler phrase (0..4) or random thinking filler
+// when voice capture finishes and backend processing begins.
+void audio_playThinkingFiller(int index);
+void audio_playRandomThinkingFiller();
 
 void audio_setVolume(int vol);
 

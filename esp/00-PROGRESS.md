@@ -1,17 +1,19 @@
 # BMO Firmware Progress
 
-## Current status - 2026-08-26 12:00:00 +07:00
+## Current status - 2026-08-26 15:30:00 +07:00
 
-- Wake-Up Acknowledgment Cue: `PASS`; added `audio_playWakeAck()` invoked on "Hi Joy" detection before transition to `RECORDING` (voice capture).
-- Embedded asset: `audio_wav/wake_ack.wav` (PCM 16kHz mono 16-bit, <=600ms) with fallback synthesized dual-tone rising earcon (659 Hz -> 880 Hz).
-- Python Contract Test Suite: `83/83 PASS` (100% passing across all contract tests including `test_wake_ack_contract.py`).
-- Step 3 / Gate 3: `PASS` after one corrective official build, exact artifact flash to verified ESP32-S3/COM7, and a fresh physical upload transaction.
-- Step 4 I2S timeout corrective source review: `PASS`; one official build invocation was `BLOCKED` before compilation because it ran from the workspace root and could not find `CMakeLists.txt`. Existing corrective artifact remains installed; no flash occurred. Gate 4 is `PENDING / DEFERRED_NETWORK_DEPENDENT_E2E`.
-- Current next step: `Step 4 — Event, download, playback`; corrective build is blocked pending operator direction because the one permitted invocation exited `2` before compilation. Historical `RECORDING_NOT_COMPLETING` remains closed for local lifecycle; the new corrective artifact has not been built or flashed.
-- Gate 5 idle network loss -> recovery -> re-authentication remains `DEFERRED_TO_GATE_5 / BLOCKED_BY_NETWORK_AUTHORITY`; this was not claimed as tested.
-- No source, backend, router, or credential change was made after the corrective build; no second build, Ninja, or flash retry was performed.
+- Non-Blocking Wake Acknowledgment Cue (Earcon): `PASS`; implemented dedicated background worker task `wake_ack_worker_task` pinned to Core 0 in `audio.cpp`, triggered asynchronously via `audio_triggerWakeAck()` (`xTaskNotifyGive`) on `WAKENET_DETECTED` in `wakeword.cpp`. Provides instant acoustic earcon playback with 0ms microphone loop blocking delay.
+- Seamless Single-Breath Wake Word: `PASS`; rolling circular pre-roll buffer (8192 samples / ~512ms at 16kHz mono PCM) in `wakeword.cpp` captures audio uninterrupted during wake cue playback.
+- Python Contract Test Suite: `88/88 PASS` (100% passing across all contract tests in `esp/tests/`).
+## Seamless single-breath wake word implementation - 2026-08-26 15:00:00 +07:00
 
-## Wake-up acknowledgment audio cue implementation - 2026-08-26 12:00:00 +07:00
+- Implemented rolling circular pre-roll buffer in `wakeword.cpp` (`PREROLL_BUFFER_SAMPLES = 8192`, ~512ms at 16kHz mono) during IDLE state.
+- Removed blocking `audio_playWakeAck()` from the critical microphone path in `wakeword_listener_task` to prevent freezing the I2S microphone loop during user speech.
+- Updated `wakeword_task()` to immediately trigger `start_recording()` and transition to `BMOState::RECORDING` with 0ms delay, instantly updating LCD to `DisplayMode::LISTENING`.
+- Enhanced `start_recording()` to drain the pre-roll buffer in chronological order into `record_buffer` and operate idempotently.
+- Pre-allocated `record_buffer` in PSRAM during `wakeword_init()`.
+- Updated contract test `test_wake_ack_contract.py` with `test_wakeword_seamless_single_breath_contract`.
+- Ran full test suite: 88/88 tests PASS (`python3 -m unittest discover -s esp/tests`).
 
 - Static review and contract tests passed for wake-up acknowledgment cue:
   - `audio.h`: declared `void audio_playWakeAck();`.

@@ -2197,6 +2197,7 @@ void api_upload_audio_and_process() {
             success_post = last_upload_result == BMO_UPLOAD_ACCEPTED;
 
             if (success_post) {
+                audio_playRandomThinkingFiller();
                 break;
             }
 

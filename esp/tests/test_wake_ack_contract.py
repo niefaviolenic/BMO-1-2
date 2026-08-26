@@ -40,6 +40,7 @@ class WakeAckContractTest(unittest.TestCase):
     def test_audio_header_declares_wake_ack(self) -> None:
         header = AUDIO_HEADER.read_text(encoding="utf-8")
         self.assertIn("void audio_playWakeAck();", header)
+        self.assertIn("void audio_triggerWakeAck();", header)
 
     def test_audio_source_implements_wake_ack_and_symbols(self) -> None:
         source = AUDIO_SOURCE.read_text(encoding="utf-8")
@@ -53,6 +54,10 @@ class WakeAckContractTest(unittest.TestCase):
         self.assertIn("speaker_write_tone", wake_ack_body)
         self.assertIn("speaker_write_silence", wake_ack_body)
 
+        self.assertIn("audio_triggerWakeAck", source)
+        self.assertIn("wake_ack_worker_task", source)
+        self.assertIn("xTaskNotifyGive", source)
+        self.assertIn("ulTaskNotifyTake", source)
     def test_cmake_embeds_wake_ack_wav(self) -> None:
         cmake = MAIN_CMAKE.read_text(encoding="utf-8")
         self.assertRegex(cmake, r'EMBED_FILES[\s\S]*"audio_wav/wake_ack\.wav"')
@@ -69,8 +74,16 @@ class WakeAckContractTest(unittest.TestCase):
             self.assertGreaterEqual(duration_ms, 100.0, "Wake cue duration should be at least 100ms")
             self.assertLessEqual(duration_ms, 600.0, "Wake cue duration should be concise (<= 600ms)")
 
-    def test_wakeword_listener_calls_wake_ack_before_wakeword_task(self) -> None:
+    def test_wakeword_seamless_single_breath_contract(self) -> None:
         source = WAKEWORD_SOURCE.read_text(encoding="utf-8")
+
+        # Pre-roll rolling circular buffer definition
+        match_preroll = re.search(r"#define\s+PREROLL_BUFFER_SAMPLES\s+(\d+)", source)
+        self.assertIsNotNone(match_preroll, "PREROLL_BUFFER_SAMPLES must be defined in wakeword.cpp")
+        preroll_samples = int(match_preroll.group(1))
+        self.assertGreaterEqual(preroll_samples, 4096, "Pre-roll buffer should be at least 4096 samples (~256ms)")
+        self.assertLessEqual(preroll_samples, 16000, "Pre-roll buffer should be reasonable (<= 16000 samples)")
+
         task_body = function_body(
             source,
             r"static\s+void\s+wakeword_listener_task\s*\([^)]*\)",
@@ -80,17 +93,23 @@ class WakeAckContractTest(unittest.TestCase):
         self.assertIsNotNone(match_detect, "WAKENET_DETECTED handler not found in wakeword_listener_task")
 
         detect_block = task_body[match_detect.end() :]
-        idx_ack = detect_block.find("audio_playWakeAck();")
         idx_task = detect_block.find("wakeword_task()")
-
-        self.assertNotEqual(idx_ack, -1, "audio_playWakeAck() must be called on WAKENET_DETECTED")
         self.assertNotEqual(idx_task, -1, "wakeword_task() must be called on WAKENET_DETECTED")
-        self.assertLess(
-            idx_ack,
-            idx_task,
-            "audio_playWakeAck() must be called before wakeword_task() to prevent recording the wake cue",
+        self.assertIn("audio_triggerWakeAck();", detect_block, "audio_triggerWakeAck() must be called on WAKENET_DETECTED")
+        self.assertNotIn("audio_playWakeAck();", detect_block, "audio_playWakeAck() must not block the microphone thread on WAKENET_DETECTED")
+        # wakeword_task immediately starts recording with zero handoff latency
+        wakeword_task_body = function_body(
+            source,
+            r"bool\s+wakeword_task\s*\(\s*\)",
         )
+        self.assertIn("start_recording()", wakeword_task_body, "wakeword_task must start recording immediately")
 
+        # start_recording commits pre-roll buffer
+        start_recording_body = function_body(
+            source,
+            r"bool\s+start_recording\s*\(\s*\)",
+        )
+        self.assertIn("preroll_drain_locked", start_recording_body, "start_recording must drain pre-roll buffer")
     def test_recording_state_contract_is_not_altered(self) -> None:
         state_source = STATE_SOURCE.read_text(encoding="utf-8")
         state_task = function_body(
