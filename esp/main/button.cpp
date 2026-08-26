@@ -2,8 +2,8 @@
 
 #include "audio.h"
 #include "display.h"
+#include "pairing.h"
 #include "state.h"
-
 #include "driver/gpio.h"
 #include "esp_err.h"
 #include "esp_log.h"
@@ -229,23 +229,30 @@ void button_update()
 
                 if(getState() == JoyState::IDLE)
                 {
-                    const JoyState state_before = getState();
-                    const Face face_before = display_get_idle_face();
-                    const Face face_after = display_next_touch_face();
+                    if(display_pairing_code_is_visible() || pairing_get_snapshot().phase != PairingPhase::NONE)
+                    {
+                        ESP_LOGW(TAG, "Touch rejected: robot is in pairing mode (unbound)");
+                    }
+                    else
+                    {
+                        const JoyState state_before = getState();
+                        const Face face_before = display_get_idle_face();
+                        const Face face_after = display_next_touch_face();
 
-                    // Touch is an expression selector, not a voice-capture
-                    // trigger. Keep the cue local so it cannot create a
-                    // delayed backend response or overwrite the selected face.
-                    audio_setVolume(SPEAKER_DEFAULT_VOLUME);
-                    audio_playExpressionAudio((int)face_after);
+                        // Touch is an expression selector, not a voice-capture
+                        // trigger. Keep the cue local so it cannot create a
+                        // delayed backend response or overwrite the selected face.
+                        audio_setVolume(SPEAKER_DEFAULT_VOLUME);
+                        audio_playExpressionAudio((int)face_after);
 
-                    ESP_LOGI(
-                        TAG,
-                        "Touch accepted: Joy state before=%s Face before=%d Face after=%d Face render requested=%d expression_audio=1",
-                        joy_state_name(state_before),
-                        (int)face_before,
-                        (int)face_after,
-                        1);
+                        ESP_LOGI(
+                            TAG,
+                            "Touch accepted: Joy state before=%s Face before=%d Face after=%d Face render requested=%d expression_audio=1",
+                            joy_state_name(state_before),
+                            (int)face_before,
+                            (int)face_after,
+                            1);
+                    }
                 }
                 else
                 {

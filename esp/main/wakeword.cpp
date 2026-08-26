@@ -6,8 +6,8 @@
 
 #include "audio.h"
 #include "display.h"
+#include "pairing.h"
 #include "state.h"
-
 #include "driver/gpio.h"
 #include "driver/i2s_std.h"
 #include "esp_check.h"
@@ -645,6 +645,13 @@ static void wakeword_listener_task(
 
                 if(detected == WAKENET_DETECTED)
                 {
+                    PairingSnapshot pairing_snapshot = pairing_get_snapshot();
+                    if (pairing_snapshot.phase != PairingPhase::NONE || display_pairing_code_is_visible())
+                    {
+                        ESP_LOGW(TAG, "Hi Joy detected but ignored: robot is in pairing mode (unbound)");
+                        continue;
+                    }
+
                     ESP_LOGI(
                         TAG,
                         "Hi Joy detected - seamless single-breath trigger");
@@ -969,9 +976,15 @@ void wakeword_init()
 
 bool wakeword_task()
 {
+    PairingSnapshot pairing_snapshot = pairing_get_snapshot();
+    if (pairing_snapshot.phase != PairingPhase::NONE || display_pairing_code_is_visible())
+    {
+        ESP_LOGW(TAG, "Wake task rejected: robot is in pairing mode (unbound)");
+        return false;
+    }
+
     if(!trySetState(JoyState::IDLE, JoyState::RECORDING))
         return false;
-
     // Immediately start recording and commit pre-roll buffer to eliminate handoff gap
     start_recording();
 
