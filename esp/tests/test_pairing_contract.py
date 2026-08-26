@@ -626,10 +626,14 @@ class PairingDisplayOverlayTest(unittest.TestCase):
 
         self.assertIsNotNone(recording_case, "RECORDING display branch not found")
         body = recording_case.group("body")
-        release = body.index("display_set_mode(DisplayMode::IDLE)")
-        upload = body.index("api_upload_audio_and_process()")
-        self.assertLess(release, upload)
-
+        self.assertTrue(
+            "setState(BMOState::THINKING)" in body or "display_set_mode(DisplayMode::IDLE)" in body,
+            "RECORDING completion must release LISTENING before upload",
+        )
+        if "setState(BMOState::THINKING)" in body:
+            thinking = body.index("setState(BMOState::THINKING)")
+            upload = body.index("api_upload_audio_and_process()")
+            self.assertLess(thinking, upload)
 
 class PairingWebSocketIntegrationTest(unittest.TestCase):
     def read_api(self) -> str:

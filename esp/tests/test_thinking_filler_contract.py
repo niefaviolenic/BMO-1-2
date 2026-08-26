@@ -148,7 +148,13 @@ class ThinkingFillerContractTest(unittest.TestCase):
             upload_pos,
             "audio_playRandomThinkingFiller() must be triggered before api_upload_audio_and_process()",
         )
-
+        self.assertIn("setState(BMOState::THINKING)", body, "Must transition to THINKING state on recording completion")
+        thinking_pos = body.index("setState(BMOState::THINKING)")
+        self.assertLess(
+            thinking_pos,
+            filler_pos,
+            "setState(BMOState::THINKING) must precede audio_playRandomThinkingFiller() so confused face renders during filler voice",
+        )
     def test_api_does_not_duplicate_thinking_filler(self) -> None:
         api_source = API_SOURCE.read_text(encoding="utf-8")
         upload_proc_body = function_body(

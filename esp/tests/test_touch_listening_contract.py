@@ -55,10 +55,14 @@ class TouchListeningContractTest(unittest.TestCase):
             r"case\s+BMOState::RECORDING\s*:",
         )
 
-        release = recording.index("display_set_mode(DisplayMode::IDLE)")
-        upload = recording.index("api_upload_audio_and_process()")
-        self.assertLess(release, upload)
-
+        self.assertTrue(
+            "setState(BMOState::THINKING)" in recording or "display_set_mode(DisplayMode::IDLE)" in recording,
+            "RECORDING completion must release LISTENING before upload",
+        )
+        if "setState(BMOState::THINKING)" in recording:
+            thinking = recording.index("setState(BMOState::THINKING)")
+            upload = recording.index("api_upload_audio_and_process()")
+            self.assertLess(thinking, upload)
     def test_listening_expression_is_distinct_and_non_blocking(self) -> None:
         header = DISPLAY_HEADER.read_text(encoding="utf-8")
         source = DISPLAY_SOURCE.read_text(encoding="utf-8")

@@ -156,27 +156,27 @@ static void bmo_state_machine_task(void *pvParameters)
                     vTaskDelay(pdMS_TO_TICKS(10));
                 }
 
-                // Recording is terminal now; release the local listening UI
-                // before any backend request can take over with thinking.
-                display_set_mode(DisplayMode::IDLE);
-
                 RecordingStatus recording_status =
                     get_recording_status();
 
                 if(recording_status == RecordingStatus::COMPLETED &&
                    get_record_size() > WAV_HEADER_SAMPLES)
                 {
+                    // Phase 1 Thinking Transition: immediately switch expression to
+                    // DisplayMode::THINKING (FACE_CONFUSED) when user finishes speaking,
+                    // matching the thinking filler voice without flashing IDLE/HAPPY.
+                    setState(BMOState::THINKING);
                     audio_playRandomThinkingFiller();
                     api_upload_audio_and_process();
                 }
                 else
                 {
+                    display_set_mode(DisplayMode::IDLE);
                     ESP_LOGW(
                         TAG,
                         "Recording not uploadable: status=%d; upload skipped",
                         (int)recording_status);
                 }
-
                 setState(BMOState::IDLE);
                 break;
             }
