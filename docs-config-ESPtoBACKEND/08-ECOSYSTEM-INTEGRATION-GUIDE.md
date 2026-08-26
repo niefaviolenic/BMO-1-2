@@ -197,14 +197,14 @@ sequenceDiagram
 ## 7. Panduan Verifikasi & Test Suite
 
 ### A. ESP32-S3 Firmware Contract Tests
-Firmware dilengkapi dengan 90 contract test berbasis Python `unittest` di direktori `esp/tests/`:
+Firmware dilengkapi dengan 93 contract test berbasis Python `unittest` di direktori `esp/tests/`:
 ```bash
 cd esp
 python3 -m unittest discover -s tests -v
 ```
 Output:
 ```text
-Ran 90 tests in 0.036s
+Ran 93 tests in 0.033s
 OK (100% Passing)
 ```
 

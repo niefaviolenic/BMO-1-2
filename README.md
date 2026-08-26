@@ -242,7 +242,7 @@ idf.py -D JOY_DEV_SUPPRESS_PAIRING_UI=ON build flash monitor
 
 ## 7. Python Contract Test Suite
 
-Repository ini dilengkapi dengan 90 contract tests berbasis Python `unittest` di direktori `esp/tests/` untuk menguji kepatuhan kode firmware terhadap seluruh kontrak produksi (audio, wake ack cue, wake silence, display, pairing, SNTP, playback, dynamic thinking filler, rolling pre-roll buffer single-breath):
+Repository ini dilengkapi dengan 93 contract tests berbasis Python `unittest` di direktori `esp/tests/` untuk menguji kepatuhan kode firmware terhadap seluruh kontrak produksi (audio, wake ack cue, wake silence, display, pairing, SNTP, playback, dynamic thinking filler, rolling pre-roll buffer single-breath):
 
 ```bash
 # Menjalankan seluruh test suite
@@ -252,7 +252,7 @@ python3 -m unittest discover -s esp/tests -v
 Hasil uji:
 ```text
 ----------------------------------------------------------------------
-Ran 90 tests in 0.036s
+Ran 93 tests in 0.033s
 
 OK (100% Passing)
 ```
@@ -290,5 +290,5 @@ OK (100% Passing)
     │   ├── wakeword.cpp / wakeword.h   # INMP441 I2S mic & WakeNet "Hi Joy" engine
     │   ├── wifi.cpp / wifi.h           # Wi-Fi station & SNTP time sync
     │   └── audio_wav/                  # Embedded WAV clips (01.wav - 10.wav, wake_ack.wav, thinking_*.wav)
-    └── tests/                          # 90/90 Python Contract Tests (100% Passing)
+    └── tests/                          # 93/93 Python Contract Tests (100% Passing)
 ```

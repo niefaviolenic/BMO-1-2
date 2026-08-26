@@ -140,3 +140,17 @@ Verification evidence: focused suppression contracts pass; full `python -m unitt
 - Behavior after: Upon `WAKENET_DETECTED`, `wakeword_task()` immediately transitions state to `RECORDING` (triggering instant LCD visual feedback `DisplayMode::LISTENING`) and executes `start_recording()`, which commits the ~512ms pre-roll buffer into `record_buffer`. Microphone frames continue streaming into `record_buffer` with 0 dropped frames.
 - Reason: Enables seamless conversational interaction where user commands spoken continuously in one breath are completely captured and accurately transcribed by STT.
 - Verification evidence: Full Python contract test suite passes 88/88 tests (`python3 -m unittest discover -s esp/tests`).
+
+## Change — Device ID Standardization to `joy-001` & Full Ecosystem Doc Alignment
+
+- Goal: Standardize all device identity declarations across ESP32 firmware, build system (`esp/CMakeLists.txt`), environment templates (`.env`, `joy-production.env`, `bmo-production.env`), and backend handoff documentation to `joy-001`, eliminating authentication rejections caused by legacy `bmo-001` credentials.
+- Files/functions affected:
+  - `esp/CMakeLists.txt` (enforced strict check `DEVICE_ID=joy-001`, removing legacy acceptance of `bmo-001`).
+  - `.env`, `esp/.env`, `bmo-production.env`, `esp/bmo-production.env`, `joy-production.env`, `esp/joy-production.env` (standardized `DEVICE_ID=joy-001`).
+  - Backend VPS Docs (`/opt/bmo/app/docs/hardware-handoff/DEPLOYMENT-CONFIG.md`, `README.md`, `FIRMWARE-CHECKLIST.md`, `ACCEPTANCE-TESTS.md`, `docs/integration/ESP-AGENT-HANDOFF.md`, `docs/integration/11-FULL-ECOSYSTEM-ARCHITECTURE-AND-STATUS.md`): synchronized all hardware device IDs to `joy-001` and updated status to `PHYSICAL_ESP32_STATUS: VERIFIED_ONLINE_AND_AUTHENTICATED`.
+  - ESP Repository Docs (`README.md`, `docs-config-ESPtoBACKEND/00-PROGRESS.md`, `docs-config-ESPtoBACKEND/08-ECOSYSTEM-INTEGRATION-GUIDE.md`): synchronized contract test counts to 93/93 passing tests and added physical verification records.
+- Behavior before: If firmware was built with an environment file specifying `DEVICE_ID=bmo-001`, CMake allowed it to compile into `joy_credentials.h`. Upon connecting to the production backend (`wss://api.personalbmo.web.id/ws`), the backend rejected the handshake with `authentication_failed` (`INVALID_DEVICE_CREDENTIALS`, code `4003`) because the production container expects `deviceId: "joy-001"`.
+- Behavior after: `esp/CMakeLists.txt` strictly asserts `DEVICE_ID=joy-001`. All local environment files and backend handoff documents specify `joy-001`. The firmware compiles cleanly and authenticates successfully on first attempt (`WS authenticated successfully. Backend state: idle`).
+- Reason: Ensures end-to-end device identity alignment across backend database, WebSocket server, build automation, and physical hardware.
+- Regression risk: None; `joy-001` is the active device identifier registered on the production backend.
+- Verification evidence: Live ESP32-S3 physical boot log on `/dev/cu.usbmodem1101` verified WebSocket authentication success (`I (13987) API: WS authenticated successfully. Backend state: idle`); 93/93 Python contract tests passing (`python3 -m unittest discover -s esp/tests`).
