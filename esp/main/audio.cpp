@@ -57,6 +57,8 @@ extern const uint8_t _binary_09_wav_start[];
 extern const uint8_t _binary_09_wav_end[];
 extern const uint8_t _binary_10_wav_start[];
 extern const uint8_t _binary_10_wav_end[];
+extern const uint8_t _binary_wake_ack_wav_start[];
+extern const uint8_t _binary_wake_ack_wav_end[];
 }
 
 struct EmbeddedWavClip
@@ -481,22 +483,22 @@ void audio_playExpressionChange()
 
 //--------------------------------------------------
 
-static bool audio_play_embedded_wav(int expression_index)
+static bool audio_play_embedded_wav_clip(
+    const uint8_t *start,
+    const uint8_t *end,
+    const char *clip_name)
 {
-    if(expression_index < 0 ||
-       expression_index >= (int)(sizeof(expression_clips) / sizeof(expression_clips[0])))
+    if(start == nullptr || end == nullptr || end <= start)
     {
         return false;
     }
 
-    const EmbeddedWavClip &clip = expression_clips[expression_index];
-    const uint8_t *wav = clip.start;
-    const size_t wav_size = (size_t)(clip.end - clip.start);
+    const uint8_t *wav = start;
+    const size_t wav_size = (size_t)(end - start);
 
-    if(wav == nullptr || wav_size < 12 ||
-       !wav_tag_is(wav, "RIFF") || !wav_tag_is(wav + 8, "WAVE"))
+    if(wav_size < 12 || !wav_tag_is(wav, "RIFF") || !wav_tag_is(wav + 8, "WAVE"))
     {
-        ESP_LOGE(TAG, "Expression WAV %d has an invalid RIFF header", expression_index + 1);
+        ESP_LOGE(TAG, "%s WAV has an invalid RIFF header", clip_name);
         return false;
     }
 
@@ -551,8 +553,8 @@ static bool audio_play_embedded_wav(int expression_index)
        sample_rate == 0 || (pcm_bytes % sizeof(int16_t)) != 0)
     {
         ESP_LOGE(TAG,
-                 "Expression WAV %d format rejected: format=%u channels=%u rate=%lu bits=%u bytes=%lu",
-                 expression_index + 1,
+                 "%s WAV format rejected: format=%u channels=%u rate=%lu bits=%u bytes=%lu",
+                 clip_name,
                  audio_format,
                  channels,
                  (unsigned long)sample_rate,
@@ -562,9 +564,8 @@ static bool audio_play_embedded_wav(int expression_index)
     }
 
     ESP_LOGI(TAG,
-             "Play expression %02d: phrase=\"%s\" rate=%lu channels=%u bytes=%lu volume=%d",
-             expression_index + 1,
-             expression_phrase(expression_index),
+             "Play %s: rate=%lu channels=%u bytes=%lu volume=%d",
+             clip_name,
              (unsigned long)sample_rate,
              channels,
              (unsigned long)pcm_bytes,
@@ -576,11 +577,60 @@ static bool audio_play_embedded_wav(int expression_index)
         channels,
         (int)sample_rate);
     if(!played)
-        ESP_LOGE(TAG, "Embedded expression WAV %02d playback failed", expression_index + 1);
+        ESP_LOGE(TAG, "%s WAV playback failed", clip_name);
     else
         (void)speaker_write_silence(50);
 
     return played;
+}
+
+static bool audio_play_embedded_wav(int expression_index)
+{
+    if(expression_index < 0 ||
+       expression_index >= (int)(sizeof(expression_clips) / sizeof(expression_clips[0])))
+    {
+        return false;
+    }
+
+    char name_buf[32];
+    snprintf(name_buf, sizeof(name_buf), "expression %02d", expression_index + 1);
+
+    const EmbeddedWavClip &clip = expression_clips[expression_index];
+    return audio_play_embedded_wav_clip(clip.start, clip.end, name_buf);
+}
+
+//--------------------------------------------------
+
+void audio_playWakeAck()
+{
+    ESP_LOGI(
+        TAG,
+        "Play wake ack cue");
+
+    (void)audio_set_sample_rate(SPEAKER_SAMPLE_RATE);
+
+    if(audio_play_embedded_wav_clip(
+           _binary_wake_ack_wav_start,
+           _binary_wake_ack_wav_end,
+           "wake ack"))
+    {
+        return;
+    }
+
+    // Fallback dual-tone earcon synthesized in firmware (rising chime: 659 Hz -> 880 Hz)
+    esp_err_t result = ESP_OK;
+    result |= speaker_write_tone(659, 75);
+    result |= speaker_write_silence(25);
+    result |= speaker_write_tone(880, 110);
+    result |= speaker_write_silence(50);
+
+    if(result != ESP_OK)
+    {
+        ESP_LOGW(
+            TAG,
+            "Wake ack cue skipped: %s",
+            esp_err_to_name(result));
+    }
 }
 
 //--------------------------------------------------

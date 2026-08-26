@@ -74,3 +74,19 @@ Reason: allow development firmware to exercise pairing internally without exposi
 Regression risk: a preprocessor guard in the action processor could accidentally suppress protocol actions or alter production behavior if the default is wrong. Mitigations are an explicit default-off generated macro, focused source contracts, default and suppression-mode builds, and the full existing test suite.
 
 Verification evidence: focused suppression contracts pass; full `python -m unittest discover -s tests -v` passed 56/56; `idf.py -D BMO_DEV_SUPPRESS_PAIRING_UI=ON build` passed with generated macro `1`; final default `idf.py build` passed with generated macro `0` and CMake cache `OFF`. COM12 dev image flash passed, and serial monitoring observed stable boot, WSS authentication, and internal `pairing_code` receipt without logging the code. LCD visual output was not directly observable in this setup, so no visual claim is made; no pairing completion was claimed without a backend claim.
+
+## Change — Wake-Up Acknowledgment Audio Cue ("heem" / rising earcon)
+
+- Goal: Provide immediate acoustic feedback (Siri-like "heem" / rising earcon cue) to the user when the "Hi Joy" wake word is detected by ESP-SR WakeNet, played before voice recording starts to avoid microphone self-capture.
+- Files/functions affected:
+  - `esp/main/audio.h` (`audio_playWakeAck()` declaration).
+  - `esp/main/audio.cpp` (`audio_playWakeAck()` implementation using embedded WAV clip `wake_ack.wav` and fallback synthesized dual-tone rising chime `659 Hz (75ms) -> 25ms silence -> 880 Hz (110ms) -> 50ms silence` via `speaker_write_tone`/`speaker_write_silence`).
+  - `esp/main/wakeword.cpp` (invoking `audio_playWakeAck()` immediately on `WAKENET_DETECTED` prior to calling `wakeword_task()`).
+  - `esp/main/CMakeLists.txt` (embedding `audio_wav/wake_ack.wav` into the firmware binary).
+  - `esp/main/audio_wav/wake_ack.wav` (embedded wake acknowledgment audio asset, $\le 600\text{ ms}$, 16kHz mono 16-bit PCM WAV).
+  - `esp/tests/test_wake_ack_contract.py` (contract tests validating function declaration, implementation symbols, CMake EMBED_FILES registration, WAV format/duration $\le 600\text{ ms}$, invocation order before `wakeword_task()`, and state machine isolation).
+- Behavior before: upon detecting "Hi Joy", the firmware transitioned directly into `wakeword_task()` and `BMOState::RECORDING` with only visual LCD indication (`LISTENING`), without an acoustic wake acknowledgment cue.
+- Behavior after: upon `WAKENET_DETECTED`, `audio_playWakeAck()` is executed immediately to play the embedded `wake_ack.wav` (or fallback dual-tone synthesized earcon) through the MAX98357A I2S speaker at `SPEAKER_SAMPLE_RATE`. Voice capture and transition to `BMOState::RECORDING` occurs only after cue playback finishes, ensuring the INMP441 microphone does not capture the cue sound.
+- Reason: improves conversational voice assistant UX by immediately acknowledging wake word detection with a pleasant, low-latency earcon sound before listening.
+- Regression risk: playing audio during microphone capture could contaminate the user audio recording buffer with the cue tone; playing an excessively long cue would introduce noticeable interaction latency. Mitigations include strict sequential invocation before `wakeword_task()`, concise audio duration ($\le 600\text{ ms}$), fallback dual-tone synthesis if WAV is missing or corrupt, and dedicated contract tests in `test_wake_ack_contract.py`.
+- Verification evidence: `test_wake_ack_contract.py` passes 6/6 tests; full contract suite passes 83/83 tests (`python3 -m unittest discover -s esp/tests`).

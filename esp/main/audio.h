@@ -10,6 +10,11 @@ void audio_init();
 
 void audio_playHello();
 
+// Short pleasant wake-up acknowledgment cue ("heem" / rising earcon)
+// played immediately when the wake word ("Hi Joy") is detected,
+// before voice capture begins so the microphone does not record the cue.
+void audio_playWakeAck();
+
 // Short musical cue used when the device changes into an active expression
 // before microphone capture begins.
 void audio_playExpressionChange();

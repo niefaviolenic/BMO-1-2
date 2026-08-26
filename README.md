@@ -25,10 +25,11 @@ sequenceDiagram
 
     Note over U,ESP: Voice Interaction (Wake-up & Capture)
     U->>ESP: Katakan "Hi Joy" / Sentuh Sensor Touch (GPIO 14)
-    ESP->>ESP: WakeNet Detect -> BMOState::RECORDING (Display: LISTENING)
+    ESP->>ESP: WakeNet Detect "Hi Joy"
+    ESP->>U: Play Wake-up Ack Cue ("heem" / rising earcon via MAX98357A)
+    ESP->>ESP: BMOState::RECORDING (Display: LISTENING)
     U->>ESP: Bicara: "Halo BMO, apa kabar?"
     ESP->>ESP: Silence VAD (450ms) -> WAV Canonical Validation (16kHz 16-bit Mono)
-
     Note over ESP,Pipe: Voice Processing Pipeline
     ESP->>WSS: POST /api/v1/voice (Content-Type: audio/wav, X-Request-Id: UUIDv4)
     WSS-->>ESP: HTTP 202 {"request_id":"...", "status":"processing"}
@@ -93,6 +94,7 @@ sequenceDiagram
 - **Bit Depth & Channel**: `16-bit Signed Integer (PCM)`, `1 Channel (Mono)`.
 - **Byte Rate / Block Align**: `32.000 byte/s`, `2 byte/block`.
 - **Wakeword Engine**: ESP-SR WakeNet (Keyword: *"Hi Joy"* pada partisi `model`).
+- **Wake-up Acknowledgment Cue**: Saat *"Hi Joy"* terdeteksi oleh WakeNet, firmware mengeksekusi `audio_playWakeAck()` untuk memutar audio acknowledgment cue (Siri-like *"heem"* / rising earcon cue) melalui speaker MAX98357A *sebelum* transisi ke `BMOState::RECORDING` dan sebelum voice capture mikrofon dimulai. Hal ini memastikan mikrofon INMP441 tidak merekam suara cue sendiri.
 - **Voice Activity Detection (VAD) Tuning**:
   - `SILENCE_THRESHOLD = 250` (Amplitudo PCM threshold).
   - `RECORD_SILENCE_DURATION_MS = 450 ms` (Batas hening untuk stop rekaman secara natural).
@@ -107,7 +109,9 @@ sequenceDiagram
 - **Streaming Buffer**: 32 KB cyclic buffer dengan 2 KB low-latency pre-buffering.
 - **Dukungan HTTP**: Mendukung Content-Length tetap maupun *Chunked Transfer Encoding* (`Transfer-Encoding: chunked`).
 - **ID3 Tag Handling**: Otomatis mendeteksi dan melewati ID3v2 metadata header tanpa membuat decoder corrupt.
-- **Audio Ekspresi Lokal**: 10 clip WAV tertanam di flash (`01.wav` – `10.wav`) untuk respon audio pergantian wajah dan feedback suara lokal ("aku happy", "aku sedih", dll.).
+- **Audio Ekspresi & Cue Lokal**:
+  - **Wake-up Acknowledgment Cue**: Embedded WAV `audio_wav/wake_ack.wav` (durasi $\le 600\text{ ms}$, 16kHz 16-bit Mono PCM WAV) atau dual-tone fallback synthesizer (rising chime: 659 Hz $\to$ 880 Hz) yang diputar seketika wake word *"Hi Joy"* terdeteksi.
+  - **Ekspresi Wajah**: 10 clip WAV tertanam di flash (`01.wav` – `10.wav`) untuk respon audio pergantian wajah dan feedback suara lokal ("aku happy", "aku sedih", dll.).
 
 ---
 
@@ -120,7 +124,7 @@ Firmware mengelola state tersinkronisasi antara FreeRTOS Task, LCD Display, dan 
                   │      IDLE      │ ◄────────────────────────┐
                   └───────┬────────┘                          │
                           │                                   │
-              [Wakeword / Touch Trigger]                      │
+              [Wakeword ("Hi Joy") -> Wake Ack Cue / Touch Trigger]
                           ▼                                   │
                   ┌────────────────┐                          │
                   │   RECORDING    │                          │
@@ -148,8 +152,8 @@ Firmware mengelola state tersinkronisasi antara FreeRTOS Task, LCD Display, dan 
 
 | Firmware State (`BMOState`) | Display UI Mode (`DisplayMode`) | Keterangan & Tindakan |
 |---|---|---|
-| `IDLE` | `IDLE` | Menampilkan animasi wajah aktif (Happy, Cute, Sad, dll.), standby listening untuk wakeword. |
-| `RECORDING` | `LISTENING` | Mikrofon aktif merekam suara user ke RAM buffer. |
+| `IDLE` | `IDLE` | Menampilkan animasi wajah aktif (Happy, Cute, Sad, dll.), standby listening untuk wakeword ("Hi Joy"). Saat terdeteksi, memainkan wake ack cue ("heem") sebelum masuk ke RECORDING. |
+| `RECORDING` | `LISTENING` | Mikrofon aktif merekam suara user ke RAM buffer setelah wake ack cue selesai dimainkan. |
 | `THINKING` | `THINKING` | Mengirim WAV via HTTPS POST, menunggu event WebSocket `audio_ready` atau `request_failed`. |
 | `SPEAKING` | `SPEAKING` | Mengunduh stream MP3, men-decode via Helix, dan memutar ke speaker MAX98357A. |
 | `ERROR_STATE` | `ERROR` | Menampilkan ekspresi error dan memainkan error tone saat terjadi kegagalan fatal. |
@@ -228,7 +232,7 @@ idf.py -D BMO_DEV_SUPPRESS_PAIRING_UI=ON build flash monitor
 
 ## 7. Python Contract Test Suite
 
-Repository ini dilengkapi dengan 77 contract tests berbasis Python `unittest` di direktori `esp/tests/` untuk menguji kepatuhan kode firmware terhadap kontrak produksi (audio, wake silence, display, pairing, SNTP, playback):
+Repository ini dilengkapi dengan 83 contract tests berbasis Python `unittest` di direktori `esp/tests/` untuk menguji kepatuhan kode firmware terhadap kontrak produksi (audio, wake ack cue, wake silence, display, pairing, SNTP, playback):
 
 ```bash
 # Menjalankan seluruh test suite
@@ -238,7 +242,7 @@ python3 -m unittest discover -s esp/tests -v
 Hasil uji:
 ```text
 ----------------------------------------------------------------------
-Ran 77 tests in 0.027s
+Ran 83 tests in 0.027s
 
 OK (100% Passing)
 ```
@@ -268,7 +272,7 @@ OK (100% Passing)
     ├── sdkconfig                       # Konfigurasi ESP-IDF
     ├── main/                           # Source C++ firmware
     │   ├── api.cpp / api.h             # HTTPS upload, WSS client, HTTP MP3 download
-    │   ├── audio.cpp / audio.h         # MAX98357A I2S driver & audio generator
+    │   ├── audio.cpp / audio.h         # MAX98357A I2S driver, wake ack cue & audio generator
     │   ├── button.cpp / button.h       # Touch & volume buttons driver
     │   ├── display.cpp / display.h     # ILI9341 TFT display UI & expression renderer
     │   ├── network.cpp / network.h     # FreeRTOS network event synchronization
@@ -277,6 +281,6 @@ OK (100% Passing)
     │   ├── state.cpp / state.h         # BMO core state machine
     │   ├── wakeword.cpp / wakeword.h   # INMP441 I2S mic & WakeNet "Hi Joy" engine
     │   ├── wifi.cpp / wifi.h           # Wi-Fi station & SNTP time sync
-    │   └── audio_wav/                  # Embedded WAV clips (01.wav - 10.wav)
-    └── tests/                          # 77/77 Python Contract Tests
+    │   └── audio_wav/                  # Embedded WAV clips (01.wav - 10.wav & wake_ack.wav)
+    └── tests/                          # 83/83 Python Contract Tests
 ```

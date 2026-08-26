@@ -538,10 +538,12 @@ static void wakeword_listener_task(
                         TAG,
                         "Hi Joy detected");
 
+                    audio_playWakeAck();
+
                     if(wakeword_task())
                     {
                         wakeword_cooldown_until =
-                            now + pdMS_TO_TICKS(WAKEWORD_COOLDOWN_MS);
+                            xTaskGetTickCount() + pdMS_TO_TICKS(WAKEWORD_COOLDOWN_MS);
                     }
                 }
             }

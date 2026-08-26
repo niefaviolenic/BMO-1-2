@@ -1,13 +1,24 @@
 # BMO Firmware Progress
 
-## Current status - 2026-08-18 16:19:27 +07:00
+## Current status - 2026-08-26 12:00:00 +07:00
 
+- Wake-Up Acknowledgment Cue: `PASS`; added `audio_playWakeAck()` invoked on "Hi Joy" detection before transition to `RECORDING` (voice capture).
+- Embedded asset: `audio_wav/wake_ack.wav` (PCM 16kHz mono 16-bit, <=600ms) with fallback synthesized dual-tone rising earcon (659 Hz -> 880 Hz).
+- Python Contract Test Suite: `83/83 PASS` (100% passing across all contract tests including `test_wake_ack_contract.py`).
 - Step 3 / Gate 3: `PASS` after one corrective official build, exact artifact flash to verified ESP32-S3/COM7, and a fresh physical upload transaction.
 - Step 4 I2S timeout corrective source review: `PASS`; one official build invocation was `BLOCKED` before compilation because it ran from the workspace root and could not find `CMakeLists.txt`. Existing corrective artifact remains installed; no flash occurred. Gate 4 is `PENDING / DEFERRED_NETWORK_DEPENDENT_E2E`.
 - Current next step: `Step 4 — Event, download, playback`; corrective build is blocked pending operator direction because the one permitted invocation exited `2` before compilation. Historical `RECORDING_NOT_COMPLETING` remains closed for local lifecycle; the new corrective artifact has not been built or flashed.
-- Gate 5 idle network loss → recovery → re-authentication remains `DEFERRED_TO_GATE_5 / BLOCKED_BY_NETWORK_AUTHORITY`; this was not claimed as tested.
+- Gate 5 idle network loss -> recovery -> re-authentication remains `DEFERRED_TO_GATE_5 / BLOCKED_BY_NETWORK_AUTHORITY`; this was not claimed as tested.
 - No source, backend, router, or credential change was made after the corrective build; no second build, Ninja, or flash retry was performed.
 
+## Wake-up acknowledgment audio cue implementation - 2026-08-26 12:00:00 +07:00
+
+- Static review and contract tests passed for wake-up acknowledgment cue:
+  - `audio.h`: declared `void audio_playWakeAck();`.
+  - `audio.cpp`: implemented `audio_playWakeAck()` playing `_binary_wake_ack_wav_start` / `_binary_wake_ack_wav_end` with fallback dual-tone earcon chime (659 Hz for 75ms, 25ms silence, 880 Hz for 110ms, 50ms silence) via MAX98357A I2S amplifier at `SPEAKER_SAMPLE_RATE`.
+  - `wakeword.cpp`: called `audio_playWakeAck()` immediately on `WAKENET_DETECTED` prior to `wakeword_task()`, preventing mic from recording the cue tone.
+  - `CMakeLists.txt`: embedded `audio_wav/wake_ack.wav`.
+  - `tests/test_wake_ack_contract.py`: verified contract rules, WAV properties, and execution order (6/6 tests passing).
 ## I2S timeout corrective source review and build attempt - 2026-08-18 16:19:27 +07:00
 
 - Static review passed for the minimal changes in `main/wakeword.cpp` and `main/audio.cpp`: direct millisecond arguments for all six new I2S read/write calls, 3-second no-sample-progress timeout, timestamp-based WakeNet cooldown, and neutral `Voice capture requested` wording.

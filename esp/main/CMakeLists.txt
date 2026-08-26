@@ -12,6 +12,7 @@ idf_component_register(
         "audio_wav/08.wav"
         "audio_wav/09.wav"
         "audio_wav/10.wav"
+        "audio_wav/wake_ack.wav"
     PRIV_INCLUDE_DIRS "${BMO_CREDENTIAL_INCLUDE_DIR}"
     REQUIRES
         driver
