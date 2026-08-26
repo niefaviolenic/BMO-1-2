@@ -82,7 +82,7 @@ class WakeAckContractTest(unittest.TestCase):
         self.assertIsNotNone(match_preroll, "PREROLL_BUFFER_SAMPLES must be defined in wakeword.cpp")
         preroll_samples = int(match_preroll.group(1))
         self.assertGreaterEqual(preroll_samples, 4096, "Pre-roll buffer should be at least 4096 samples (~256ms)")
-        self.assertLessEqual(preroll_samples, 16000, "Pre-roll buffer should be reasonable (<= 16000 samples)")
+        self.assertLessEqual(preroll_samples, 32000, "Pre-roll buffer should be reasonable (<= 32000 samples)")
 
         task_body = function_body(
             source,

@@ -45,6 +45,11 @@ class WakewordSilenceContractTest(unittest.TestCase):
         self.assertIsNotNone(match, "RECORD_SILENCE_DURATION_MS definition not found")
         duration = int(match.group(1))
         self.assertEqual(duration, 800, "RECORD_SILENCE_DURATION_MS should be 800")
+    def test_record_leading_silence_timeout_is_defined(self) -> None:
+        match = re.search(r"#define\s+RECORD_LEADING_SILENCE_TIMEOUT_MS\s+(\d+)", self.source)
+        self.assertIsNotNone(match, "RECORD_LEADING_SILENCE_TIMEOUT_MS definition not found")
+        duration = int(match.group(1))
+        self.assertEqual(duration, 3500, "RECORD_LEADING_SILENCE_TIMEOUT_MS should be 3500")
 
     def test_min_speech_duration_grace_period_is_defined(self) -> None:
         match = re.search(r"#define\s+RECORD_MIN_SPEECH_DURATION_MS\s+(\d+)", self.source)
@@ -58,11 +63,13 @@ class WakewordSilenceContractTest(unittest.TestCase):
             self.source,
             r"static\s+void\s+wakeword_listener_task\s*\([^)]*\)",
         )
+        self.assertIn("recording_speech_detected", task_body)
+        self.assertIn("RECORD_LEADING_SILENCE_TIMEOUT_MS", task_body)
         self.assertIn("RECORD_MIN_SPEECH_DURATION_MS", task_body)
         self.assertIn("min_duration_reached", task_body)
         self.assertIn("silence_reached", task_body)
         self.assertIn('finalize_recording("silence_detected")', task_body)
-
+        self.assertIn('fail_recording(\n                    RecordingStatus::ABORTED,\n                    "leading_silence_timeout")', task_body)
 
 if __name__ == "__main__":
     unittest.main()

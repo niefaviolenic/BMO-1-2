@@ -46,9 +46,10 @@ static const char *TAG = "WAKE";
 #define RECORD_MAX_SAMPLES (RECORD_SAMPLE_RATE * RECORD_DURATION_SEC) // 960000 samples
 
 #define RECORD_BUFFER_SIZE (RECORD_MAX_SAMPLES + WAV_HEADER_SAMPLES)
-#define PREROLL_BUFFER_SAMPLES 8192 // ~512ms at 16kHz mono circular pre-roll buffer
+#define PREROLL_BUFFER_SAMPLES 24000 // ~1.5s at 16kHz mono circular pre-roll buffer
 
 #define SILENCE_THRESHOLD 250
+#define RECORD_LEADING_SILENCE_TIMEOUT_MS 3500
 #define RECORD_SILENCE_DURATION_MS 800
 #define RECORD_MIN_SPEECH_DURATION_MS 400
 #define RECORD_I2S_READ_TIMEOUT_MS 100
@@ -109,6 +110,9 @@ static TaskHandle_t wakeword_task_handle = NULL;
 static int16_t *record_buffer = NULL;
 static int record_index = 0;
 static int silence_samples = 0;
+static int speech_samples = 0;
+static int leading_silence_samples = 0;
+static bool recording_speech_detected = false;
 static RecordingStatus recording_status = RecordingStatus::IDLE;
 static TickType_t recording_started_tick = 0;
 static TickType_t recording_last_sample_tick = 0;
@@ -248,12 +252,20 @@ static bool finalize_recording(
             elapsed_ms =
                 (uint32_t)((xTaskGetTickCount() - recording_started_tick) *
                            portTICK_PERIOD_MS);
+            silence_samples = 0;
+            leading_silence_samples = 0;
+            speech_samples = 0;
+            recording_speech_detected = false;
             recording_status = RecordingStatus::COMPLETED;
             completed = true;
         }
         else
         {
             record_index = 0;
+            silence_samples = 0;
+            leading_silence_samples = 0;
+            speech_samples = 0;
+            recording_speech_detected = false;
             recording_status = RecordingStatus::FAILED;
         }
     }
@@ -301,6 +313,9 @@ static void fail_recording(
                        portTICK_PERIOD_MS);
         record_index = 0;
         silence_samples = 0;
+        leading_silence_samples = 0;
+        speech_samples = 0;
+        recording_speech_detected = false;
         recording_status = terminal_status;
         changed = true;
     }
@@ -618,6 +633,7 @@ static void wakeword_listener_task(
             bool buffer_unavailable = false;
             bool buffer_full = false;
             bool silence_reached = false;
+            bool leading_silence_reached = false;
             int samples_to_copy = 0;
 
             portENTER_CRITICAL(&recording_mux);
@@ -628,15 +644,6 @@ static void wakeword_listener_task(
             }
             else
             {
-                if (peak < SILENCE_THRESHOLD)
-                {
-                    silence_samples += wakeword_chunk_size;
-                }
-                else
-                {
-                    silence_samples = 0;
-                }
-
                 int available_samples =
                     RECORD_BUFFER_SIZE - record_index;
                 samples_to_copy =
@@ -655,13 +662,45 @@ static void wakeword_listener_task(
                         (size_t)samples_to_copy * sizeof(int16_t));
                     record_index += samples_to_copy;
                     recording_last_sample_tick = now;
-                    bool min_duration_reached =
-                        (record_index - WAV_HEADER_SAMPLES) >=
-                        (RECORD_SAMPLE_RATE * RECORD_MIN_SPEECH_DURATION_MS / 1000);
-                    silence_reached =
-                        min_duration_reached &&
-                        (silence_samples >=
-                         (RECORD_SAMPLE_RATE * RECORD_SILENCE_DURATION_MS / 1000));
+
+                    if(!recording_speech_detected)
+                    {
+                        if(peak >= SILENCE_THRESHOLD)
+                        {
+                            recording_speech_detected = true;
+                            speech_samples += samples_to_copy;
+                            silence_samples = 0;
+                        }
+                        else
+                        {
+                            leading_silence_samples += samples_to_copy;
+                            if(leading_silence_samples >=
+                               (RECORD_SAMPLE_RATE * RECORD_LEADING_SILENCE_TIMEOUT_MS / 1000))
+                            {
+                                leading_silence_reached = true;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        speech_samples += samples_to_copy;
+                        if(peak < SILENCE_THRESHOLD)
+                        {
+                            silence_samples += samples_to_copy;
+                        }
+                        else
+                        {
+                            silence_samples = 0;
+                        }
+
+                        bool min_duration_reached =
+                            speech_samples >=
+                            (RECORD_SAMPLE_RATE * RECORD_MIN_SPEECH_DURATION_MS / 1000);
+                        silence_reached =
+                            min_duration_reached &&
+                            (silence_samples >=
+                             (RECORD_SAMPLE_RATE * RECORD_SILENCE_DURATION_MS / 1000));
+                    }
                 }
             }
 
@@ -683,7 +722,15 @@ static void wakeword_listener_task(
 
             log_recording_progress_if_due(now, "samples");
 
-            // Check stop conditions: 800 ms of silence (after minimum speech duration) OR 60 seconds duration.
+            if(leading_silence_reached)
+            {
+                fail_recording(
+                    RecordingStatus::ABORTED,
+                    "leading_silence_timeout");
+                continue;
+            }
+
+            // Check stop conditions: 800 ms trailing silence (after minimum speech duration) OR 60 seconds duration.
             if (silence_reached)
             {
                 finalize_recording("silence_detected");
@@ -918,6 +965,9 @@ bool start_recording()
             portENTER_CRITICAL(&recording_mux);
             record_index = 0;
             silence_samples = 0;
+            leading_silence_samples = 0;
+            speech_samples = 0;
+            recording_speech_detected = false;
             recording_status = RecordingStatus::FAILED;
             portEXIT_CRITICAL(&recording_mux);
 
@@ -944,6 +994,9 @@ bool start_recording()
 
     record_index += preroll_copied;
     silence_samples = 0;
+    leading_silence_samples = 0;
+    speech_samples = 0;
+    recording_speech_detected = false;
     recording_started_tick = now;
     recording_last_sample_tick = now;
     recording_last_diag_tick = now;
