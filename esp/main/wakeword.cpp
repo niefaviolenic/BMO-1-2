@@ -37,8 +37,8 @@ static const char *TAG = "WAKE";
 
 #define WAKEWORD_TASK_STACK_SIZE 8192
 #define WAKEWORD_TASK_PRIORITY   5
-#define WAKEWORD_COOLDOWN_MS     2500
-#define WAKEWORD_STARTUP_GUARD_MS 2500
+#define WAKEWORD_COOLDOWN_MS     1000
+#define WAKEWORD_STARTUP_GUARD_MS 1000
 
 #define RECORD_DURATION_SEC 60
 #define RECORD_SAMPLE_RATE 16000
@@ -47,8 +47,8 @@ static const char *TAG = "WAKE";
 #define RECORD_BUFFER_SIZE (RECORD_MAX_SAMPLES + WAV_HEADER_SAMPLES)
 
 #define SILENCE_THRESHOLD 250
-#define RECORD_SILENCE_DURATION_MS 1500
-#define RECORD_MIN_SPEECH_DURATION_MS 1500
+#define RECORD_SILENCE_DURATION_MS 450
+#define RECORD_MIN_SPEECH_DURATION_MS 400
 #define RECORD_I2S_READ_TIMEOUT_MS 100
 #define RECORD_NO_SAMPLE_PROGRESS_TIMEOUT_MS 3000
 #define RECORD_DIAGNOSTIC_INTERVAL_MS 1000
@@ -619,7 +619,7 @@ static void wakeword_listener_task(
 
             log_recording_progress_if_due(now, "samples");
 
-            // Check stop conditions: 1500 ms of silence (after minimum speech duration) OR 60 seconds duration.
+            // Check stop conditions: 450 ms of silence (after minimum speech duration) OR 60 seconds duration.
             if (silence_reached)
             {
                 finalize_recording("silence_detected");
