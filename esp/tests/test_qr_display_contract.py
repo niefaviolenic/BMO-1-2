@@ -60,6 +60,7 @@ class QrDisplayContractTest(unittest.TestCase):
         self.assertIn("(LCD_H_RES - qr_pixel_size) / 2", source)
         self.assertIn("(LCD_V_RES - qr_pixel_size) / 2", source)
         self.assertIn("quiet_zone_modules = 4", source)
+        self.assertIn("clamp_value(144 / (qr_size + 2 * quiet_zone_modules), 1, 3)", source)
         self.assertIn("!qr_code_active", source)
 
     def test_pairing_exports_parse_rfc3339_utc_externally(self) -> None:

@@ -71,4 +71,5 @@ Plan ini dianggap berhasil diimplementasikan bila satu ESP fisik dengan `device_
 - menerima `display_status` (termasuk transcript STT) lalu `audio_ready` (termasuk response text LLM) untuk request yang sama;
 - mengunduh `audio/mpeg` (direct/chunked), men-decode via Helix MP3 decoder, memutar sampai selesai, dan mengirim `audio_playback_done`;
 - kembali authenticated setelah disconnect dan tidak mengirim credential di URL/query/log;
-- melewati checklist acceptance pada `07-EXECUTION-CHECKLIST.md` serta 98/98 Python contract tests.
+- mendukung QR code display (`display_qr`, `clear_qr`) untuk WhatsApp pairing dan proactive speech protocol (`proactive_offer`, `proactive_audio_ready`, `proactive_cancel`);
+- melewati checklist acceptance pada `07-EXECUTION-CHECKLIST.md` serta 105/105 Python contract tests across 14 suites.

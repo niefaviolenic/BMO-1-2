@@ -189,10 +189,9 @@ sequenceDiagram
 - **Playback & Controls**: `GET /api/v1/plugins/spotify/player` dan `POST /api/v1/plugins/spotify/play`, `/pause`, `/next`, `/previous`.
 
 ### B. WhatsApp Hermes Integration
-- **Pairing & QR**: `POST /api/v1/plugins/whatsapp/start` mengembalikan QR string & pairing code untuk di-link via WhatsApp Linked Devices.
-- **Status & Contacts**: `GET /api/v1/plugins/whatsapp/status` dan `GET /api/v1/plugins/whatsapp/contacts`.
+- **Pairing & QR**: `GET /api/v1/integrations/whatsapp/qr` atau `POST /api/v1/integrations/whatsapp/connect` menghasilkan string payload QR. Backend secara otomatis mengirimkan event WebSocket `display_qr` ke hardware ESP32 aktif untuk merender QR code pada LCD ILI9341 320x240 (`qrcodegen`).
+- **Confirm & Clear**: Setelah user memindai QR via WhatsApp Linked Devices, backend memancarkan event WS `clear_qr` ke ESP32 dan memperbarui status bridge ke `CONNECTED`.
 - **Notification Forwarding**: Mengirim event realtime WS `whatsapp_notification` ke aplikasi mobile.
-
 ### C. Long-Term Memory & Summaries
 - **Memory Settings**: `GET` / `PATCH /api/v1/settings/memory` atau `GET /api/v1/account/memory`.
 - **Summary**: `GET /api/v1/memory/summary`, `POST /api/v1/memory/summary/regenerate`.
@@ -222,15 +221,15 @@ sequenceDiagram
 ## 8. Panduan Verifikasi & Test Suite
 
 ### A. ESP32-S3 Firmware Contract Tests
-Firmware dilengkapi dengan 98 contract test berbasis Python `unittest` di direktori `esp/tests/` (13 modul uji):
+Firmware dilengkapi dengan 105 contract test berbasis Python `unittest` di direktori `esp/tests/` (14 modul uji):
 ```bash
 cd esp
 python3 -m unittest discover -s tests -v
 ```
 Output:
 ```text
-Ran 98 tests in 0.033s
-OK (100% Passing)
+Ran 105 tests in 1.616s
+OK (100% Passing across all 14 test suites)
 ```
 
 ### B. Mobile App Tests
@@ -243,5 +242,5 @@ npm test
 ### C. Backend Test Suite
 Backend dilengkapi dengan unit & integration tests pada directory `backend/tests/`:
 ```bash
-ssh joy-vps "sudo -iu bmo-admin bash -c 'cd /opt/bmo/app/backend && npm test'"
+ssh joy-vps "sudo -iu joy-admin bash -c 'cd /opt/joy/app/backend && npm test'"
 ```

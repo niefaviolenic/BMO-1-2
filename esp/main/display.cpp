@@ -725,15 +725,8 @@ static void draw_qr_overlay_locked()
         return;
     }
 
-    int scale = 3;
-    if(qr_size + 8 <= 45)
-        scale = 4;
-    else if(qr_size + 8 <= 70)
-        scale = 3;
-    else
-        scale = 2;
-
     const int quiet_zone_modules = 4;
+    const int scale = clamp_value(144 / (qr_size + 2 * quiet_zone_modules), 1, 3);
     const int quiet_zone_px = quiet_zone_modules * scale;
     const int qr_pixel_size = qr_size * scale;
     const int total_qr_w = qr_pixel_size + 2 * quiet_zone_px;

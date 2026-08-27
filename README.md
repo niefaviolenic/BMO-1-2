@@ -133,6 +133,11 @@ sequenceDiagram
 - **Voice Capture Reservation (`voice_capture_reservation.cpp/.h`)**: Mengelola lifecycle reservasi mikrofon lokal (`IDLE`, `REQUESTING`, `RESERVED`, `EXPIRED`, `REJECTED`) dengan UUID request, lease ID, dan timeout lease untuk mencegah tabrakan antara input suara pengguna dan audio proaktif.
 - **Playback Watchdog (`playback_watchdog.cpp/.h`)**: Melacak progress pemutaran audio secara thread-safe menggunakan atomics (`http_bytes_received`, `mp3_frames_decoded`, `pcm_frames_written`). Jika tidak ada progres selama `kPlaybackStallUs = 5.000.000 µs` (5 detik), watchdog secara otomatis me-latch stall state dan membatalkan stream yang macet guna membebaskan resource I2S/DMA.
 
+### D. QR Code Display Engine & WhatsApp Bridge (`qrcodegen`)
+- **QR Display Protocol**: Mendukung render kode QR dinamis pada LCD SPI 320x240 (`display.cpp/.h` & `qrcodegen.c/.h`) untuk pairing WhatsApp Web / Baileys bridge atau on-screen onboarding:
+  - `display_qr` (inbound WS): Berisi string `qr` dan ISO timestamp `expires_at`. Firmware meng-generate matrix QR code secara realtime dan merendernya secara centered dengan background putih dan border kontras pada layar TFT.
+  - `clear_qr` (inbound WS): Menghapus overlay QR code seketika setelah pairing berhasil atau dibatalkan, mengembalikan display ke animasi ekspresi `JoyState::IDLE`.
+  - **Touch & Wakeword Guarding**: Selama mode QR aktif (`DisplayMode::QR_CODE`), sentuhan dan wake word di-guard agar tidak mengganggu proses scan kamera pengguna.
 ## 4. State Machine & Lifecycle
 
 Firmware mengelola state tersinkronisasi antara FreeRTOS Task, LCD Display, dan WebSocket:
@@ -205,6 +210,17 @@ Firmware mengelola state tersinkronisasi antara FreeRTOS Task, LCD Display, dan 
    {"event":"pairing_completed", "status":"ok"}
    ```
 
+### C. Protokol WhatsApp QR Code Display
+1. **Inisiasi Pairing WhatsApp**: Backend/WhatsApp bridge mengirimkan event WebSocket `display_qr`:
+   ```json
+   {"event":"display_qr", "qr":"2@abc...xyz,123...", "expires_at":"2026-08-27T12:00:00.000Z"}
+   ```
+2. **Render LCD**: ESP32 meng-generate visual QR code melalui library `qrcodegen` dan menampilkannya di tengah layar LCD ILI9341 320x240.
+3. **Pembersihan Layar**: Begitu user selesai men-scan QR via WhatsApp Linked Devices atau sesi kedaluwarsa, backend mengirim event `clear_qr`:
+   ```json
+   {"event":"clear_qr"}
+   ```
+   Firmware membersihkan layar dan kembali ke state normal `IDLE`.
 ---
 
 ## 6. Panduan Build, Flash, dan Monitor
@@ -250,7 +266,7 @@ idf.py -D JOY_DEV_SUPPRESS_PAIRING_UI=ON build flash monitor
 
 ## 7. Python Contract Test Suite
 
-Repository ini dilengkapi dengan 98 contract tests berbasis Python `unittest` di direktori `esp/tests/` (13 modul uji) untuk menguji kepatuhan kode firmware terhadap seluruh kontrak produksi (audio, wake ack cue, wake silence, display, pairing, SNTP, playback, dynamic thinking filler, rolling pre-roll buffer single-breath, proactive protocol, playback watchdog, voice capture reservation, dan development UI suppression):
+Repository ini dilengkapi dengan 105 contract tests berbasis Python `unittest` di direktori `esp/tests/` (14 modul uji) untuk menguji kepatuhan kode firmware terhadap seluruh kontrak produksi (audio, wake ack cue, wake silence, display & QR code engine, pairing PIN & suppression, SNTP time sync, shared playback, dynamic thinking filler, rolling pre-roll buffer single-breath, proactive protocol, playback watchdog, voice capture reservation, dan touch interaction):
 
 ```bash
 # Menjalankan seluruh test suite
@@ -260,9 +276,9 @@ python3 -m unittest discover -s esp/tests -v
 Hasil uji:
 ```text
 ----------------------------------------------------------------------
-Ran 98 tests in 0.033s
+Ran 105 tests in 1.616s
 
-OK (100% Passing)
+OK (100% Passing across all 14 test suites)
 ```
 ## 8. Struktur Direktori Repository
 
@@ -297,5 +313,5 @@ OK (100% Passing)
     │   ├── wakeword.cpp / wakeword.h   # INMP441 I2S mic & WakeNet "Hi Joy" engine
     │   ├── wifi.cpp / wifi.h           # Wi-Fi station & SNTP time sync
     │   └── audio_wav/                  # Embedded WAV clips (01.wav - 10.wav, wake_ack.wav, thinking_*.wav)
-    └── tests/                          # 98/98 Python Contract Tests (100% Passing)
+    └── tests/                          # 105/105 Python Contract Tests (100% Passing across 14 test suites)
 ```

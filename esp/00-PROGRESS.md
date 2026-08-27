@@ -1,10 +1,14 @@
 # Joy Firmware Progress
 
-## Current status - 2026-08-26 15:30:00 +07:00
+## Current status - 2026-08-27 15:30:00 +07:00
 
-- Non-Blocking Wake Acknowledgment Cue (Earcon): `PASS`; implemented dedicated background worker task `wake_ack_worker_task` pinned to Core 0 in `audio.cpp`, triggered asynchronously via `audio_triggerWakeAck()` (`xTaskNotifyGive`) on `WAKENET_DETECTED` in `wakeword.cpp`. Provides instant acoustic earcon playback with 0ms microphone loop blocking delay.
+- Python Contract Test Suite: `105/105 PASS` (100% passing across all 14 contract test suites in `esp/tests/`).
+- QR Code Display Engine (`qrcodegen`): `PASS`; dynamic WhatsApp QR code rendering and clearing on 320x240 LCD via `display_qr` and `clear_qr` events.
+- Non-Blocking Wake Acknowledgment Cue (Earcon): `PASS`; dedicated background worker task `wake_ack_worker_task` pinned to Core 0 in `audio.cpp`, triggered asynchronously via `audio_triggerWakeAck()` (`xTaskNotifyGive`) on `WAKENET_DETECTED` in `wakeword.cpp`. Instant acoustic earcon playback with 0ms microphone loop blocking delay.
 - Seamless Single-Breath Wake Word: `PASS`; rolling circular pre-roll buffer (8192 samples / ~512ms at 16kHz mono PCM) in `wakeword.cpp` captures audio uninterrupted during wake cue playback.
-- Python Contract Test Suite: `90/90 PASS` (100% passing across all 90 contract tests in `esp/tests/`).
+- Dynamic Thinking Filler Voice & Loops: `PASS`; 5 embedded canonical WAV clips played dynamically upon `JOY_UPLOAD_ACCEPTED` to eliminate dead-air latency.
+- Proactive Audio Protocol & Playback Watchdog: `PASS`; proactive speech handling (`proactive_offer`, `proactive_audio_ready`, `proactive_cancel`) with 5s atomic stall watchdog and voice capture reservation.
+- Device Pairing PIN & Suppression: `PASS`; 6-digit pairing state machine with compile-time development UI suppression option.
 ## Seamless single-breath wake word implementation - 2026-08-26 15:00:00 +07:00
 
 - Implemented rolling circular pre-roll buffer in `wakeword.cpp` (`PREROLL_BUFFER_SAMPLES = 8192`, ~512ms at 16kHz mono) during IDLE state.

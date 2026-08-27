@@ -167,3 +167,17 @@ Verification evidence: focused suppression contracts pass; full `python -m unitt
 - Behavior before: Proactive delivery preparation existed as an isolated abstraction without direct WebSocket event dispatch; no voice reservation lease tracking or atomic stall watchdog was active.
 - Behavior after: Backend can offer proactive audio (`proactive_offer`); if ESP32 is in `IDLE` state, it immediately confirms with `proactive_offer_accepted`. When audio is ready (`proactive_audio_ready`), playback begins immediately with watchdog protection. Voice capture reservation guards against scheduling collisions while user is speaking.
 - Verification evidence: Full Python contract test suite passes 98/98 tests (`python3 -m unittest discover -s esp/tests`).
+
+## Change — QR Code Display Engine (`qrcodegen`) & WhatsApp Bridge
+
+- Goal: Enable real-time dynamic QR code generation and rendering on the 320x240 SPI LCD for WhatsApp Web / Baileys bridge device linking and onboarding flows directly on the robot hardware.
+- Files/functions affected:
+  - `esp/main/qrcodegen.h` / `qrcodegen.c` (integrated lightweight C QR code generation library, supporting QR version 1 to 40 with ECC levels LOW/MEDIUM/QUARTILE/HIGH).
+  - `esp/main/display.h` / `display.cpp` (`display_set_qr_code(const char *qr_payload, const char *expires_at)`, `display_clear_qr_code()`, centered rendering on 320x240 TFT with white quiet-zone padding and contrast borders).
+  - `esp/main/api.cpp` (handlers for inbound WebSocket events `display_qr` with payload `qr` and `expires_at`, and `clear_qr`).
+  - `esp/main/button.cpp` / `wakeword.cpp` (guards against touch triggers and wake word detection while `DisplayMode::QR_CODE` is active).
+  - `esp/main/CMakeLists.txt` (registered `qrcodegen.c` in component sources).
+  - `esp/tests/test_qr_display_contract.py` (focused contract tests validating event dispatch, handler symbols, display functions, button/wakeword guards, and RFC 3339 timestamp parsing).
+- Behavior before: WhatsApp bridge pairing required opening a mobile app sheet or external browser; no on-device QR rendering existed.
+- Behavior after: Backend sends `display_qr` over `/ws`; ESP32 instantly encodes and renders the QR code on the LCD screen; when user scans via WhatsApp Linked Devices, backend sends `clear_qr` and firmware smoothly transitions back to `JoyState::IDLE` face animations.
+- Verification evidence: Full Python contract test suite passes 105/105 tests across 14 suites (`python3 -m unittest discover -s esp/tests`).

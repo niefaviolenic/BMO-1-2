@@ -104,6 +104,8 @@ Nilai `reason` untuk `audio_playback_failed`: `DOWNLOAD_FAILED`, `DECODE_FAILED`
 | `proactive_offer` | `delivery_id`, `attempt_id`, `offer_receipt`, `expires_at_ms` | Penawaran backend untuk pengiriman audio proaktif (jadwal/peringatan) |
 | `proactive_audio_ready` | `delivery_id`, `attempt_id`, `lease_id`, `audio_receipt`, `audio_url`, `expires_at_ms` | Stream audio proaktif siap diunduh dan diputar ke speaker |
 | `proactive_cancel` | `delivery_id`, `attempt_id`, `lease_id` | Pembatalan pemutaran audio proaktif yang sedang berjalan |
+| `display_qr` | `qr` (string raw QR payload), `expires_at` (ISO timestamp) | Menampilkan QR code dinamis WhatsApp pairing pada layar LCD ILI9341 320x240 |
+| `clear_qr` | `event="clear_qr"` | Menghapus overlay QR code dari layar LCD dan kembali ke ekspresi IDLE |
 
 `request_failed.code` dapat berupa `NO_SPEECH`, `INVALID_AUDIO`, `STT_FAILED`, `HERMES_FAILED`, `TTS_FAILED`, `AUDIO_EXPIRED`, `PIPELINE_TIMEOUT`, atau `INTERNAL_ERROR`.
 

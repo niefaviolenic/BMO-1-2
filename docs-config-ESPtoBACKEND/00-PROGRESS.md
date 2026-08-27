@@ -6,12 +6,12 @@ File ini adalah sumber status implementasi. Agent yang mengerjakan perubahan ESP
 
 | Field | Nilai |
 |---|---|
-| Overall status | `VERIFIED / 98_CONTRACT_TESTS_PASS` |
+| Overall status | `VERIFIED / 105_CONTRACT_TESTS_PASS` |
 | Current step | `Step 5 — Production Verification & Multi-Feature Parity` |
-| Overall progress | `Wake-Ack Cue PASS; Single-Breath Wake Word Pre-roll PASS; Dynamic Thinking Filler Loop PASS; Shared Playback Task & Watchdog PASS; Proactive Audio Protocol PASS; Voice Capture Reservation PASS; Pairing UI Suppression PASS; 98/98 Python Contract Tests 100% PASS; Backend Hermes Streaming & TTFA ~1.7s PASS` |
-| Last updated | `2026-08-27 12:00:00 +07:00` |
+| Overall progress | `Wake-Ack Cue PASS; Single-Breath Wake Word Pre-roll PASS; Dynamic Thinking Filler Loop PASS; Shared Playback Task & Watchdog PASS; Proactive Audio Protocol PASS; Voice Capture Reservation PASS; Pairing UI Suppression PASS; QR Code Display Engine PASS; 105/105 Python Contract Tests 100% PASS; Backend Hermes Streaming & TTFA ~1.7s PASS` |
+| Last updated | `2026-08-27 15:30:00 +07:00` |
 | Updated by | `Joy Engineering Assistant` |
-| Firmware/build | `PASS — ESP-IDF build verified; 98/98 Python contract tests passing across 13 test suites` |
+| Firmware/build | `PASS — ESP-IDF build verified; 105/105 Python contract tests passing across 14 test suites` |
 | Hardware | `PASS` — ESP32-S3 (INMP441 I2S Mic, MAX98357A I2S Amp, ILI9341 LCD, Touch GPIO 14, Buttons GPIO 15/16) |
 | Production target | `https://api.personalbmo.web.id` / `wss://api.personalbmo.web.id/ws` |
 
@@ -26,7 +26,8 @@ File ini adalah sumber status implementasi. Agent yang mengerjakan perubahan ESP
    - `playback_watchdog.cpp/.h` monitoring stream stalls (`kPlaybackStallUs = 5000000` / 5s timeout) with atomic counters.
    - `voice_capture_reservation.cpp/.h` managing microphone leases and preventing proactive playback collisions.
 6. **Development Pairing UI Suppression**: Compile-time flag `JOY_DEV_SUPPRESS_PAIRING_UI` allowing headless/dev firmware to exercise pairing protocol without rendering PIN to LCD.
-7. **Python Contract Test Suite**: `98/98 PASS` (100% passing across all 13 test suites in `esp/tests/`).
+7. **QR Code Display Engine (`qrcodegen`)**: Real-time QR code generation and rendering on 320x240 LCD for WhatsApp pairing via `display_qr` and `clear_qr` WebSocket events.
+8. **Python Contract Test Suite**: `105/105 PASS` (100% passing across all 14 test suites in `esp/tests/`).
 ## Backend Update — Hermes Streaming Integration & TTFA Optimization (~1.7s) — 2026-08-26
 
 Backend production telah dioptimasi dengan arsitektur **Hermes Streaming** (`POST /v1/chat/completions` SSE stream dengan `stream: true`), `SentenceSplitter` untuk chunking kalimat/klausa berbasis tanda baca, dan pipelined TTS synthesis:

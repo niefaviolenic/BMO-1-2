@@ -49,6 +49,11 @@ File utama: `esp/main/api.cpp`.
 - Event `proactive_cancel`: Backend dapat membatalkan pengiriman proaktif jika terjadi interupsi user atau kedaluwarsa lease.
 - `PlaybackJob` dan `playback_watchdog`: Menjaga isolasi physical speaker, memastikan voice response selalu mendapat prioritas tertinggi di atas proactive audio, dan me-latch stall state jika streaming terputus lebih dari 5 detik.
 
+
+### QR Code Display Events (`display_qr` & `clear_qr`)
+
+- Event `display_qr`: Backend/WhatsApp bridge mengirim event dengan payload string `qr` dan ISO timestamp `expires_at`. ESP32 segera meng-generate matrix QR code via `qrcodegen` dan menampilkannya di LCD 320x240 (`display_set_qr_code()`). Selama QR code ditampilkan, touch sensor dan wakeword di-guard agar tidak menginterupsi scan kamera.
+- Event `clear_qr`: Backend mengirim event `clear_qr` ketika WhatsApp bridge telah terhubung (pairing confirmed) atau sesi QR dibatalkan/expired. ESP32 membersihkan layer QR code (`display_clear_qr_code()`) dan kembali ke tampilan ekspresi normal `JoyState::IDLE`.
 ### Heartbeat dan reconnect
 
 - Backend mengirim native ping tiap 60 detik dan menutup setelah dua pong hilang. Pastikan library WebSocket membalas native ping/pong; jangan menggantinya dengan event JSON yang tidak ada di kontrak.
