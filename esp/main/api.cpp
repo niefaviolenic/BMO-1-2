@@ -901,6 +901,26 @@ static void handle_ws_message(const char *payload, int len) {
         if (valid_pairing_completion)
             pairing_on_completed();
     }
+    else if (strcmp(event, "display_qr") == 0) {
+        cJSON *qr_node = cJSON_GetObjectItem(root, "qr");
+        cJSON *expires_node = cJSON_GetObjectItem(root, "expires_at");
+        if (qr_node != NULL && cJSON_IsString(qr_node) && qr_node->valuestring != NULL &&
+            qr_node->valuestring[0] != '\0' && expires_node != NULL && cJSON_IsString(expires_node) &&
+            expires_node->valuestring != NULL && expires_node->valuestring[0] != '\0') {
+            time_t expires_epoch = 0;
+            const time_t now_epoch = time(NULL);
+            if (parse_rfc3339_utc(expires_node->valuestring, &expires_epoch) && expires_epoch > now_epoch) {
+                ESP_LOGI(TAG, "Received display_qr event, expires_at_epoch=%ld", (long)expires_epoch);
+                display_set_qr_code(qr_node->valuestring, expires_epoch);
+            } else {
+                ESP_LOGW(TAG, "Rejected display_qr event: invalid expires_at timestamp or already expired");
+            }
+        }
+    }
+    else if (strcmp(event, "clear_qr") == 0) {
+        ESP_LOGI(TAG, "Received clear_qr event");
+        display_clear_qr_code();
+    }
     else if (strcmp(event, "display_status") == 0) {
         cJSON *req_id_node = cJSON_GetObjectItem(root, "request_id");
         cJSON *status_node = cJSON_GetObjectItem(root, "status");
@@ -1250,6 +1270,12 @@ static void ws_monitor_task(void *param) {
         if (display_pairing_code_is_visible() && (now_ms - last_pairing_countdown_tick_ms >= 1000)) {
             last_pairing_countdown_tick_ms = now_ms;
             display_update_pairing_countdown();
+        }
+
+        static int64_t last_qr_countdown_tick_ms = 0;
+        if (display_qr_code_is_visible() && (now_ms - last_qr_countdown_tick_ms >= 1000)) {
+            last_qr_countdown_tick_ms = now_ms;
+            display_update_qr_countdown();
         }
 
         if (!network_has_ip() || !network_has_valid_time()) {

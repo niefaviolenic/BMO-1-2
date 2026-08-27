@@ -646,9 +646,9 @@ static void wakeword_listener_task(
                 if(detected == WAKENET_DETECTED)
                 {
                     PairingSnapshot pairing_snapshot = pairing_get_snapshot();
-                    if (pairing_snapshot.phase != PairingPhase::NONE || display_pairing_code_is_visible())
+                    if (pairing_snapshot.phase != PairingPhase::NONE || display_pairing_code_is_visible() || display_qr_code_is_visible())
                     {
-                        ESP_LOGW(TAG, "Hi Joy detected but ignored: robot is in pairing mode (unbound)");
+                        ESP_LOGW(TAG, "Hi Joy detected but ignored: robot is in pairing mode or QR display mode");
                         continue;
                     }
 
@@ -977,9 +977,9 @@ void wakeword_init()
 bool wakeword_task()
 {
     PairingSnapshot pairing_snapshot = pairing_get_snapshot();
-    if (pairing_snapshot.phase != PairingPhase::NONE || display_pairing_code_is_visible())
+    if (pairing_snapshot.phase != PairingPhase::NONE || display_pairing_code_is_visible() || display_qr_code_is_visible())
     {
-        ESP_LOGW(TAG, "Wake task rejected: robot is in pairing mode (unbound)");
+        ESP_LOGW(TAG, "Wake task rejected: robot is in pairing mode or QR display mode");
         return false;
     }
 

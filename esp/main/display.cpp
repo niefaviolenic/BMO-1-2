@@ -1,4 +1,5 @@
 #include "display.h"
+#include "qrcodegen.h"
 
 #include <math.h>
 #include <stdint.h>
@@ -77,6 +78,15 @@ static char pairing_code[7] = {};
 static time_t pairing_expires_at_epoch = 0;
 static int pairing_total_duration_sec = 0;
 static int last_rendered_fill_width = -1;
+static constexpr int QR_MAX_VERSION = 15;
+static constexpr size_t QR_BUFFER_LEN = qrcodegen_BUFFER_LEN_FOR_VERSION(QR_MAX_VERSION);
+static constexpr int QR_BAR_Y = 214;
+static constexpr int QR_BAR_HEIGHT = 6;
+static bool qr_code_active = false;
+static uint8_t qr_matrix[QR_BUFFER_LEN] = {};
+static time_t qr_expires_at_epoch = 0;
+static int qr_total_duration_sec = 0;
+static int last_rendered_qr_fill_width = -1;
 
 static const char *face_name(Face face)
 {
@@ -705,6 +715,105 @@ static void draw_pairing_overlay_locked()
 
     flush_framebuffer_locked();
 }
+
+static void draw_qr_overlay_locked()
+{
+    display_wake();
+    draw_screen_base();
+
+    const int qr_size = qrcodegen_getSize(qr_matrix);
+    if(qr_size <= 0)
+    {
+        flush_framebuffer_locked();
+        return;
+    }
+
+    int scale = 3;
+    if(qr_size + 8 <= 45)
+        scale = 4;
+    else if(qr_size + 8 <= 70)
+        scale = 3;
+    else
+        scale = 2;
+
+    const int quiet_zone_modules = 4;
+    const int quiet_zone_px = quiet_zone_modules * scale;
+    const int qr_pixel_size = qr_size * scale;
+    const int total_qr_w = qr_pixel_size + 2 * quiet_zone_px;
+    const int total_qr_h = total_qr_w;
+
+    const int start_x = (LCD_H_RES - qr_pixel_size) / 2;
+    int start_y = (QR_BAR_Y - total_qr_h) / 2;
+    if(start_y < quiet_zone_px + 2)
+        start_y = quiet_zone_px + 2;
+
+    pairing_fill_x_mirrored_rect(
+        start_x - quiet_zone_px,
+        start_y - quiet_zone_px,
+        total_qr_w,
+        total_qr_h,
+        COLOR_WHITE);
+
+    for(int y = 0; y < qr_size; ++y)
+    {
+        for(int x = 0; x < qr_size; ++x)
+        {
+            if(qrcodegen_getModule(qr_matrix, x, y))
+            {
+                pairing_fill_x_mirrored_rect(
+                    start_x + x * scale,
+                    start_y + y * scale,
+                    scale,
+                    scale,
+                    COLOR_BLACK);
+            }
+        }
+    }
+
+    const int bar_w = total_qr_w > 180 ? total_qr_w : 180;
+    const int bar_x = (LCD_H_RES - bar_w) / 2;
+    const int bar_y = QR_BAR_Y;
+
+    if(qr_expires_at_epoch > 0 && qr_total_duration_sec > 0)
+    {
+        pairing_fill_x_mirrored_rect(
+            bar_x,
+            bar_y,
+            bar_w,
+            QR_BAR_HEIGHT,
+            COLOR_BLACK);
+
+        const int inner_max_width = bar_w - 2;
+        const int inner_height = QR_BAR_HEIGHT - 2;
+        pairing_fill_x_mirrored_rect(
+            bar_x + 1,
+            bar_y + 1,
+            inner_max_width,
+            inner_height,
+            COLOR_WHITE);
+
+        const time_t now_epoch = time(NULL);
+        const int remaining_sec =
+            (qr_expires_at_epoch > now_epoch) ?
+                static_cast<int>(qr_expires_at_epoch - now_epoch) : 0;
+
+        int fill_width = (remaining_sec * inner_max_width) / qr_total_duration_sec;
+        fill_width = clamp_value(fill_width, 0, inner_max_width);
+        last_rendered_qr_fill_width = fill_width;
+
+        if(fill_width > 0)
+        {
+            pairing_fill_x_mirrored_rect(
+                bar_x + 1,
+                bar_y + 1,
+                fill_width,
+                inner_height,
+                COLOR_BLACK);
+        }
+    }
+
+    flush_framebuffer_locked();
+}
 //--------------------------------------------------
 
 static void clear_face_panel()
@@ -1107,6 +1216,16 @@ static void secure_clear_pairing_code_locked()
     last_rendered_fill_width = -1;
 }
 
+static void secure_clear_qr_code_locked()
+{
+    volatile uint8_t *cursor = qr_matrix;
+    for(size_t index = 0; index < sizeof(qr_matrix); ++index)
+        cursor[index] = 0;
+    qr_expires_at_epoch = 0;
+    qr_total_duration_sec = 0;
+    last_rendered_qr_fill_width = -1;
+}
+
 //--------------------------------------------------
 
 void display_init()
@@ -1336,7 +1455,11 @@ void display_face(
         return;
     }
 
-    if(current_display_mode == DisplayMode::IDLE && pairing_code_active)
+    if(current_display_mode == DisplayMode::IDLE && qr_code_active)
+    {
+        draw_qr_overlay_locked();
+    }
+    else if(current_display_mode == DisplayMode::IDLE && pairing_code_active)
     {
         draw_pairing_overlay_locked();
     }
@@ -1363,7 +1486,9 @@ Face display_next_touch_face()
 
     if(display_ready && current_display_mode == DisplayMode::IDLE)
     {
-        if(pairing_code_active)
+        if(qr_code_active)
+            draw_qr_overlay_locked();
+        else if(pairing_code_active)
             draw_pairing_overlay_locked();
         else
             draw_face_locked(current_touch_face);
@@ -1409,6 +1534,13 @@ void display_set_mode(DisplayMode mode)
 
     if(!display_ready)
     {
+        unlock_display();
+        return;
+    }
+
+    if(mode == DisplayMode::IDLE && qr_code_active)
+    {
+        draw_qr_overlay_locked();
         unlock_display();
         return;
     }
@@ -1477,9 +1609,8 @@ bool display_set_pairing_code(
     }
     pairing_code_active = true;
 
-    if(display_ready && current_display_mode == DisplayMode::IDLE)
+    if(display_ready && current_display_mode == DisplayMode::IDLE && !qr_code_active)
         draw_pairing_overlay_locked();
-
     unlock_display();
     return true;
 }
@@ -1489,7 +1620,7 @@ void display_update_pairing_countdown()
     if(!lock_display(pdMS_TO_TICKS(100)))
         return;
 
-    if(display_ready && display_on && pairing_code_active && current_display_mode == DisplayMode::IDLE &&
+    if(display_ready && display_on && pairing_code_active && !qr_code_active && current_display_mode == DisplayMode::IDLE &&
        pairing_expires_at_epoch > 0 && pairing_total_duration_sec > 0)
     {
         const time_t now_epoch = time(NULL);
@@ -1527,7 +1658,12 @@ void display_clear_pairing_code()
     pairing_code_active = false;
 
     if(redraw_idle_face)
-        draw_face_locked(current_touch_face);
+    {
+        if(qr_code_active)
+            draw_qr_overlay_locked();
+        else
+            draw_face_locked(current_touch_face);
+    }
 
     unlock_display();
 }
@@ -1541,6 +1677,161 @@ bool display_pairing_code_is_visible()
         display_ready &&
         display_on &&
         pairing_code_active &&
+        !qr_code_active &&
+        current_display_mode == DisplayMode::IDLE;
+    unlock_display();
+    return visible;
+}
+
+bool display_set_qr_code(
+    const char *qr_payload,
+    time_t expires_at_epoch)
+{
+    if(qr_payload == NULL || strlen(qr_payload) == 0)
+        return false;
+
+    const time_t now_epoch = time(NULL);
+    if(expires_at_epoch <= now_epoch)
+        return false;
+
+    if(!lock_display(pdMS_TO_TICKS(1000)))
+        return false;
+
+    uint8_t temp_buffer[QR_BUFFER_LEN];
+    uint8_t new_matrix[QR_BUFFER_LEN];
+    bool ok = qrcodegen_encodeText(
+        qr_payload,
+        temp_buffer,
+        new_matrix,
+        qrcodegen_Ecc_LOW,
+        qrcodegen_VERSION_MIN,
+        QR_MAX_VERSION,
+        qrcodegen_Mask_AUTO,
+        true);
+
+    volatile uint8_t *v_temp = temp_buffer;
+    for(size_t i = 0; i < sizeof(temp_buffer); ++i) v_temp[i] = 0;
+
+    if(!ok)
+    {
+        volatile uint8_t *v_mat = new_matrix;
+        for(size_t i = 0; i < sizeof(new_matrix); ++i) v_mat[i] = 0;
+        unlock_display();
+        return false;
+    }
+
+    if(qr_code_active && memcmp(qr_matrix, new_matrix, sizeof(qr_matrix)) == 0 &&
+       qr_expires_at_epoch == expires_at_epoch)
+    {
+        volatile uint8_t *v_mat = new_matrix;
+        for(size_t i = 0; i < sizeof(new_matrix); ++i) v_mat[i] = 0;
+        unlock_display();
+        return true;
+    }
+
+    secure_clear_qr_code_locked();
+    memcpy(qr_matrix, new_matrix, sizeof(qr_matrix));
+    volatile uint8_t *v_mat = new_matrix;
+    for(size_t i = 0; i < sizeof(new_matrix); ++i) v_mat[i] = 0;
+
+    qr_expires_at_epoch = expires_at_epoch;
+    qr_total_duration_sec = static_cast<int>(expires_at_epoch - now_epoch);
+    qr_code_active = true;
+
+    if(display_ready && current_display_mode == DisplayMode::IDLE)
+        draw_qr_overlay_locked();
+
+    unlock_display();
+    return true;
+}
+
+void display_update_qr_countdown()
+{
+    if(!lock_display(pdMS_TO_TICKS(100)))
+        return;
+
+    if(display_ready && display_on && qr_code_active && current_display_mode == DisplayMode::IDLE)
+    {
+        const time_t now_epoch = time(NULL);
+        if(qr_expires_at_epoch > 0 && now_epoch >= qr_expires_at_epoch)
+        {
+            secure_clear_qr_code_locked();
+            qr_code_active = false;
+            if(pairing_code_active)
+                draw_pairing_overlay_locked();
+            else
+                draw_face_locked(current_touch_face);
+            unlock_display();
+            return;
+        }
+
+        if(qr_expires_at_epoch > 0 && qr_total_duration_sec > 0)
+        {
+            const int qr_size = qrcodegen_getSize(qr_matrix);
+            int scale = 3;
+            if(qr_size + 8 <= 45)
+                scale = 4;
+            else if(qr_size + 8 <= 70)
+                scale = 3;
+            else
+                scale = 2;
+
+            const int quiet_zone_px = 4 * scale;
+            const int total_qr_w = qr_size * scale + 2 * quiet_zone_px;
+            const int bar_w = total_qr_w > 180 ? total_qr_w : 180;
+            const int inner_max_width = bar_w - 2;
+
+            const int remaining_sec = static_cast<int>(qr_expires_at_epoch - now_epoch);
+            int fill_width = (remaining_sec * inner_max_width) / qr_total_duration_sec;
+            fill_width = clamp_value(fill_width, 0, inner_max_width);
+
+            if(fill_width != last_rendered_qr_fill_width)
+            {
+                draw_qr_overlay_locked();
+            }
+        }
+    }
+
+    unlock_display();
+}
+
+void display_clear_qr_code()
+{
+    if(!lock_display(pdMS_TO_TICKS(1000)))
+        return;
+
+    if(!qr_code_active)
+    {
+        secure_clear_qr_code_locked();
+        unlock_display();
+        return;
+    }
+
+    const bool redraw_idle_face =
+        display_ready && current_display_mode == DisplayMode::IDLE;
+    secure_clear_qr_code_locked();
+    qr_code_active = false;
+
+    if(redraw_idle_face)
+    {
+        if(pairing_code_active)
+            draw_pairing_overlay_locked();
+        else
+            draw_face_locked(current_touch_face);
+    }
+
+    unlock_display();
+}
+
+bool display_qr_code_is_visible()
+{
+    if(!lock_display(pdMS_TO_TICKS(100)))
+        return false;
+
+    const bool visible =
+        display_ready &&
+        display_on &&
+        qr_code_active &&
         current_display_mode == DisplayMode::IDLE;
     unlock_display();
     return visible;

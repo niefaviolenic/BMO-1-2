@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "network.cpp" "state.cpp" "api.cpp" "playback.cpp" "playback_watchdog.cpp" "voice_capture_reservation.cpp" "wifi.cpp" "button.cpp" "wakeword.cpp" "audio.cpp" "display.cpp" "pairing.cpp" "main.cpp"
+    SRCS "network.cpp" "state.cpp" "api.cpp" "playback.cpp" "playback_watchdog.cpp" "voice_capture_reservation.cpp" "wifi.cpp" "button.cpp" "wakeword.cpp" "audio.cpp" "display.cpp" "pairing.cpp" "qrcodegen.c" "main.cpp"
     INCLUDE_DIRS "."
     EMBED_FILES
         "audio_wav/01.wav"

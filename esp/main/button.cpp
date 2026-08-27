@@ -229,9 +229,9 @@ void button_update()
 
                 if(getState() == JoyState::IDLE)
                 {
-                    if(display_pairing_code_is_visible() || pairing_get_snapshot().phase != PairingPhase::NONE)
+                    if(display_pairing_code_is_visible() || display_qr_code_is_visible() || pairing_get_snapshot().phase != PairingPhase::NONE)
                     {
-                        ESP_LOGW(TAG, "Touch rejected: robot is in pairing mode (unbound)");
+                        ESP_LOGW(TAG, "Touch rejected: robot is in pairing mode or QR display mode");
                     }
                     else
                     {

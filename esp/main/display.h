@@ -45,6 +45,14 @@ void display_clear_pairing_code();
 
 bool display_pairing_code_is_visible();
 
+bool display_set_qr_code(const char *qr_payload, time_t expires_at_epoch);
+
+void display_update_qr_countdown();
+
+void display_clear_qr_code();
+
+bool display_qr_code_is_visible();
+
 void display_test_pattern();
 
 #endif

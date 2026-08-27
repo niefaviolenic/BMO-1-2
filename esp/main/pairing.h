@@ -44,5 +44,6 @@ bool pairing_on_code(const char *code, const char *expires_at, time_t now_epoch)
 void pairing_on_completed();
 uint8_t pairing_poll(time_t now_epoch, int64_t monotonic_ms);
 PairingSnapshot pairing_get_snapshot();
+bool parse_rfc3339_utc(const char *text, time_t *epoch_out);
 
 #endif

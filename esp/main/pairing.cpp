@@ -111,7 +111,7 @@ int64_t days_from_civil(int year, unsigned month, unsigned day)
     return static_cast<int64_t>(era) * 146097 + static_cast<int64_t>(day_of_era) - 719468;
 }
 
-bool parse_rfc3339_utc(const char *text, time_t *epoch_out)
+bool parse_rfc3339_utc_impl(const char *text, time_t *epoch_out)
 {
     if (text == nullptr || epoch_out == nullptr)
     {
@@ -224,6 +224,11 @@ void clear_action_locked(PairingAction action)
 }
 } // namespace
 
+bool parse_rfc3339_utc(const char *text, time_t *epoch_out)
+{
+    return parse_rfc3339_utc_impl(text, epoch_out);
+}
+
 void pairing_init()
 {
     PairingLock lock;
@@ -305,7 +310,7 @@ void pairing_on_disconnected()
 bool pairing_on_code(const char *code, const char *expires_at, time_t now_epoch)
 {
     time_t expires_at_epoch = 0;
-    if (!is_six_digit_code(code) || !parse_rfc3339_utc(expires_at, &expires_at_epoch) ||
+    if (!is_six_digit_code(code) || !parse_rfc3339_utc_impl(expires_at, &expires_at_epoch) ||
         expires_at_epoch <= now_epoch)
     {
         return false;
