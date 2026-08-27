@@ -80,13 +80,10 @@ static int pairing_total_duration_sec = 0;
 static int last_rendered_fill_width = -1;
 static constexpr int QR_MAX_VERSION = 15;
 static constexpr size_t QR_BUFFER_LEN = qrcodegen_BUFFER_LEN_FOR_VERSION(QR_MAX_VERSION);
-static constexpr int QR_BAR_Y = 214;
-static constexpr int QR_BAR_HEIGHT = 6;
 static bool qr_code_active = false;
 static uint8_t qr_matrix[QR_BUFFER_LEN] = {};
 static time_t qr_expires_at_epoch = 0;
 static int qr_total_duration_sec = 0;
-static int last_rendered_qr_fill_width = -1;
 
 static const char *face_name(Face face)
 {
@@ -743,9 +740,7 @@ static void draw_qr_overlay_locked()
     const int total_qr_h = total_qr_w;
 
     const int start_x = (LCD_H_RES - qr_pixel_size) / 2;
-    int start_y = (QR_BAR_Y - total_qr_h) / 2;
-    if(start_y < quiet_zone_px + 2)
-        start_y = quiet_zone_px + 2;
+    const int start_y = (LCD_V_RES - qr_pixel_size) / 2;
 
     pairing_fill_x_mirrored_rect(
         start_x - quiet_zone_px,
@@ -767,48 +762,6 @@ static void draw_qr_overlay_locked()
                     scale,
                     COLOR_BLACK);
             }
-        }
-    }
-
-    const int bar_w = total_qr_w > 180 ? total_qr_w : 180;
-    const int bar_x = (LCD_H_RES - bar_w) / 2;
-    const int bar_y = QR_BAR_Y;
-
-    if(qr_expires_at_epoch > 0 && qr_total_duration_sec > 0)
-    {
-        pairing_fill_x_mirrored_rect(
-            bar_x,
-            bar_y,
-            bar_w,
-            QR_BAR_HEIGHT,
-            COLOR_BLACK);
-
-        const int inner_max_width = bar_w - 2;
-        const int inner_height = QR_BAR_HEIGHT - 2;
-        pairing_fill_x_mirrored_rect(
-            bar_x + 1,
-            bar_y + 1,
-            inner_max_width,
-            inner_height,
-            COLOR_WHITE);
-
-        const time_t now_epoch = time(NULL);
-        const int remaining_sec =
-            (qr_expires_at_epoch > now_epoch) ?
-                static_cast<int>(qr_expires_at_epoch - now_epoch) : 0;
-
-        int fill_width = (remaining_sec * inner_max_width) / qr_total_duration_sec;
-        fill_width = clamp_value(fill_width, 0, inner_max_width);
-        last_rendered_qr_fill_width = fill_width;
-
-        if(fill_width > 0)
-        {
-            pairing_fill_x_mirrored_rect(
-                bar_x + 1,
-                bar_y + 1,
-                fill_width,
-                inner_height,
-                COLOR_BLACK);
         }
     }
 
@@ -1223,7 +1176,6 @@ static void secure_clear_qr_code_locked()
         cursor[index] = 0;
     qr_expires_at_epoch = 0;
     qr_total_duration_sec = 0;
-    last_rendered_qr_fill_width = -1;
 }
 
 //--------------------------------------------------
@@ -1761,34 +1713,6 @@ void display_update_qr_countdown()
                 draw_pairing_overlay_locked();
             else
                 draw_face_locked(current_touch_face);
-            unlock_display();
-            return;
-        }
-
-        if(qr_expires_at_epoch > 0 && qr_total_duration_sec > 0)
-        {
-            const int qr_size = qrcodegen_getSize(qr_matrix);
-            int scale = 3;
-            if(qr_size + 8 <= 45)
-                scale = 4;
-            else if(qr_size + 8 <= 70)
-                scale = 3;
-            else
-                scale = 2;
-
-            const int quiet_zone_px = 4 * scale;
-            const int total_qr_w = qr_size * scale + 2 * quiet_zone_px;
-            const int bar_w = total_qr_w > 180 ? total_qr_w : 180;
-            const int inner_max_width = bar_w - 2;
-
-            const int remaining_sec = static_cast<int>(qr_expires_at_epoch - now_epoch);
-            int fill_width = (remaining_sec * inner_max_width) / qr_total_duration_sec;
-            fill_width = clamp_value(fill_width, 0, inner_max_width);
-
-            if(fill_width != last_rendered_qr_fill_width)
-            {
-                draw_qr_overlay_locked();
-            }
         }
     }
 
