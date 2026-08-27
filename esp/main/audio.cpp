@@ -1003,13 +1003,17 @@ static void thinking_filler_worker_task(void *param)
     while(true)
     {
         uint32_t count = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        if(count == 0)
+        if(count == 0 || thinking_filler_stop_requested)
             continue;
 
         thinking_filler_running = true;
-        thinking_filler_stop_requested = false;
 
         audio_setVolume(SPEAKER_DEFAULT_VOLUME);
+        if(thinking_filler_stop_requested)
+        {
+            thinking_filler_running = false;
+            continue;
+        }
         (void)audio_set_sample_rate(SPEAKER_SAMPLE_RATE);
 
         ESP_LOGI(TAG, "Thinking filler loop started");
@@ -1027,6 +1031,11 @@ static void thinking_filler_worker_task(void *param)
             char name_buf[32];
             snprintf(name_buf, sizeof(name_buf), "thinking %02d", index + 1);
             const EmbeddedWavClip &clip = thinking_clips[index];
+
+            if(thinking_filler_stop_requested)
+            {
+                break;
+            }
 
             ESP_LOGI(TAG, "Thinking filler loop playing %s (\"%s\")", name_buf, thinking_phrase(index));
 
@@ -1061,12 +1070,12 @@ void audio_startThinkingFillerLoop()
     if(!speaker_ready)
         return;
 
-    thinking_filler_stop_requested = false;
-
-    if(thinking_filler_running)
+    if(thinking_filler_running && !thinking_filler_stop_requested)
     {
         return;
     }
+
+    thinking_filler_stop_requested = false;
 
     if(thinking_filler_task_handle != NULL)
     {
@@ -1082,8 +1091,8 @@ void audio_stopThinkingFillerLoop()
 {
     thinking_filler_stop_requested = true;
 
-    // Wait briefly (up to 200ms) for the loop task to finish current chunk and exit
-    int wait_count = 40; // 40 * 5ms = 200ms
+    // Wait briefly (up to 400ms) for the loop task to finish current chunk and exit
+    int wait_count = 80; // 80 * 5ms = 400ms
     while(thinking_filler_running && wait_count > 0)
     {
         vTaskDelay(pdMS_TO_TICKS(5));
@@ -1092,7 +1101,7 @@ void audio_stopThinkingFillerLoop()
 
     if(thinking_filler_running)
     {
-        ESP_LOGW(TAG, "Thinking filler loop did not stop within 200ms");
+        ESP_LOGW(TAG, "Thinking filler loop did not stop within 400ms");
     }
 }
 
