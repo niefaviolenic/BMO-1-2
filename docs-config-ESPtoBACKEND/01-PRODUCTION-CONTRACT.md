@@ -85,8 +85,9 @@ Request ID wajib UUID v4 dan harus dipertahankan ketika request yang sama diulan
 | `pairing_mode_request` | `event` | Meminta backend menginisiasi flow pairing 6-digit |
 | `audio_playback_done` | `event`, `request_id` UUIDv4 | Konfirmasi playback MP3 telah tuntas diputar ke speaker |
 | `audio_playback_failed` | `event`, `request_id`, `reason` | Notifikasi kegagalan download/decode/playback |
+| `proactive_offer_accepted` | `event`, `delivery_id`, `attempt_id`, `offer_receipt` | Konfirmasi ESP siap menerima & memutar audio proaktif dari backend |
 
-Nilai `reason` hanya: `DOWNLOAD_FAILED`, `DECODE_FAILED`, `PLAYBACK_FAILED`.
+Nilai `reason` untuk `audio_playback_failed`: `DOWNLOAD_FAILED`, `DECODE_FAILED`, `PLAYBACK_FAILED`.
 
 ## WebSocket outbound dari backend
 
@@ -100,6 +101,9 @@ Nilai `reason` hanya: `DOWNLOAD_FAILED`, `DECODE_FAILED`, `PLAYBACK_FAILED`.
 | `display_status` | `request_id`, `status="thinking"`, opsional `transcript` / `user_transcript` | Notifikasi backend sedang memproses audio (STT / LLM) |
 | `audio_ready` | `request_id`, `audio_url`, `format="mp3"`, `expires_in_seconds`, opsional `transcript`, `response_text` | URL MP3 siap diunduh dan diputar oleh ESP |
 | `request_failed` | `request_id`, `code`, `recoverable=true` | Transaksi gagal di backend |
+| `proactive_offer` | `delivery_id`, `attempt_id`, `offer_receipt`, `expires_at_ms` | Penawaran backend untuk pengiriman audio proaktif (jadwal/peringatan) |
+| `proactive_audio_ready` | `delivery_id`, `attempt_id`, `lease_id`, `audio_receipt`, `audio_url`, `expires_at_ms` | Stream audio proaktif siap diunduh dan diputar ke speaker |
+| `proactive_cancel` | `delivery_id`, `attempt_id`, `lease_id` | Pembatalan pemutaran audio proaktif yang sedang berjalan |
 
 `request_failed.code` dapat berupa `NO_SPEECH`, `INVALID_AUDIO`, `STT_FAILED`, `HERMES_FAILED`, `TTS_FAILED`, `AUDIO_EXPIRED`, `PIPELINE_TIMEOUT`, atau `INTERNAL_ERROR`.
 
@@ -134,6 +138,13 @@ Backend memproses suara menggunakan arsitektur real-time streaming pipeline:
    - Abstraksi `PlaybackJob` di `playback.cpp` mengatur hak kepemilikan speaker DAC tunggal (arbitrasi eksklusif).
    - Memberikan prioritas utama pada Voice Playback dan mengisolasi Proactive Delivery dari konflik pemutaran suara.
 
+5. **Voice Capture Reservation (`voice_capture_reservation.cpp/.h`)**:
+   - Mengelola status reservasi mikrofon lokal (`IDLE`, `REQUESTING`, `RESERVED`, `EXPIRED`, `REJECTED`) dengan UUID request, lease ID, dan batas waktu lease.
+   - Mencegah backend memulai pemutaran proaktif saat mikrofon sedang aktif merekam suara pengguna.
+
+6. **Playback Watchdog (`playback_watchdog.cpp/.h`)**:
+   - Melacak metrik pemutaran secara realtime menggunakan atomics (`http_bytes_received`, `mp3_frames_decoded`, `pcm_frames_written`).
+   - Menggunakan ambang batas stall `kPlaybackStallUs = 5.000.000 µs` (5 detik). Jika aliran stream audio terhenti atau tersendat tanpa progress selama 5 detik, watchdog mengunci status `PlaybackTerminalReason::STALLED` dan membatalkan stream secara aman.
 ## Urutan transaksi
 
 1. Wi-Fi tersambung dan waktu valid (SNTP).

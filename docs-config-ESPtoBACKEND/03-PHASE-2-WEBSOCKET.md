@@ -42,6 +42,13 @@ File utama: `esp/main/api.cpp`.
 - Jika WS terputus saat audio selesai/gagal, simpan event pending per request ID dan kirim setelah re-authenticated.
 - Kirim event dengan return value yang diperiksa; bila send gagal, jangan menganggap acknowledgement sudah diterima.
 
+### Proactive Event Family & Playback Arbitration
+
+- Event `proactive_offer`: Backend menawarkan pengiriman audio proaktif dengan field `delivery_id`, `attempt_id`, `offer_receipt`, `expires_at_ms`. Jika ESP dalam state `IDLE` dan tidak sedang merekam/memproses suara, ESP membalas `proactive_offer_accepted`.
+- Event `proactive_audio_ready`: Backend mengirimkan URL MP3 proaktif (`delivery_id`, `attempt_id`, `lease_id`, `audio_receipt`, `audio_url`, `expires_at_ms`). ESP memulai streaming MP3 dan memutar audio proaktif.
+- Event `proactive_cancel`: Backend dapat membatalkan pengiriman proaktif jika terjadi interupsi user atau kedaluwarsa lease.
+- `PlaybackJob` dan `playback_watchdog`: Menjaga isolasi physical speaker, memastikan voice response selalu mendapat prioritas tertinggi di atas proactive audio, dan me-latch stall state jika streaming terputus lebih dari 5 detik.
+
 ### Heartbeat dan reconnect
 
 - Backend mengirim native ping tiap 60 detik dan menutup setelah dua pong hilang. Pastikan library WebSocket membalas native ping/pong; jangan menggantinya dengan event JSON yang tidak ada di kontrak.
@@ -49,7 +56,6 @@ File utama: `esp/main/api.cpp`.
 - Setelah setiap reconnect, ulangi authenticate dan tunggu `authenticated` sebelum mengirim pending upload/playback event.
 - Tangani `connection_replaced` dengan berhenti memakai koneksi lama; koneksi baru menjadi satu-satunya kanal.
 - Pada WS error/close, reset seluruh flag transport/auth secara konsisten. Jangan hanya menghapus flag backend tetapi tetap menganggap `ws_connected=true`.
-
 ## File/function ESP yang terdampak
 
 - `esp/main/api.cpp`: WebSocket setup, `WEBSOCKET_EVENT_CONNECTED`, event parser, `ws_send_text`, reconnect monitor, pending event.

@@ -71,4 +71,4 @@ Plan ini dianggap berhasil diimplementasikan bila satu ESP fisik dengan `device_
 - menerima `display_status` (termasuk transcript STT) lalu `audio_ready` (termasuk response text LLM) untuk request yang sama;
 - mengunduh `audio/mpeg` (direct/chunked), men-decode via Helix MP3 decoder, memutar sampai selesai, dan mengirim `audio_playback_done`;
 - kembali authenticated setelah disconnect dan tidak mengirim credential di URL/query/log;
-- melewati checklist acceptance pada `07-EXECUTION-CHECKLIST.md` serta 83/83 Python contract tests.
+- melewati checklist acceptance pada `07-EXECUTION-CHECKLIST.md` serta 98/98 Python contract tests.

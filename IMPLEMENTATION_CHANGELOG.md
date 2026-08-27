@@ -154,3 +154,16 @@ Verification evidence: focused suppression contracts pass; full `python -m unitt
 - Reason: Ensures end-to-end device identity alignment across backend database, WebSocket server, build automation, and physical hardware.
 - Regression risk: None; `joy-001` is the active device identifier registered on the production backend.
 - Verification evidence: Live ESP32-S3 physical boot log on `/dev/cu.usbmodem1101` verified WebSocket authentication success (`I (13987) API: WS authenticated successfully. Backend state: idle`); 93/93 Python contract tests passing (`python3 -m unittest discover -s esp/tests`).
+
+## Change — Proactive Audio Protocol, Voice Capture Reservation & Playback Watchdog
+
+- Goal: Complete the end-to-end integration for proactive audio delivery (scheduled reminders, WhatsApp/system alerts) while protecting user voice recording priority, and preventing audio playback stalls via an atomic watchdog.
+- Files/functions affected:
+  - `esp/main/playback.h` / `playback.cpp` (`ProactiveOffer`, `ProactiveAudioReady`, `ProactiveCancel`, `ProactiveRejectReason`, `ProactiveFailureReason`, `playback_prepare_proactive_offer`, `playback_start_proactive_ready`, `playback_cancel_proactive`).
+  - `esp/main/voice_capture_reservation.h` / `voice_capture_reservation.cpp` (`VoiceReservationState`, `VoiceCaptureReservation`, `voice_reservation_begin_request`, `voice_reservation_handle_accepted`, `voice_reservation_handle_rejected`, `voice_reservation_handle_expired`, `voice_reservation_is_valid`).
+  - `esp/main/playback_watchdog.h` / `playback_watchdog.cpp` (`PlaybackTerminalReason`, `PlaybackJobControl`, `PlaybackWatchdogSnapshot`, `playback_watchdog_latch_stalled`, stall timeout `kPlaybackStallUs = 5000000`).
+  - `esp/main/api.cpp` (handlers for inbound WebSocket events `proactive_offer`, `proactive_audio_ready`, `proactive_cancel`, and outbound response `proactive_offer_accepted`).
+  - `esp/tests/test_proactive_protocol_contract.py`, `esp/tests/test_playback_watchdog_contract.py`, `esp/tests/test_voice_capture_reservation_contract.py` (focused contract tests).
+- Behavior before: Proactive delivery preparation existed as an isolated abstraction without direct WebSocket event dispatch; no voice reservation lease tracking or atomic stall watchdog was active.
+- Behavior after: Backend can offer proactive audio (`proactive_offer`); if ESP32 is in `IDLE` state, it immediately confirms with `proactive_offer_accepted`. When audio is ready (`proactive_audio_ready`), playback begins immediately with watchdog protection. Voice capture reservation guards against scheduling collisions while user is speaking.
+- Verification evidence: Full Python contract test suite passes 98/98 tests (`python3 -m unittest discover -s esp/tests`).

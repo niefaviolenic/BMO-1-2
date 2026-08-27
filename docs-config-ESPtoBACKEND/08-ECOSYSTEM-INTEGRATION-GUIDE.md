@@ -140,7 +140,7 @@ sequenceDiagram
 
     Note over Mob,WSS: 2. Mobile User Claims Device
     Mob->>Mob: User input PIN "123564" pada RobotPairSheet
-    Mob->>WSS: POST /api/v1/pairing/claim {"code":"123564"} (with Bearer Token)
+    Mob->>WSS: POST /api/v1/devices/claim {"code":"123564"} (with Bearer Token)
     WSS->>DB: Bind Device `joy-001` to User Account
     DB-->>WSS: Binding SUCCESS
     WSS-->>Mob: HTTP 200 {"device": {"id":"...", "name":"Joy", "pairedAt":"..."}}
@@ -153,30 +153,55 @@ sequenceDiagram
 ```
 
 ---
+## 5. Alur Proactive Audio & Schedules (Backend -> ESP32 & Mobile)
 
-## 5. Fitur Integrasi Superpowers (Spotify, WhatsApp, Memory, Schedules)
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Sch as Scheduler / Backend Worker
+    participant WSS as Backend Device WSS (/ws)
+    participant ESP as ESP32-S3 (Joy-1-2)
+    participant Mob as Joy Mobile App
 
-### A. Spotify Integration
-- **OAuth Connect**: `GET /api/v1/integrations/spotify/auth?returnTo=...` menghasilkan authorization URL Spotify.
-- **Status Polling**: `GET /api/v1/integrations/spotify/status` mengembalikan status `CONNECTED`, `PENDING`, atau `DISCONNECTED`.
-- **Playback & Controls**: `GET /api/v1/integrations/spotify/playback` dan `POST /api/v1/integrations/spotify/actions` (`PLAY`, `PAUSE`, `NEXT`, `PREVIOUS`, `SEEK`, `VOLUME`). Token dienkripsi dengan AES-GCM di backend.
+    Note over Sch: 1. Schedule Trigger / Reminder Due
+    Sch->>WSS: Dispatch Proactive Notification
+    WSS->>Mob: WS {"event":"schedule_status", "scheduleId":"...", "status":"RUNNING"}
+    WSS->>ESP: WS {"event":"proactive_offer", "delivery_id":"...", "attempt_id":"...", "offer_receipt":"...", "expires_at_ms":...}
 
-### B. WhatsApp Hermes Integration
-- **Pairing & QR**: `GET /api/v1/integrations/whatsapp/qr` mengembalikan QR string untuk di-scan via WhatsApp Linked Devices.
-- **Konfirmasi**: `POST /api/v1/integrations/whatsapp/confirm` mengaktifkan status bridge WhatsApp.
-- **Notification Rules**: `GET` / `PUT /api/v1/integrations/whatsapp/rules` mengatur forwarding pesan WhatsApp penting ke Joy.
-
-### C. Long-Term Memory & Summaries
-- **Memory Settings**: `GET` / `PATCH /api/v1/settings/memory` (mengatur preferensi penyimpanan memori).
-- **Summary**: `GET /api/v1/memory/summary`, `POST /api/v1/memory/summary/regenerate`, `POST /api/v1/memory/summary/feedback`.
-
-### D. Schedules & Proactive Reminders
-- **Schedule Management**: `POST /api/v1/schedules` (membuat reminder harian), `POST /api/v1/schedules/:id/pause`, `POST /api/v1/schedules/:id/resume`, `DELETE /api/v1/schedules/:id`.
-- **Proactive Delivery**: Backend mengirimkan proactive speech event ke physical ESP32 (`PlaybackJob` origin `PROACTIVE`) atau push notification ke mobile app.
+    Note over ESP,WSS: 2. Offer Acceptance & Audio Ready
+    alt ESP is IDLE
+        ESP->>WSS: WS {"event":"proactive_offer_accepted", "delivery_id":"...", "attempt_id":"...", "offer_receipt":"..."}
+        WSS-->>ESP: WS {"event":"proactive_audio_ready", "delivery_id":"...", "audio_url":"...", "expires_at_ms":...}
+        ESP->>ESP: Download & Play Proactive Speech (MAX98357A)
+        ESP->>WSS: WS {"event":"audio_playback_done", "request_id":"<delivery_id>"}
+    else ESP is BUSY (Recording / Voice / Thinking)
+        ESP->>ESP: Reject Proactive Offer (Voice priority preserved)
+    end
+```
 
 ---
 
-## 6. Matrix Error Code & Handling
+## 6. Fitur Integrasi Superpowers (Spotify, WhatsApp, Memory, Schedules)
+
+### A. Spotify Integration
+- **OAuth Connect**: `POST /api/v1/plugins/spotify/auth-url` atau `GET /api/v1/integrations/spotify/auth` menghasilkan authorization URL Spotify.
+- **Status Polling**: `GET /api/v1/plugins/spotify/status` atau `GET /api/v1/integrations/spotify/status` (`CONNECTED`, `PENDING`, `DISCONNECTED`).
+- **Playback & Controls**: `GET /api/v1/plugins/spotify/player` dan `POST /api/v1/plugins/spotify/play`, `/pause`, `/next`, `/previous`.
+
+### B. WhatsApp Hermes Integration
+- **Pairing & QR**: `POST /api/v1/plugins/whatsapp/start` mengembalikan QR string & pairing code untuk di-link via WhatsApp Linked Devices.
+- **Status & Contacts**: `GET /api/v1/plugins/whatsapp/status` dan `GET /api/v1/plugins/whatsapp/contacts`.
+- **Notification Forwarding**: Mengirim event realtime WS `whatsapp_notification` ke aplikasi mobile.
+
+### C. Long-Term Memory & Summaries
+- **Memory Settings**: `GET` / `PATCH /api/v1/settings/memory` atau `GET /api/v1/account/memory`.
+- **Summary**: `GET /api/v1/memory/summary`, `POST /api/v1/memory/summary/regenerate`.
+
+### D. Schedules & Proactive Reminders
+- **Schedule Management**: `GET /api/v1/schedules`, `POST /api/v1/schedules` (membuat reminder harian), `POST /api/v1/schedules/:id/pause`, `POST /api/v1/schedules/:id/resume`, `DELETE /api/v1/schedules/:id`.
+- **Realtime State**: WebSocket event `schedule_status` mengabarkan progres eksekusi jadwal ke mobile.
+
+## 7. Matrix Error Code & Handling
 
 | Error Code | Asal | Deskripsi | Mitigasi & Tindakan Klien |
 |---|---|---|---|
@@ -194,17 +219,17 @@ sequenceDiagram
 
 ---
 
-## 7. Panduan Verifikasi & Test Suite
+## 8. Panduan Verifikasi & Test Suite
 
 ### A. ESP32-S3 Firmware Contract Tests
-Firmware dilengkapi dengan 93 contract test berbasis Python `unittest` di direktori `esp/tests/`:
+Firmware dilengkapi dengan 98 contract test berbasis Python `unittest` di direktori `esp/tests/` (13 modul uji):
 ```bash
 cd esp
 python3 -m unittest discover -s tests -v
 ```
 Output:
 ```text
-Ran 93 tests in 0.033s
+Ran 98 tests in 0.033s
 OK (100% Passing)
 ```
 

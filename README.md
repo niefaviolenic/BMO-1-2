@@ -122,8 +122,16 @@ sequenceDiagram
     4. `thinking_04.wav`: *"hmm coba aku cari tahu dulu"* (~1.3s, pleasant harmonic phrase)
     5. `thinking_05.wav`: *"bentar ya joy lagi mikir"* (~1.1s, pleasant melodic phrase)
     Setiap clip adalah 16kHz 16-bit Mono PCM canonical WAV, dilengkapi dengan fallback tone melody sintetis jika WAV corrupt/tidak tersedia. Fitur ini menghilangkan jeda hening (*dead air*) selama LLM dan TTS backend memproses jawaban.
-  - **Ekspresi Wajah**: 10 clip WAV tertanam di flash (`01.wav` – `10.wav`) untuk respon audio pergantian wajah dan feedback suara lokal ("aku happy", "aku sedih", dll.).
----
+  - **Ekspresi Wajah & Interaksi Sentuh**: 10 clip WAV tertanam di flash (`01.wav` – `10.wav`) untuk respon audio pergantian wajah dan feedback suara lokal ("aku happy", "aku sedih", dll.). Sensor capacitive touch pada GPIO 14 mendukung rotasi 10 ekspresi wajah berturut-turut saat disentuh, dan interaksi suara saat di-hold/tap aktif.
+  - **Dynamic Thinking Filler Loop Controls**: Background FreeRTOS task dapat memutar loop acak filler berpikir secara non-blocking (`audio_startThinkingFillerLoop()`, `audio_stopThinkingFillerLoop()`) dan dihentikan seketika saat audio response siap diputar (`audio_ready`) atau request gagal.
+
+### C. Proactive Audio, Voice Reservation & Playback Watchdog
+- **Proactive Audio Protocol**: Mendukung penerimaan dan pemutaran audio proaktif (seperti pengingat jadwal, notifikasi WhatsApp/sistem) dari backend:
+  - `proactive_offer` (inbound WS): Berisi `delivery_id`, `attempt_id`, `offer_receipt`, `expires_at_ms`. Jika ESP dalam state `IDLE`, ESP membalas dengan event WS `proactive_offer_accepted`.
+  - `proactive_audio_ready` (inbound WS): Berisi `delivery_id`, `attempt_id`, `lease_id`, `audio_receipt`, `audio_url`, `expires_at_ms`. ESP mengunduh MP3 stream dan memutar pesan suara proaktif ke speaker.
+  - `proactive_cancel` (inbound WS): Berisi `delivery_id`, `attempt_id`, `lease_id` untuk membatalkan pengiriman proaktif yang sedang berjalan jika kadaluwarsa/dibatalkan user.
+- **Voice Capture Reservation (`voice_capture_reservation.cpp/.h`)**: Mengelola lifecycle reservasi mikrofon lokal (`IDLE`, `REQUESTING`, `RESERVED`, `EXPIRED`, `REJECTED`) dengan UUID request, lease ID, dan timeout lease untuk mencegah tabrakan antara input suara pengguna dan audio proaktif.
+- **Playback Watchdog (`playback_watchdog.cpp/.h`)**: Melacak progress pemutaran audio secara thread-safe menggunakan atomics (`http_bytes_received`, `mp3_frames_decoded`, `pcm_frames_written`). Jika tidak ada progres selama `kPlaybackStallUs = 5.000.000 µs` (5 detik), watchdog secara otomatis me-latch stall state dan membatalkan stream yang macet guna membebaskan resource I2S/DMA.
 
 ## 4. State Machine & Lifecycle
 
@@ -242,7 +250,7 @@ idf.py -D JOY_DEV_SUPPRESS_PAIRING_UI=ON build flash monitor
 
 ## 7. Python Contract Test Suite
 
-Repository ini dilengkapi dengan 93 contract tests berbasis Python `unittest` di direktori `esp/tests/` untuk menguji kepatuhan kode firmware terhadap seluruh kontrak produksi (audio, wake ack cue, wake silence, display, pairing, SNTP, playback, dynamic thinking filler, rolling pre-roll buffer single-breath):
+Repository ini dilengkapi dengan 98 contract tests berbasis Python `unittest` di direktori `esp/tests/` (13 modul uji) untuk menguji kepatuhan kode firmware terhadap seluruh kontrak produksi (audio, wake ack cue, wake silence, display, pairing, SNTP, playback, dynamic thinking filler, rolling pre-roll buffer single-breath, proactive protocol, playback watchdog, voice capture reservation, dan development UI suppression):
 
 ```bash
 # Menjalankan seluruh test suite
@@ -252,11 +260,10 @@ python3 -m unittest discover -s esp/tests -v
 Hasil uji:
 ```text
 ----------------------------------------------------------------------
-Ran 93 tests in 0.033s
+Ran 98 tests in 0.033s
 
 OK (100% Passing)
 ```
-
 ## 8. Struktur Direktori Repository
 
 ```text
@@ -290,5 +297,5 @@ OK (100% Passing)
     │   ├── wakeword.cpp / wakeword.h   # INMP441 I2S mic & WakeNet "Hi Joy" engine
     │   ├── wifi.cpp / wifi.h           # Wi-Fi station & SNTP time sync
     │   └── audio_wav/                  # Embedded WAV clips (01.wav - 10.wav, wake_ack.wav, thinking_*.wav)
-    └── tests/                          # 93/93 Python Contract Tests (100% Passing)
+    └── tests/                          # 98/98 Python Contract Tests (100% Passing)
 ```
