@@ -284,3 +284,74 @@ PlaybackSnapshot playback_get_snapshot()
     snapshot.deadline_monotonic_ms = s_state.deadline_monotonic_ms;
     return snapshot;
 }
+
+static ProactiveOffer s_active_offer{};
+static bool s_has_active_offer = false;
+static int64_t s_offer_deadline_us = 0;
+
+bool playback_prepare_proactive_offer(const ProactiveOffer& offer,
+                                      int64_t now_us,
+                                      ProactiveRejectReason* rejection)
+{
+    PlaybackLock lock;
+    if (s_state.active) {
+        if (rejection) *rejection = ProactiveRejectReason::BUSY;
+        return false;
+    }
+
+    if (std::strlen(offer.delivery_id) == 0 || std::strlen(offer.attempt_id) == 0 || std::strlen(offer.offer_receipt) == 0) {
+        if (rejection) *rejection = ProactiveRejectReason::INVALID;
+        return false;
+    }
+
+    s_active_offer = offer;
+    s_has_active_offer = true;
+    s_offer_deadline_us = now_us + kProactiveLeaseUs;
+    return true;
+}
+
+bool playback_start_proactive_ready(const ProactiveAudioReady& ready,
+                                   int64_t now_us)
+{
+    PlaybackLock lock;
+    if (!s_has_active_offer) {
+        return false;
+    }
+    if (now_us > s_offer_deadline_us) {
+        s_has_active_offer = false;
+        return false;
+    }
+    if (std::strcmp(s_active_offer.delivery_id, ready.delivery_id) != 0 ||
+        std::strcmp(s_active_offer.attempt_id, ready.attempt_id) != 0) {
+        return false;
+    }
+
+    PlaybackJob job{};
+    job.origin = PlaybackOrigin::PROACTIVE;
+    std::strncpy(job.correlation_id, ready.delivery_id, sizeof(job.correlation_id) - 1);
+    std::strncpy(job.audio_url, ready.audio_url, sizeof(job.audio_url) - 1);
+    job.expires_in_seconds = 45;
+    std::strncpy(job.source, "SCHEDULE", sizeof(job.source) - 1);
+
+    s_state.current_job = job;
+    s_state.active = true;
+    std::strncpy(s_state.current_proactive_delivery_id, ready.delivery_id, sizeof(s_state.current_proactive_delivery_id) - 1);
+    s_state.deadline_monotonic_ms = (now_us / 1000LL) + 45000LL;
+    s_has_active_offer = false;
+    return true;
+}
+
+void playback_cancel_proactive(const ProactiveCancel& cancel,
+                               int64_t now_us)
+{
+    PlaybackLock lock;
+    if (s_has_active_offer &&
+        std::strcmp(s_active_offer.delivery_id, cancel.delivery_id) == 0 &&
+        std::strcmp(s_active_offer.attempt_id, cancel.attempt_id) == 0) {
+        s_has_active_offer = false;
+    }
+    if (s_state.active &&
+        std::strcmp(s_state.current_proactive_delivery_id, cancel.delivery_id) == 0) {
+        playback_cancel();
+    }
+}

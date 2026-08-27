@@ -1,5 +1,6 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
+#include <time.h>
 
 enum Face
 {
@@ -36,7 +37,9 @@ Face display_get_idle_face();
 
 void display_set_mode(DisplayMode mode);
 
-bool display_set_pairing_code(const char code[7]);
+bool display_set_pairing_code(const char code[7], time_t expires_at_epoch);
+
+void display_update_pairing_countdown();
 
 void display_clear_pairing_code();
 

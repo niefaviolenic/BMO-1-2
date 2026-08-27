@@ -256,11 +256,14 @@ class PairingDisplayOverlayTest(unittest.TestCase):
 
         self.assertRegex(
             header,
-            r"bool\s+display_set_pairing_code\s*\(\s*const\s+char\s+code\s*\[\s*7\s*\]\s*\)\s*;",
+            r"bool\s+display_set_pairing_code\s*\(\s*const\s+char\s+code\s*\[\s*7\s*\]\s*,\s*time_t\s+expires_at_epoch\s*\)\s*;",
+        )
+        self.assertRegex(
+            header,
+            r"void\s+display_update_pairing_countdown\s*\(\s*\)\s*;",
         )
         self.assertRegex(header, r"void\s+display_clear_pairing_code\s*\(\s*\)\s*;")
         self.assertRegex(header, r"bool\s+display_pairing_code_is_visible\s*\(\s*\)\s*;")
-
     def test_overlay_has_fixed_six_digit_bounded_renderer(self) -> None:
         source = self.read_required(DISPLAY_SOURCE)
 
@@ -274,9 +277,23 @@ class PairingDisplayOverlayTest(unittest.TestCase):
         self.assertRegex(source, r"static_assert\s*\([^;]*LCD_H_RES")
         self.assertRegex(source, r"static_assert\s*\([^;]*LCD_V_RES")
 
+
+    def test_pairing_countdown_bar_is_bounded_inside_face(self) -> None:
+        source = self.read_required(DISPLAY_SOURCE)
+        bar_y = self.read_integer_constant(source, "PAIRING_BAR_Y")
+        bar_height = self.read_integer_constant(source, "PAIRING_BAR_HEIGHT")
+        digit_height = self.read_integer_constant(source, "PAIRING_DIGIT_HEIGHT")
+        digit_y = (240 - digit_height) // 2
+
+        self.assertGreater(bar_y, digit_y + digit_height, "Bar must be positioned below the PIN digits")
+        self.assertLessEqual(bar_y + bar_height, 208, "Bar must stay inside the face panel bounds")
+        self.assertIn("pairing_expires_at_epoch", source)
+        self.assertIn("pairing_total_duration_sec", source)
+        self.assertIn("PAIRING_BAR_Y", source)
+        self.assertIn("PAIRING_BAR_HEIGHT", source)
+
     def test_pairing_renderer_uses_conventional_numeric_glyphs(self) -> None:
         source = self.read_required(DISPLAY_SOURCE)
-
         for forbidden in (
             "SEGMENT_A",
             "SEGMENT_B",
@@ -604,10 +621,10 @@ class PairingDisplayOverlayTest(unittest.TestCase):
             r"static\s+void\s+draw_pairing_digit\s*\([^)]*\)",
             r"static\s+void\s+draw_pairing_overlay_locked\s*\([^)]*\)",
             r"bool\s+display_set_pairing_code\s*\([^)]*\)",
+            r"void\s+display_update_pairing_countdown\s*\([^)]*\)",
             r"void\s+display_clear_pairing_code\s*\([^)]*\)",
             r"bool\s+display_pairing_code_is_visible\s*\([^)]*\)",
         )
-
         for signature in pairing_functions:
             body = function_body(source, signature)
             self.assertNotIn("ESP_LOG", body)

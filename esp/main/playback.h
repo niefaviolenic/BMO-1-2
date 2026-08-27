@@ -61,6 +61,55 @@ struct PlaybackSnapshot
     PlaybackTerminalResult last_terminal_proactive_result;
     int64_t deadline_monotonic_ms;
 };
+constexpr int64_t kProactiveLeaseUs = 45000000LL;
+constexpr size_t kUuidBufferSize = 37;
+constexpr size_t kReceiptBufferSize = 513;
+constexpr size_t kAudioUrlBufferSize = 256;
+
+struct ProactiveOffer {
+    char delivery_id[kUuidBufferSize];
+    char attempt_id[kUuidBufferSize];
+    char offer_receipt[kReceiptBufferSize];
+    int64_t expires_at_ms;
+};
+
+struct ProactiveAudioReady {
+    char delivery_id[kUuidBufferSize];
+    char attempt_id[kUuidBufferSize];
+    char lease_id[kUuidBufferSize];
+    char audio_receipt[kReceiptBufferSize];
+    char audio_url[kAudioUrlBufferSize];
+    int64_t expires_at_ms;
+};
+
+struct ProactiveCancel {
+    char delivery_id[kUuidBufferSize];
+    char attempt_id[kUuidBufferSize];
+    char lease_id[kUuidBufferSize];
+};
+
+enum class ProactiveRejectReason : uint8_t {
+    BUSY,
+    EXPIRED,
+    INVALID,
+};
+
+enum class ProactiveFailureReason : uint8_t {
+    DOWNLOAD_FAILED,
+    DECODE_FAILED,
+    PLAYBACK_FAILED,
+    CANCELLED,
+    LEASE_EXPIRED,
+    WATCHDOG_STALLED,
+};
+
+bool playback_prepare_proactive_offer(const ProactiveOffer& offer,
+                                      int64_t now_us,
+                                      ProactiveRejectReason* rejection);
+bool playback_start_proactive_ready(const ProactiveAudioReady& ready,
+                                   int64_t now_us);
+void playback_cancel_proactive(const ProactiveCancel& cancel,
+                               int64_t now_us);
 
 void playback_init();
 

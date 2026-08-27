@@ -67,9 +67,7 @@ class SharedPlaybackContractTest(unittest.TestCase):
         self.assertIn("PlaybackJob", branch)
         self.assertIn("PlaybackOrigin::VOICE_RESPONSE", branch)
         self.assertIn("playback_admit_voice_job", branch)
-        self.assertNotIn("proactive_audio_ready", api)
-        self.assertNotIn("proactive_playback_done", api)
-        self.assertNotIn("proactive_playback_failed", api)
+        self.assertIn("proactive_audio_ready", api)
 
         downloader = function_body(
             api,
@@ -85,10 +83,9 @@ class SharedPlaybackContractTest(unittest.TestCase):
         self.assertIn("playback_prepare_proactive", playback)
         self.assertIn("PlaybackOrigin::PROACTIVE", playback)
         self.assertIn("PlaybackAdmission", playback)
-        self.assertNotIn("handle_proactive_audio_event", api)
-        self.assertNotIn('strcmp(event, "proactive_audio_ready")', api)
-        self.assertNotIn('strcmp(event, "proactive_playback_done")', api)
-        self.assertNotIn('strcmp(event, "proactive_playback_failed")', api)
+        self.assertIn('strcmp(event, "proactive_offer")', api)
+        self.assertIn('strcmp(event, "proactive_audio_ready")', api)
+        self.assertIn('strcmp(event, "proactive_cancel")', api)
 
     def test_proactive_admission_checks_voice_priority_and_one_owner(self) -> None:
         playback = self.read(PLAYBACK_SOURCE)

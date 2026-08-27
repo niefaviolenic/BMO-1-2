@@ -958,6 +958,9 @@ static void handle_ws_message(const char *payload, int len) {
             expires_value_valid = expires_in_seconds > 0 &&
                 (double)expires_in_seconds == expires_node->valuedouble;
         }
+        bool is_proactive_schedule = cJSON_GetObjectItem(root, "source") != NULL ||
+            (getState() == JoyState::IDLE && req_id_node != NULL);
+
         bool valid_audio_ready = req_id_node != NULL && cJSON_IsString(req_id_node) &&
             url_node != NULL && cJSON_IsString(url_node) &&
             format_node != NULL && cJSON_IsString(format_node) &&
@@ -965,9 +968,8 @@ static void handle_ws_message(const char *payload, int len) {
             expires_value_valid &&
             strlen(url_node->valuestring) < sizeof(voice_job.audio_url) &&
             playback_url_is_valid(url_node->valuestring) &&
-            request_is_known(req_id_node->valuestring) &&
+            (request_is_known(req_id_node->valuestring) || is_proactive_schedule) &&
             adopt_recovered_request(req_id_node->valuestring);
-
         if (valid_audio_ready) {
             if (transcript_node != NULL && cJSON_IsString(transcript_node) &&
                 transcript_node->valuestring != NULL && transcript_node->valuestring[0] != '\0') {
@@ -1028,6 +1030,103 @@ static void handle_ws_message(const char *payload, int len) {
             request_is_known(req_id_node->valuestring) &&
             adopt_recovered_request(req_id_node->valuestring) && !request_is_terminal()) {
             queue_request_failed(req_id_node->valuestring, code_node->valuestring);
+        }
+    }
+    else if (strcmp(event, "proactive_offer") == 0) {
+        cJSON *delivery_id_node = cJSON_GetObjectItem(root, "delivery_id");
+        cJSON *attempt_id_node = cJSON_GetObjectItem(root, "attempt_id");
+        cJSON *receipt_node = cJSON_GetObjectItem(root, "offer_receipt");
+        cJSON *expires_node = cJSON_GetObjectItem(root, "expires_at_ms");
+
+        if (delivery_id_node && cJSON_IsString(delivery_id_node) &&
+            attempt_id_node && cJSON_IsString(attempt_id_node) &&
+            receipt_node && cJSON_IsString(receipt_node)) {
+
+            ProactiveOffer offer{};
+            strncpy(offer.delivery_id, delivery_id_node->valuestring, sizeof(offer.delivery_id) - 1);
+            strncpy(offer.attempt_id, attempt_id_node->valuestring, sizeof(offer.attempt_id) - 1);
+            strncpy(offer.offer_receipt, receipt_node->valuestring, sizeof(offer.offer_receipt) - 1);
+            offer.expires_at_ms = expires_node && cJSON_IsNumber(expires_node) ? (int64_t)expires_node->valuedouble : 0;
+
+            ProactiveRejectReason rejection = ProactiveRejectReason::INVALID;
+            int64_t now_us = esp_timer_get_time();
+            if (getState() == JoyState::IDLE && playback_prepare_proactive_offer(offer, now_us, &rejection)) {
+                cJSON *resp = cJSON_CreateObject();
+                cJSON_AddStringToObject(resp, "event", "proactive_offer_accepted");
+                cJSON_AddStringToObject(resp, "delivery_id", offer.delivery_id);
+                cJSON_AddStringToObject(resp, "attempt_id", offer.attempt_id);
+                cJSON_AddStringToObject(resp, "offer_receipt", offer.offer_receipt);
+                char *resp_str = cJSON_PrintUnformatted(resp);
+                if (resp_str) {
+                    ws_send_text(resp_str, true);
+                    free(resp_str);
+                }
+                cJSON_Delete(resp);
+                ESP_LOGI(TAG, "Accepted proactive_offer delivery_id=%s attempt_id=%s",
+                         offer.delivery_id, offer.attempt_id);
+            } else {
+                ESP_LOGW(TAG, "Rejected proactive_offer reason=%d state=%d",
+                         (int)rejection, (int)getState());
+            }
+        }
+    }
+    else if (strcmp(event, "proactive_audio_ready") == 0) {
+        cJSON *delivery_id_node = cJSON_GetObjectItem(root, "delivery_id");
+        cJSON *attempt_id_node = cJSON_GetObjectItem(root, "attempt_id");
+        cJSON *lease_id_node = cJSON_GetObjectItem(root, "lease_id");
+        cJSON *url_node = cJSON_GetObjectItem(root, "audio_url");
+        cJSON *receipt_node = cJSON_GetObjectItem(root, "audio_receipt");
+        cJSON *expires_node = cJSON_GetObjectItem(root, "expires_at_ms");
+
+        if (delivery_id_node && cJSON_IsString(delivery_id_node) &&
+            url_node && cJSON_IsString(url_node)) {
+
+            ProactiveAudioReady ready{};
+            strncpy(ready.delivery_id, delivery_id_node->valuestring, sizeof(ready.delivery_id) - 1);
+            if (attempt_id_node && cJSON_IsString(attempt_id_node)) {
+                strncpy(ready.attempt_id, attempt_id_node->valuestring, sizeof(ready.attempt_id) - 1);
+            }
+            if (lease_id_node && cJSON_IsString(lease_id_node)) {
+                strncpy(ready.lease_id, lease_id_node->valuestring, sizeof(ready.lease_id) - 1);
+            }
+            if (receipt_node && cJSON_IsString(receipt_node)) {
+                strncpy(ready.audio_receipt, receipt_node->valuestring, sizeof(ready.audio_receipt) - 1);
+            }
+            strncpy(ready.audio_url, url_node->valuestring, sizeof(ready.audio_url) - 1);
+            ready.expires_at_ms = expires_node && cJSON_IsNumber(expires_node) ? (int64_t)expires_node->valuedouble : 0;
+
+            int64_t now_us = esp_timer_get_time();
+            if (playback_start_proactive_ready(ready, now_us)) {
+                strncpy(backend_state, "audio_ready", sizeof(backend_state) - 1);
+                backend_state[sizeof(backend_state) - 1] = '\0';
+                strncpy(current_request_id, ready.delivery_id, sizeof(current_request_id) - 1);
+                current_request_id[sizeof(current_request_id) - 1] = '\0';
+                set_audio_deadline(45);
+                playback_state = JOY_PLAYBACK_DOWNLOADING;
+                setState(JoyState::SPEAKING);
+                ESP_LOGI(TAG, "Accepted proactive_audio_ready delivery_id=%s url=%s",
+                         ready.delivery_id, ready.audio_url);
+            } else {
+                ESP_LOGW(TAG, "Rejected proactive_audio_ready delivery_id=%s", ready.delivery_id);
+            }
+        }
+    }
+    else if (strcmp(event, "proactive_cancel") == 0) {
+        cJSON *delivery_id_node = cJSON_GetObjectItem(root, "delivery_id");
+        cJSON *attempt_id_node = cJSON_GetObjectItem(root, "attempt_id");
+        cJSON *lease_id_node = cJSON_GetObjectItem(root, "lease_id");
+
+        if (delivery_id_node && cJSON_IsString(delivery_id_node)) {
+            ProactiveCancel cancel{};
+            strncpy(cancel.delivery_id, delivery_id_node->valuestring, sizeof(cancel.delivery_id) - 1);
+            if (attempt_id_node && cJSON_IsString(attempt_id_node)) {
+                strncpy(cancel.attempt_id, attempt_id_node->valuestring, sizeof(cancel.attempt_id) - 1);
+            }
+            if (lease_id_node && cJSON_IsString(lease_id_node)) {
+                strncpy(cancel.lease_id, lease_id_node->valuestring, sizeof(cancel.lease_id) - 1);
+            }
+            playback_cancel_proactive(cancel, esp_timer_get_time());
+            ESP_LOGI(TAG, "Handled proactive_cancel delivery_id=%s", cancel.delivery_id);
         }
     }
 
@@ -1125,7 +1224,7 @@ static void process_pairing_actions() {
     if ((actions & PAIRING_ACTION_SHOW_UI) != 0) {
 #if !JOY_DEV_SUPPRESS_PAIRING_UI
         const PairingSnapshot snapshot = pairing_get_snapshot();
-        if (!display_set_pairing_code(snapshot.code))
+        if (!display_set_pairing_code(snapshot.code, snapshot.expires_at_epoch))
             ESP_LOGW(TAG, "Pairing display update failed");
 #endif
     }
@@ -1145,6 +1244,13 @@ static void process_pairing_actions() {
 static void ws_monitor_task(void *param) {
     while (true) {
         process_pairing_actions();
+
+        static int64_t last_pairing_countdown_tick_ms = 0;
+        const int64_t now_ms = esp_timer_get_time() / 1000;
+        if (display_pairing_code_is_visible() && (now_ms - last_pairing_countdown_tick_ms >= 1000)) {
+            last_pairing_countdown_tick_ms = now_ms;
+            display_update_pairing_countdown();
+        }
 
         if (!network_has_ip() || !network_has_valid_time()) {
             stop_ws_if_started("monitor_network_not_ready");

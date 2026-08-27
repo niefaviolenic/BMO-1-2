@@ -74,6 +74,9 @@ static DisplayMode current_display_mode = DisplayMode::IDLE;
 static Face current_touch_face = FACE_HAPPY;
 static bool pairing_code_active = false;
 static char pairing_code[7] = {};
+static time_t pairing_expires_at_epoch = 0;
+static int pairing_total_duration_sec = 0;
+static int last_rendered_fill_width = -1;
 
 static const char *face_name(Face face)
 {
@@ -128,6 +131,13 @@ static_assert(
     PAIRING_START_Y >= 32 &&
         PAIRING_START_Y + PAIRING_DIGIT_HEIGHT <= LCD_V_RES - 32,
     "Pairing digit must fit inside the user-vertical face axis");
+static constexpr int PAIRING_BAR_Y = 172;
+static constexpr int PAIRING_BAR_HEIGHT = 6;
+
+static_assert(
+    PAIRING_BAR_Y >= 32 &&
+        PAIRING_BAR_Y + PAIRING_BAR_HEIGHT <= LCD_V_RES - 32,
+    "Pairing bar must fit inside the user-vertical face axis");
 
 //--------------------------------------------------
 
@@ -655,6 +665,44 @@ static void draw_pairing_overlay_locked()
             static_cast<uint8_t>(pairing_code[index] - '0'));
     }
 
+    if(pairing_expires_at_epoch > 0 && pairing_total_duration_sec > 0)
+    {
+        pairing_fill_x_mirrored_rect(
+            PAIRING_START_X,
+            PAIRING_BAR_Y,
+            PAIRING_TOTAL_WIDTH,
+            PAIRING_BAR_HEIGHT,
+            COLOR_BLACK);
+
+        const int inner_max_width = PAIRING_TOTAL_WIDTH - 2;
+        const int inner_height = PAIRING_BAR_HEIGHT - 2;
+        pairing_fill_x_mirrored_rect(
+            PAIRING_START_X + 1,
+            PAIRING_BAR_Y + 1,
+            inner_max_width,
+            inner_height,
+            COLOR_WHITE);
+
+        const time_t now_epoch = time(NULL);
+        const int remaining_sec =
+            (pairing_expires_at_epoch > now_epoch) ?
+                static_cast<int>(pairing_expires_at_epoch - now_epoch) : 0;
+
+        int fill_width = (remaining_sec * inner_max_width) / pairing_total_duration_sec;
+        fill_width = clamp_value(fill_width, 0, inner_max_width);
+        last_rendered_fill_width = fill_width;
+
+        if(fill_width > 0)
+        {
+            pairing_fill_x_mirrored_rect(
+                PAIRING_START_X + 1,
+                PAIRING_BAR_Y + 1,
+                fill_width,
+                inner_height,
+                COLOR_BLACK);
+        }
+    }
+
     flush_framebuffer_locked();
 }
 //--------------------------------------------------
@@ -1054,6 +1102,9 @@ static void secure_clear_pairing_code_locked()
     volatile char *cursor = pairing_code;
     for(size_t index = 0; index < sizeof(pairing_code); ++index)
         cursor[index] = '\0';
+    pairing_expires_at_epoch = 0;
+    pairing_total_duration_sec = 0;
+    last_rendered_fill_width = -1;
 }
 
 //--------------------------------------------------
@@ -1396,7 +1447,8 @@ void display_set_mode(DisplayMode mode)
 }
 
 bool display_set_pairing_code(
-    const char code[7])
+    const char code[7],
+    time_t expires_at_epoch)
 {
     if(!is_six_digit_pairing_code(code))
         return false;
@@ -1404,7 +1456,8 @@ bool display_set_pairing_code(
     if(!lock_display(pdMS_TO_TICKS(1000)))
         return false;
 
-    if(pairing_code_active && memcmp(pairing_code, code, sizeof(pairing_code)) == 0)
+    if(pairing_code_active && memcmp(pairing_code, code, sizeof(pairing_code)) == 0 &&
+       pairing_expires_at_epoch == expires_at_epoch)
     {
         unlock_display();
         return true;
@@ -1413,6 +1466,15 @@ bool display_set_pairing_code(
     secure_clear_pairing_code_locked();
     memcpy(pairing_code, code, 6);
     pairing_code[6] = '\0';
+    pairing_expires_at_epoch = expires_at_epoch;
+    if(expires_at_epoch > 0)
+    {
+        const time_t now_epoch = time(NULL);
+        if(expires_at_epoch > now_epoch)
+            pairing_total_duration_sec = static_cast<int>(expires_at_epoch - now_epoch);
+        else
+            pairing_total_duration_sec = 0;
+    }
     pairing_code_active = true;
 
     if(display_ready && current_display_mode == DisplayMode::IDLE)
@@ -1420,6 +1482,31 @@ bool display_set_pairing_code(
 
     unlock_display();
     return true;
+}
+
+void display_update_pairing_countdown()
+{
+    if(!lock_display(pdMS_TO_TICKS(100)))
+        return;
+
+    if(display_ready && display_on && pairing_code_active && current_display_mode == DisplayMode::IDLE &&
+       pairing_expires_at_epoch > 0 && pairing_total_duration_sec > 0)
+    {
+        const time_t now_epoch = time(NULL);
+        const int remaining_sec =
+            (pairing_expires_at_epoch > now_epoch) ?
+                static_cast<int>(pairing_expires_at_epoch - now_epoch) : 0;
+        const int inner_max_width = PAIRING_TOTAL_WIDTH - 2;
+        int fill_width = (remaining_sec * inner_max_width) / pairing_total_duration_sec;
+        fill_width = clamp_value(fill_width, 0, inner_max_width);
+
+        if(fill_width != last_rendered_fill_width)
+        {
+            draw_pairing_overlay_locked();
+        }
+    }
+
+    unlock_display();
 }
 
 void display_clear_pairing_code()
