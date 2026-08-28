@@ -57,10 +57,11 @@ class QrDisplayContractTest(unittest.TestCase):
         self.assertIn("secure_clear_qr_code_locked", source)
         self.assertIn("qrcodegen_encodeText", source)
         self.assertIn("QR_MAX_VERSION = 15", source)
+        self.assertIn("fill_rect(0, 0, LCD_H_RES, LCD_V_RES, COLOR_WHITE)", source)
         self.assertIn("(LCD_H_RES - qr_pixel_size) / 2", source)
         self.assertIn("(LCD_V_RES - qr_pixel_size) / 2", source)
         self.assertIn("quiet_zone_modules = 4", source)
-        self.assertIn("clamp_value(144 / (qr_size + 2 * quiet_zone_modules), 1, 3)", source)
+        self.assertIn("clamp_value(LCD_V_RES / (qr_size + 2 * quiet_zone_modules), 1, 4)", source)
         self.assertIn("!qr_code_active", source)
 
     def test_pairing_exports_parse_rfc3339_utc_externally(self) -> None:

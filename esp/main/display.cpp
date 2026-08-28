@@ -716,7 +716,7 @@ static void draw_pairing_overlay_locked()
 static void draw_qr_overlay_locked()
 {
     display_wake();
-    draw_screen_base();
+    fill_rect(0, 0, LCD_H_RES, LCD_V_RES, COLOR_WHITE);
 
     const int qr_size = qrcodegen_getSize(qr_matrix);
     if(qr_size <= 0)
@@ -726,7 +726,7 @@ static void draw_qr_overlay_locked()
     }
 
     const int quiet_zone_modules = 4;
-    const int scale = clamp_value(144 / (qr_size + 2 * quiet_zone_modules), 1, 3);
+    const int scale = clamp_value(LCD_V_RES / (qr_size + 2 * quiet_zone_modules), 1, 4);
     const int quiet_zone_px = quiet_zone_modules * scale;
     const int qr_pixel_size = qr_size * scale;
     const int total_qr_w = qr_pixel_size + 2 * quiet_zone_px;
