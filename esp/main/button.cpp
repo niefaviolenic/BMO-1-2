@@ -4,6 +4,7 @@
 #include "display.h"
 #include "pairing.h"
 #include "state.h"
+#include "wakeword.h"
 #include "driver/gpio.h"
 #include "esp_err.h"
 #include "esp_log.h"
@@ -236,22 +237,15 @@ void button_update()
                     else
                     {
                         const JoyState state_before = getState();
-                        const Face face_before = display_get_idle_face();
-                        const Face face_after = display_next_touch_face();
 
-                        // Touch is an expression selector, not a voice-capture
-                        // trigger. Keep the cue local so it cannot create a
-                        // delayed backend response or overwrite the selected face.
-                        audio_setVolume(SPEAKER_DEFAULT_VOLUME);
-                        audio_playExpressionAudio((int)face_after);
+                        // Single tap touch trigger: waking up Joy (alternative to wake word)
+                        audio_triggerWakeAck();
+                        wakeword_task();
 
                         ESP_LOGI(
                             TAG,
-                            "Touch accepted: Joy state before=%s Face before=%d Face after=%d Face render requested=%d expression_audio=1",
-                            joy_state_name(state_before),
-                            (int)face_before,
-                            (int)face_after,
-                            1);
+                            "Touch accepted: Joy state before=%s - waking up to RECORDING",
+                            joy_state_name(state_before));
                     }
                 }
                 else

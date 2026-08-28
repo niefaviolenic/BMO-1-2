@@ -181,3 +181,14 @@ Verification evidence: focused suppression contracts pass; full `python -m unitt
 - Behavior before: WhatsApp bridge pairing required opening a mobile app sheet or external browser; no on-device QR rendering existed.
 - Behavior after: Backend sends `display_qr` over `/ws`; ESP32 instantly encodes and renders the QR code on the LCD screen; when user scans via WhatsApp Linked Devices, backend sends `clear_qr` and firmware smoothly transitions back to `JoyState::IDLE` face animations.
 - Verification evidence: Full Python contract test suite passes 105/105 tests across 14 suites (`python3 -m unittest discover -s esp/tests`).
+
+## Change — Single Tap Touch-to-Wake (Alternative to Wake Word)
+
+- Goal: Enable single tap capacitive touch on GPIO 14 to directly trigger Joy's wake sequence (wake ack cue + transition to `JoyState::RECORDING` and `DisplayMode::LISTENING`), acting as an independent hardware alternative to the "Hi Joy" wake word.
+- Files/functions affected:
+  - `esp/main/button.cpp` (in `button_update()`, when stable touch is detected in `JoyState::IDLE` without active pairing or QR code display, trigger `audio_triggerWakeAck()` and `wakeword_task()`).
+  - `esp/tests/test_touch_listening_contract.py` (updated contract tests to assert single-shot touch-to-wake handoff, wake ack audio cue, and wakeword task invocation).
+  - `esp/tests/test_expression_audio_contract.py` (updated contract tests to isolate expression cue from voice recording).
+- Behavior before: Touch sensor on GPIO 14 was an expression-only cycler that rotated idle faces and played local face audio clips.
+- Behavior after: Tapping the touch sensor on GPIO 14 immediately wakes Joy up, plays the pleasant rising wake acknowledgment chime (`wake_ack.wav`), transitions the LCD to `DisplayMode::LISTENING`, and initiates seamless voice capture to record the user's speech, matching the exact behavior of the acoustic "Hi Joy" wake word.
+- Verification evidence: Full Python contract test suite passes 105/105 tests across 14 suites (`python3 -m unittest discover -s esp/tests`).

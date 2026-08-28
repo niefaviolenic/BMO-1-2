@@ -45,8 +45,7 @@ class ExpressionAudioContractTest(unittest.TestCase):
         self.assertIn("speaker_write_silence", cue)
         self.assertRegex(header + source, r"SPEAKER_DEFAULT_VOLUME\s+100")
 
-    def test_expression_cue_is_owned_by_touch_not_voice_recording(self) -> None:
-        button = (ROOT / "main" / "button.cpp").read_text(encoding="utf-8")
+    def test_voice_recording_does_not_play_expression_cue(self) -> None:
         source = STATE_SOURCE.read_text(encoding="utf-8")
         task = function_body(
             source,
@@ -59,8 +58,6 @@ class ExpressionAudioContractTest(unittest.TestCase):
 
         self.assertNotIn("audio_playExpressionChange();", recording)
         self.assertNotIn("audio_playExpressionChange();", task)
-        self.assertIn("audio_playExpressionAudio((int)face_after);", button)
-
     def test_expression_audio_uses_named_spoken_phrase_at_full_volume(self) -> None:
         source = AUDIO_SOURCE.read_text(encoding="utf-8")
         playback = function_body(

@@ -122,7 +122,7 @@ sequenceDiagram
     4. `thinking_04.wav`: *"hmm coba aku cari tahu dulu"* (~1.3s, pleasant harmonic phrase)
     5. `thinking_05.wav`: *"bentar ya joy lagi mikir"* (~1.1s, pleasant melodic phrase)
     Setiap clip adalah 16kHz 16-bit Mono PCM canonical WAV, dilengkapi dengan fallback tone melody sintetis jika WAV corrupt/tidak tersedia. Fitur ini menghilangkan jeda hening (*dead air*) selama LLM dan TTS backend memproses jawaban.
-  - **Ekspresi Wajah & Interaksi Sentuh**: 10 clip WAV tertanam di flash (`01.wav` – `10.wav`) untuk respon audio pergantian wajah dan feedback suara lokal ("aku happy", "aku sedih", dll.). Sensor capacitive touch pada GPIO 14 mendukung rotasi 10 ekspresi wajah berturut-turut saat disentuh, dan interaksi suara saat di-hold/tap aktif.
+  - **Interaksi Sentuh (Touch-to-Wake)**: Sensor capacitive touch pada GPIO 14 mendukung single tap touch untuk langsung membangunkan Joy (*wake acknowledgement cue* `wake_ack.wav` + transisi `JoyState::RECORDING`), berfungsi sebagai alternatif fisik independen untuk wake word *"Hi Joy"*.
   - **Dynamic Thinking Filler Loop Controls**: Background FreeRTOS task dapat memutar loop acak filler berpikir secara non-blocking (`audio_startThinkingFillerLoop()`, `audio_stopThinkingFillerLoop()`) dan dihentikan seketika saat audio response siap diputar (`audio_ready`) atau request gagal.
 
 ### C. Proactive Audio, Voice Reservation & Playback Watchdog

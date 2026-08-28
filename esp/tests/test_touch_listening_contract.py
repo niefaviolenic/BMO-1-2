@@ -114,26 +114,24 @@ class TouchListeningContractTest(unittest.TestCase):
 
         self.assertIn("touch_level != touch_candidate_level", update)
         self.assertIn("touch_candidate_level != touch_stable_level", update)
-        self.assertIn("display_next_touch_face", update)
-        self.assertIn("audio_playExpressionAudio", update)
-        self.assertRegex(update, r"audio_setVolume\((?:100|SPEAKER_DEFAULT_VOLUME)\)")
+        self.assertIn("audio_triggerWakeAck()", update)
+        self.assertIn("wakeword_task()", update)
         self.assertIn("getState() == JoyState::IDLE", update)
 
-    def test_touch_action_is_one_shot_and_expression_audio_follows_face_render(self) -> None:
+    def test_touch_action_is_one_shot_and_triggers_wake_and_recording(self) -> None:
         button = BUTTON_SOURCE.read_text(encoding="utf-8")
         update = function_body(button, r"void\s+button_update\s*\([^)]*\)")
 
         self.assertEqual(
-            len(re.findall(r"\bdisplay_next_touch_face\s*\(\s*\)", update)),
+            len(re.findall(r"\bwakeword_task\s*\(\s*\)", update)),
             1,
         )
-        self.assertNotIn("wakeword_task()", update)
+        self.assertIn("audio_triggerWakeAck()", update)
         self.assertIn("TOUCH_CONSUMED", update)
         self.assertLess(
-            update.index("display_next_touch_face"),
-            update.index("audio_playExpressionAudio"),
+            update.index("audio_triggerWakeAck"),
+            update.index("wakeword_task"),
         )
-
     def test_touch_runtime_diagnostics_cover_the_full_handoff(self) -> None:
         button = BUTTON_SOURCE.read_text(encoding="utf-8")
         display = DISPLAY_SOURCE.read_text(encoding="utf-8")
@@ -145,9 +143,6 @@ class TouchListeningContractTest(unittest.TestCase):
             "Touch lifecycle",
             "Touch accepted",
             "Joy state before",
-            "Face before",
-            "Face after",
-            "Face render requested",
         ):
             self.assertIn(message, button)
         self.assertIn("Display mode", display)
