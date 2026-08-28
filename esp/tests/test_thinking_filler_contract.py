@@ -13,11 +13,11 @@ MAIN_CMAKE = ROOT / "main" / "CMakeLists.txt"
 AUDIO_WAV_DIR = ROOT / "main" / "audio_wav"
 
 THINKING_CLIPS = [
-    ("thinking_01.wav", "bentar aku pikir dulu"),
-    ("thinking_02.wav", "aku lagi proses dulu pertanyaannya"),
-    ("thinking_03.wav", "tunggu sebentar ya"),
-    ("thinking_04.wav", "hmm coba aku cari tahu dulu"),
-    ("thinking_05.wav", "bentar ya joy lagi mikir"),
+    ("thinking_01.wav", "let me think for a moment"),
+    ("thinking_02.wav", "processing your question"),
+    ("thinking_03.wav", "just a second"),
+    ("thinking_04.wav", "hmm let me check that for you"),
+    ("thinking_05.wav", "hold on joy is thinking"),
 ]
 
 

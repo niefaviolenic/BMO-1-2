@@ -125,11 +125,11 @@ static const char *thinking_phrase(int index)
 {
     switch(index)
     {
-        case 0: return "bentar aku pikir dulu";
-        case 1: return "aku lagi proses dulu pertanyaannya";
-        case 2: return "tunggu sebentar ya";
-        case 3: return "hmm coba aku cari tahu dulu";
-        case 4: return "bentar ya joy lagi mikir";
+        case 0: return "let me think for a moment";
+        case 1: return "processing your question";
+        case 2: return "just a second";
+        case 3: return "hmm let me check that for you";
+        case 4: return "hold on joy is thinking";
         default: return "unknown thinking phrase";
     }
 }

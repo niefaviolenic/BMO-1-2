@@ -3,11 +3,11 @@
 Generate canonical dynamic thinking filler WAV files for Joy.
 
 Clips:
-1. thinking_01.wav - "bentar aku pikir dulu" (~1.9s)
-2. thinking_02.wav - "aku lagi proses dulu pertanyaannya" (~2.3s)
-3. thinking_03.wav - "tunggu sebentar ya" (~1.1s)
-4. thinking_04.wav - "hmm coba aku cari tahu dulu" (~2.2s)
-5. thinking_05.wav - "bentar ya joy lagi mikir" (~2.2s)
+1. thinking_01.wav - "let me think for a moment" (~1.2s)
+2. thinking_02.wav - "processing your question" (~1.3s)
+3. thinking_03.wav - "just a second" (~1.1s)
+4. thinking_04.wav - "hmm let me check that for you" (~1.3s)
+5. thinking_05.wav - "hold on joy is thinking" (~1.2s)
 
 Format specifications:
 - Sample Rate: 16000 Hz
@@ -32,40 +32,40 @@ AUDIO_DIR = Path(__file__).resolve().parent
 
 THINKING_CLIPS = {
     "thinking_01.wav": {
-        "phrase": "Bentar aku pikir dulu.",
-        "contract_phrase": "bentar aku pikir dulu",
+        "phrase": "Let me think for a moment.",
+        "contract_phrase": "let me think for a moment",
         "duration": 1.15,
         "rate": "+25%",
         "tempo": 1.1,
         "notes": [(523.25, 0.8), (659.25, 0.9), (783.99, 1.0), (987.77, 0.9), (1046.50, 1.0)],
     },
     "thinking_02.wav": {
-        "phrase": "Aku lagi proses dulu pertanyaannya.",
-        "contract_phrase": "aku lagi proses dulu pertanyaannya",
+        "phrase": "Processing your question.",
+        "contract_phrase": "processing your question",
         "duration": 1.25,
         "rate": "+35%",
         "tempo": 1.45,
         "notes": [(698.46, 0.75), (880.00, 0.85), (1046.50, 1.0), (1318.51, 0.9), (1174.66, 0.8)],
     },
     "thinking_03.wav": {
-        "phrase": "Tunggu sebentar ya.",
-        "contract_phrase": "tunggu sebentar ya",
+        "phrase": "Just a second.",
+        "contract_phrase": "just a second",
         "duration": 1.1,
         "rate": "+15%",
         "tempo": 1.0,
         "notes": [(783.99, 0.8), (987.77, 0.9), (1174.66, 1.0), (1567.98, 0.95)],
     },
     "thinking_04.wav": {
-        "phrase": "Hmm coba aku cari tahu dulu.",
-        "contract_phrase": "hmm coba aku cari tahu dulu",
+        "phrase": "Hmm let me check that for you.",
+        "contract_phrase": "hmm let me check that for you",
         "duration": 1.2,
         "rate": "+30%",
         "tempo": 1.2,
         "notes": [(587.33, 0.75), (739.99, 0.85), (880.00, 0.95), (1108.73, 1.0), (1318.51, 0.85)],
     },
     "thinking_05.wav": {
-        "phrase": "Bentar ya Joy lagi mikir.",
-        "contract_phrase": "bentar ya joy lagi mikir",
+        "phrase": "Hold on, Joy is thinking.",
+        "contract_phrase": "hold on joy is thinking",
         "duration": 1.2,
         "rate": "+25%",
         "tempo": 1.15,
@@ -73,7 +73,7 @@ THINKING_CLIPS = {
     },
 }
 
-VOICE = "id-ID-GadisNeural"
+VOICE = "en-US-AnaNeural"
 
 
 def synthesize_fallback_clip(notes: list, duration_s: float, sample_rate: int = 16000, max_amplitude: int = 22000) -> bytes:
