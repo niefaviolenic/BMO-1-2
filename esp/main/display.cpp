@@ -1,4 +1,5 @@
 #include "display.h"
+#include "audio.h"
 #include "qrcodegen.h"
 
 #include <math.h>
@@ -84,6 +85,13 @@ static bool qr_code_active = false;
 static uint8_t qr_matrix[QR_BUFFER_LEN] = {};
 static time_t qr_expires_at_epoch = 0;
 static int qr_total_duration_sec = 0;
+static constexpr uint32_t SHY_DURATION_MS = 5000;
+static constexpr uint32_t SHY_FRAME_MS = 250;
+static TaskHandle_t shy_animation_task_handle = NULL;
+static portMUX_TYPE shy_animation_mux = portMUX_INITIALIZER_UNLOCKED;
+static bool shy_animation_active = false;
+static TickType_t shy_animation_deadline = 0;
+static int shy_animation_next_frame = 0;
 
 static const char *face_name(Face face)
 {
@@ -924,6 +932,39 @@ static void face_cute()
 
 //--------------------------------------------------
 
+static void face_shy(int frame_index)
+{
+    clear_face_panel();
+
+    const int phase = frame_index % 6;
+    static constexpr int gaze_offset[6] = {-5, -2, 2, 5, 2, -2};
+    const int gaze = gaze_offset[phase];
+    const int eye_y = FACE_CY - 34 + ((phase % 2) == 0 ? 0 : 2);
+
+    if(phase == 3)
+    {
+        eye_sleepy(FACE_CX - 55, eye_y);
+        eye_sleepy(FACE_CX + 55, eye_y);
+    }
+    else
+    {
+        eye_big_cute(FACE_CX - 55 + gaze, eye_y);
+        eye_big_cute(FACE_CX + 55 + gaze, eye_y);
+    }
+
+    const int blush_radius = (phase % 2) == 0 ? 10 : 13;
+    fill_circle(FACE_CX - 82, FACE_CY + 31, blush_radius, COLOR_PINK);
+    fill_circle(FACE_CX + 82, FACE_CY + 31, blush_radius, COLOR_PINK);
+    cheek_lines();
+
+    if((phase % 3) == 0)
+        mouth_tiny();
+    else
+        mouth_small_smile();
+}
+
+//--------------------------------------------------
+
 static void face_listening()
 {
     clear_face_panel();
@@ -1134,6 +1175,118 @@ static void draw_face_locked(
     ESP_LOGI(TAG, "Face actually rendered: %s(%d)", face_name(face), (int)face);
 }
 
+static void draw_shy_frame_locked(int frame_index)
+{
+    display_wake();
+    draw_screen_base();
+    face_shy(frame_index);
+    flush_framebuffer_locked();
+    ESP_LOGI(TAG, "Shy animation frame=%d", frame_index);
+}
+
+static void cancel_shy_animation()
+{
+    bool was_active = false;
+
+    portENTER_CRITICAL(&shy_animation_mux);
+    was_active = shy_animation_active;
+    shy_animation_active = false;
+    portEXIT_CRITICAL(&shy_animation_mux);
+
+    if(was_active && shy_animation_task_handle != NULL)
+        xTaskNotifyGive(shy_animation_task_handle);
+}
+
+static void shy_animation_task(void *param)
+{
+    while(true)
+    {
+        (void)ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+        while(true)
+        {
+            bool active = false;
+            portENTER_CRITICAL(&shy_animation_mux);
+            active = shy_animation_active;
+            portEXIT_CRITICAL(&shy_animation_mux);
+
+            if(!active)
+                break;
+
+            const uint32_t interrupted =
+                ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(SHY_FRAME_MS));
+            if(interrupted > 0)
+                continue;
+
+            const TickType_t now = xTaskGetTickCount();
+            bool finished = false;
+            int frame_index = 0;
+
+            portENTER_CRITICAL(&shy_animation_mux);
+            if(shy_animation_active &&
+               (int32_t)(now - shy_animation_deadline) >= 0)
+            {
+                shy_animation_active = false;
+                finished = true;
+            }
+            else if(shy_animation_active)
+            {
+                frame_index = shy_animation_next_frame++;
+            }
+            active = shy_animation_active;
+            portEXIT_CRITICAL(&shy_animation_mux);
+
+            if(finished)
+            {
+                if(lock_display(pdMS_TO_TICKS(250)))
+                {
+                    bool newer_shy_active = false;
+                    portENTER_CRITICAL(&shy_animation_mux);
+                    newer_shy_active = shy_animation_active;
+                    portEXIT_CRITICAL(&shy_animation_mux);
+
+                    if(!newer_shy_active &&
+                       display_ready &&
+                       current_display_mode == DisplayMode::IDLE &&
+                       !pairing_code_active &&
+                       !qr_code_active)
+                    {
+                        draw_face_locked(current_touch_face);
+                    }
+                    unlock_display();
+                }
+                ESP_LOGI(TAG, "Shy animation finished; idle face restored");
+                break;
+            }
+
+            if(!active)
+                break;
+
+            if(lock_display(pdMS_TO_TICKS(250)))
+            {
+                bool may_render = false;
+                portENTER_CRITICAL(&shy_animation_mux);
+                may_render = shy_animation_active;
+                portEXIT_CRITICAL(&shy_animation_mux);
+
+                if(may_render &&
+                   display_ready &&
+                   current_display_mode == DisplayMode::IDLE &&
+                   !pairing_code_active &&
+                   !qr_code_active)
+                {
+                    draw_shy_frame_locked(frame_index);
+                }
+                else if(may_render)
+                {
+                    cancel_shy_animation();
+                }
+                unlock_display();
+            }
+        }
+    }
+}
+
 //--------------------------------------------------
 
 static bool is_six_digit_pairing_code(
@@ -1320,6 +1473,22 @@ void display_init()
 
     display_on = true;
 
+    if(shy_animation_task_handle == NULL)
+    {
+        BaseType_t ret = xTaskCreate(
+            shy_animation_task,
+            "shy_animation",
+            4096,
+            NULL,
+            3,
+            &shy_animation_task_handle);
+        if(ret != pdPASS)
+        {
+            shy_animation_task_handle = NULL;
+            ESP_LOGE(TAG, "Failed to create shy_animation task");
+        }
+    }
+
     ESP_LOGI(TAG, "ILI9341 Ready");
 }
 
@@ -1329,6 +1498,9 @@ void display_sleep()
 {
     if(!display_ready)
         return;
+
+    cancel_shy_animation();
+    audio_cancelExpressionAudio();
 
     if(!lock_display(pdMS_TO_TICKS(1000)))
         return;
@@ -1394,6 +1566,8 @@ void display_face(
         return;
     }
 
+    cancel_shy_animation();
+
     if(!lock_display(pdMS_TO_TICKS(1000)))
     {
         ESP_LOGW(TAG, "Display busy");
@@ -1422,6 +1596,8 @@ Face display_next_touch_face()
 
     if(!lock_display(pdMS_TO_TICKS(1000)))
         return next_face;
+
+    cancel_shy_animation();
 
     const Face previous_face = current_touch_face;
     const int next_face_index =
@@ -1465,8 +1641,63 @@ Face display_get_idle_face()
     return face;
 }
 
+bool display_start_shy()
+{
+    if(!display_ready || shy_animation_task_handle == NULL)
+        return false;
+
+    if(!lock_display(pdMS_TO_TICKS(1000)))
+        return false;
+
+    if(current_display_mode != DisplayMode::IDLE ||
+       pairing_code_active ||
+       qr_code_active)
+    {
+        unlock_display();
+        return false;
+    }
+
+    // Shy is transient. HAPPY remains the persistent idle face that is
+    // restored after five seconds or after a higher-priority interaction.
+    current_touch_face = FACE_HAPPY;
+
+    portENTER_CRITICAL(&shy_animation_mux);
+    shy_animation_active = true;
+    shy_animation_deadline =
+        xTaskGetTickCount() + pdMS_TO_TICKS(SHY_DURATION_MS);
+    shy_animation_next_frame = 1;
+    portEXIT_CRITICAL(&shy_animation_mux);
+
+    draw_shy_frame_locked(0);
+    unlock_display();
+
+    xTaskNotifyGive(shy_animation_task_handle);
+    ESP_LOGI(TAG, "Shy animation started: duration_ms=%lu", (unsigned long)SHY_DURATION_MS);
+    return true;
+}
+
+void display_cancel_shy()
+{
+    cancel_shy_animation();
+}
+
+bool display_is_shy_active()
+{
+    bool active = false;
+    portENTER_CRITICAL(&shy_animation_mux);
+    active = shy_animation_active;
+    portEXIT_CRITICAL(&shy_animation_mux);
+    return active;
+}
+
 void display_set_mode(DisplayMode mode)
 {
+    if(mode != DisplayMode::IDLE)
+    {
+        cancel_shy_animation();
+        audio_cancelExpressionAudio();
+    }
+
     if(!lock_display(pdMS_TO_TICKS(1000)))
         return;
 
@@ -1529,6 +1760,9 @@ bool display_set_pairing_code(
 {
     if(!is_six_digit_pairing_code(code))
         return false;
+
+    cancel_shy_animation();
+    audio_cancelExpressionAudio();
 
     if(!lock_display(pdMS_TO_TICKS(1000)))
         return false;
@@ -1638,6 +1872,9 @@ bool display_set_qr_code(
     const time_t now_epoch = time(NULL);
     if(expires_at_epoch <= now_epoch)
         return false;
+
+    cancel_shy_animation();
+    audio_cancelExpressionAudio();
 
     if(!lock_display(pdMS_TO_TICKS(1000)))
         return false;

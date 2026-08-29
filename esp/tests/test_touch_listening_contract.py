@@ -114,40 +114,54 @@ class TouchListeningContractTest(unittest.TestCase):
 
         self.assertIn("touch_level != touch_candidate_level", update)
         self.assertIn("touch_candidate_level != touch_stable_level", update)
-        self.assertIn("audio_triggerWakeAck()", update)
-        self.assertIn("wakeword_task()", update)
+        self.assertIn("display_start_shy()", update)
+        self.assertIn("audio_triggerExpressionAudio((int)FACE_CUTE)", update)
+        self.assertNotIn("audio_triggerWakeAck()", update)
+        self.assertNotIn("wakeword_task()", update)
         self.assertIn("getState() == JoyState::IDLE", update)
 
-    def test_touch_action_is_one_shot_and_triggers_wake_and_recording(self) -> None:
+    def test_touch_action_is_one_shot_and_triggers_local_shy_effect(self) -> None:
         button = BUTTON_SOURCE.read_text(encoding="utf-8")
         update = function_body(button, r"void\s+button_update\s*\([^)]*\)")
 
-        self.assertEqual(
-            len(re.findall(r"\bwakeword_task\s*\(\s*\)", update)),
-            1,
-        )
-        self.assertIn("audio_triggerWakeAck()", update)
+        self.assertEqual(len(re.findall(r"\bwakeword_task\s*\(\s*\)", update)), 0)
+        self.assertNotIn("audio_triggerWakeAck()", update)
+        self.assertIn("display_start_shy()", update)
+        self.assertIn("audio_triggerExpressionAudio((int)FACE_CUTE)", update)
         self.assertIn("TOUCH_CONSUMED", update)
-        self.assertLess(
-            update.index("audio_triggerWakeAck"),
-            update.index("wakeword_task"),
-        )
-    def test_touch_runtime_diagnostics_cover_the_full_handoff(self) -> None:
+
+    def test_touch_runtime_diagnostics_cover_the_shy_handoff(self) -> None:
         button = BUTTON_SOURCE.read_text(encoding="utf-8")
         display = DISPLAY_SOURCE.read_text(encoding="utf-8")
-        state = STATE_SOURCE.read_text(encoding="utf-8")
 
         for message in (
             "Touch raw transition",
             "Touch stable",
             "Touch lifecycle",
             "Touch accepted",
-            "Joy state before",
+            "shy animation started",
         ):
             self.assertIn(message, button)
-        self.assertIn("Display mode", display)
-        self.assertIn("Face actually rendered", display)
-        self.assertIn("State:", state)
+        self.assertIn("Shy animation started", display)
+        self.assertIn("Shy animation finished", display)
+
+    def test_shy_animation_is_non_blocking_local_and_transient(self) -> None:
+        header = DISPLAY_HEADER.read_text(encoding="utf-8")
+        display = DISPLAY_SOURCE.read_text(encoding="utf-8")
+        start = function_body(display, r"bool\s+display_start_shy\s*\([^)]*\)")
+        worker = function_body(display, r"static\s+void\s+shy_animation_task\s*\([^)]*\)")
+
+        self.assertIn("bool display_start_shy();", header)
+        self.assertIn("void display_cancel_shy();", header)
+        self.assertIn("SHY_DURATION_MS = 5000", display)
+        self.assertIn("face_shy", display)
+        self.assertIn("current_touch_face = FACE_HAPPY", start)
+        self.assertIn("xTaskNotifyGive", start)
+        self.assertNotIn("vTaskDelay", start)
+        self.assertIn("pdMS_TO_TICKS(SHY_FRAME_MS)", worker)
+        self.assertIn("current_display_mode == DisplayMode::IDLE", worker)
+        self.assertIn("!pairing_code_active", worker)
+        self.assertIn("!qr_code_active", worker)
 
     def test_idle_face_preference_is_not_reset_by_api_completion_paths(self) -> None:
         api = API_SOURCE.read_text(encoding="utf-8")

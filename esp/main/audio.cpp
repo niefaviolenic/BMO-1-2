@@ -1,4 +1,7 @@
 #include "audio.h"
+#include "display.h"
+#include "pairing.h"
+#include "state.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -10,6 +13,7 @@
 #include "esp_random.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 static const char *TAG = "AUDIO";
 
@@ -31,16 +35,46 @@ static const char *TAG = "AUDIO";
 #define SPEAKER_OUTPUT_CHUNK_FRAMES 64
 
 static i2s_chan_handle_t speaker_tx_handle = NULL;
+static SemaphoreHandle_t speaker_mutex = NULL;
 
 static bool speaker_ready = false;
 
 static volatile int volume = SPEAKER_DEFAULT_VOLUME;
 static TaskHandle_t wake_ack_worker_task_handle = NULL;
 static TaskHandle_t thinking_filler_task_handle = NULL;
+static TaskHandle_t expression_audio_task_handle = NULL;
 static volatile bool thinking_filler_running = false;
 static volatile bool thinking_filler_stop_requested = false;
+static volatile bool expression_audio_running = false;
+static volatile bool expression_audio_stop_requested = false;
+static int pending_expression_index = -1;
+static portMUX_TYPE expression_audio_mux = portMUX_INITIALIZER_UNLOCKED;
 static int last_thinking_filler_index = -1;
 static uint32_t current_sample_rate = SPEAKER_SAMPLE_RATE;
+
+class SpeakerLockGuard
+{
+public:
+    explicit SpeakerLockGuard(TickType_t timeout = portMAX_DELAY)
+        : locked_(speaker_mutex == NULL ||
+                  xSemaphoreTakeRecursive(speaker_mutex, timeout) == pdTRUE)
+    {
+    }
+
+    ~SpeakerLockGuard()
+    {
+        if(locked_ && speaker_mutex != NULL)
+            xSemaphoreGiveRecursive(speaker_mutex);
+    }
+
+    bool locked() const
+    {
+        return locked_;
+    }
+
+private:
+    bool locked_;
+};
 extern "C" {
 extern const uint8_t _binary_01_wav_start[];
 extern const uint8_t _binary_01_wav_end[];
@@ -134,6 +168,14 @@ static const char *thinking_phrase(int index)
     }
 }
 
+static bool local_expression_is_allowed()
+{
+    return getState() == JoyState::IDLE &&
+           pairing_get_snapshot().phase == PairingPhase::NONE &&
+           !display_pairing_code_is_visible() &&
+           !display_qr_code_is_visible();
+}
+
 static uint16_t read_wav_le16(const uint8_t *data)
 {
     return (uint16_t)data[0] | ((uint16_t)data[1] << 8);
@@ -201,6 +243,10 @@ static esp_err_t speaker_write_tone(
 {
     if(!speaker_ready)
         return ESP_ERR_INVALID_STATE;
+
+    SpeakerLockGuard speaker_lock;
+    if(!speaker_lock.locked())
+        return ESP_ERR_TIMEOUT;
 
     int16_t samples[SPEAKER_OUTPUT_CHUNK_FRAMES * 2];
 
@@ -270,6 +316,10 @@ static esp_err_t speaker_write_silence(
     if(!speaker_ready)
         return ESP_ERR_INVALID_STATE;
 
+    SpeakerLockGuard speaker_lock;
+    if(!speaker_lock.locked())
+        return ESP_ERR_TIMEOUT;
+
     int16_t samples[SPEAKER_OUTPUT_CHUNK_FRAMES * 2] = {};
 
     uint32_t rate = current_sample_rate ? current_sample_rate : SPEAKER_SAMPLE_RATE;
@@ -322,11 +372,22 @@ static void wake_ack_worker_task(void *param)
 }
 
 static void thinking_filler_worker_task(void *param);
+static void expression_audio_worker_task(void *param);
 
 void audio_init()
 {
     if(speaker_ready)
         return;
+
+    if(speaker_mutex == NULL)
+    {
+        speaker_mutex = xSemaphoreCreateRecursiveMutex();
+        if(speaker_mutex == NULL)
+        {
+            ESP_LOGE(TAG, "Speaker mutex creation failed");
+            return;
+        }
+    }
 
     i2s_chan_config_t channel_config =
         I2S_CHANNEL_DEFAULT_CONFIG(
@@ -457,6 +518,22 @@ void audio_init()
         {
             ESP_LOGE(TAG, "Failed to create thinking_filler task");
             thinking_filler_task_handle = NULL;
+        }
+    }
+    if(expression_audio_task_handle == NULL)
+    {
+        BaseType_t ret = xTaskCreatePinnedToCore(
+            expression_audio_worker_task,
+            "expression_audio",
+            4096,
+            NULL,
+            5,
+            &expression_audio_task_handle,
+            0);
+        if(ret != pdPASS)
+        {
+            ESP_LOGE(TAG, "Failed to create expression_audio task");
+            expression_audio_task_handle = NULL;
         }
     }
 }
@@ -699,10 +776,6 @@ static bool audio_play_embedded_thinking_wav(int index)
 
 void audio_playWakeAck()
 {
-    // Wake acknowledgment cue is played at default volume (100),
-    // even if a previous volume-button event lowered the runtime setting.
-    audio_setVolume(SPEAKER_DEFAULT_VOLUME);
-
     ESP_LOGI(
         TAG,
         "Play wake ack cue");
@@ -734,6 +807,10 @@ void audio_playWakeAck()
 
 void audio_triggerWakeAck()
 {
+    // Wakeword audio has priority over local touch/expression audio. The
+    // detection and recording path itself remains unchanged.
+    audio_cancelExpressionAudio();
+
     if(wake_ack_worker_task_handle != NULL)
     {
         xTaskNotifyGive(wake_ack_worker_task_handle);
@@ -749,10 +826,6 @@ void audio_triggerWakeAck()
 
 void audio_playExpressionAudio(int expression_index)
 {
-    // Expression voice clips are played at default volume (100),
-    // even if a previous volume-button event lowered the runtime setting.
-    audio_setVolume(SPEAKER_DEFAULT_VOLUME);
-
     if(!audio_play_embedded_wav(expression_index))
     {
         ESP_LOGW(TAG,
@@ -762,13 +835,52 @@ void audio_playExpressionAudio(int expression_index)
         audio_playExpressionChange();
     }
 }
+
+void audio_triggerExpressionAudio(int expression_index)
+{
+    const int expression_count =
+        (int)(sizeof(expression_clips) / sizeof(expression_clips[0]));
+    if(expression_index < 0 || expression_index >= expression_count)
+    {
+        ESP_LOGW(TAG, "Expression audio request rejected: index=%d", expression_index);
+        return;
+    }
+
+    portENTER_CRITICAL(&expression_audio_mux);
+    pending_expression_index = expression_index;
+    expression_audio_stop_requested = true;
+    portEXIT_CRITICAL(&expression_audio_mux);
+
+    if(expression_audio_task_handle != NULL)
+    {
+        xTaskNotifyGive(expression_audio_task_handle);
+    }
+    else
+    {
+        ESP_LOGW(TAG, "expression_audio task not ready, falling back to direct playback");
+        portENTER_CRITICAL(&expression_audio_mux);
+        pending_expression_index = -1;
+        expression_audio_stop_requested = false;
+        portEXIT_CRITICAL(&expression_audio_mux);
+        if(local_expression_is_allowed())
+            audio_playExpressionAudio(expression_index);
+    }
+}
+
+void audio_cancelExpressionAudio()
+{
+    portENTER_CRITICAL(&expression_audio_mux);
+    pending_expression_index = -1;
+    expression_audio_stop_requested = true;
+    portEXIT_CRITICAL(&expression_audio_mux);
+
+    if(expression_audio_task_handle != NULL)
+        xTaskNotifyGive(expression_audio_task_handle);
+}
 //--------------------------------------------------
 
 void audio_playThinkingFiller(int index)
 {
-    // Thinking filler clips are played at default volume (100).
-    audio_setVolume(SPEAKER_DEFAULT_VOLUME);
-
     if(!audio_play_embedded_thinking_wav(index))
     {
         ESP_LOGW(TAG,
@@ -896,6 +1008,12 @@ static bool audio_play_embedded_wav_clip_cancellable(
         return false;
     }
 
+    SpeakerLockGuard speaker_lock;
+    if(!speaker_lock.locked() || (stop_flag && *stop_flag))
+    {
+        return false;
+    }
+
     if(!audio_set_sample_rate(sample_rate))
     {
         return false;
@@ -998,6 +1116,73 @@ static bool audio_play_embedded_wav_clip_cancellable(
     return true;
 }
 
+static void expression_audio_worker_task(void *param)
+{
+    while(true)
+    {
+        (void)ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+        while(true)
+        {
+            int expression_index = -1;
+
+            portENTER_CRITICAL(&expression_audio_mux);
+            expression_index = pending_expression_index;
+            pending_expression_index = -1;
+            if(expression_index >= 0)
+                expression_audio_stop_requested = false;
+            portEXIT_CRITICAL(&expression_audio_mux);
+
+            if(expression_index < 0)
+                break;
+
+            if(!local_expression_is_allowed())
+            {
+                ESP_LOGI(TAG, "Local expression request dropped: interaction is not allowed");
+                continue;
+            }
+
+            expression_audio_running = true;
+
+            char name_buf[32];
+            snprintf(name_buf, sizeof(name_buf), "expression %02d", expression_index + 1);
+            const EmbeddedWavClip &clip = expression_clips[expression_index];
+
+            ESP_LOGI(
+                TAG,
+                "Local expression worker playing %s (\"%s\")",
+                name_buf,
+                expression_phrase(expression_index));
+
+            const bool played = audio_play_embedded_wav_clip_cancellable(
+                clip.start,
+                clip.end,
+                name_buf,
+                &expression_audio_stop_requested);
+
+            if(!played && !expression_audio_stop_requested)
+            {
+                ESP_LOGW(
+                    TAG,
+                    "%s unavailable; using expression fallback melody",
+                    name_buf);
+                audio_playExpressionChange();
+            }
+
+            expression_audio_running = false;
+            if(played && !expression_audio_stop_requested)
+                (void)speaker_write_silence(30);
+
+            portENTER_CRITICAL(&expression_audio_mux);
+            const bool has_pending_expression = pending_expression_index >= 0;
+            portEXIT_CRITICAL(&expression_audio_mux);
+
+            if(!has_pending_expression)
+                break;
+        }
+    }
+}
+
 static void thinking_filler_worker_task(void *param)
 {
     while(true)
@@ -1008,7 +1193,6 @@ static void thinking_filler_worker_task(void *param)
 
         thinking_filler_running = true;
 
-        audio_setVolume(SPEAKER_DEFAULT_VOLUME);
         if(thinking_filler_stop_requested)
         {
             thinking_filler_running = false;
@@ -1069,6 +1253,8 @@ void audio_startThinkingFillerLoop()
 {
     if(!speaker_ready)
         return;
+
+    audio_cancelExpressionAudio();
 
     if(thinking_filler_running && !thinking_filler_stop_requested)
     {
@@ -1154,6 +1340,10 @@ void audio_play_pcm(const int16_t *mono_samples, size_t sample_count)
     if(!speaker_ready)
         return;
 
+    SpeakerLockGuard speaker_lock;
+    if(!speaker_lock.locked())
+        return;
+
     int16_t stereo_buf[SPEAKER_OUTPUT_CHUNK_FRAMES * 2];
     size_t i = 0;
     while(i < sample_count)
@@ -1191,6 +1381,11 @@ bool audio_set_sample_rate(uint32_t sample_rate)
 {
     if (!speaker_ready || sample_rate == 0)
         return false;
+
+    SpeakerLockGuard speaker_lock;
+    if(!speaker_lock.locked())
+        return false;
+
     if (current_sample_rate == sample_rate)
         return true;
 
@@ -1251,6 +1446,10 @@ bool audio_play_raw(const int16_t *samples, size_t sample_count, int channels, i
 {
     if (!speaker_ready || samples == NULL || sample_count == 0 || sample_rate <= 0 ||
         (channels != 1 && channels != 2) || (channels == 2 && (sample_count % 2) != 0))
+        return false;
+
+    SpeakerLockGuard speaker_lock;
+    if(!speaker_lock.locked())
         return false;
 
     int64_t call_start_us = esp_timer_get_time();

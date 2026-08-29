@@ -26,6 +26,11 @@ void audio_playExpressionChange();
 // Falls back to the short melody when the requested clip is unavailable.
 void audio_playExpressionAudio(int expression_index);
 
+// Queue the selected local expression clip on the dedicated local-effect
+// worker. A newer request replaces the clip that is currently playing.
+void audio_triggerExpressionAudio(int expression_index);
+void audio_cancelExpressionAudio();
+
 // Play a dynamic thinking filler phrase (0..4) or random thinking filler
 // when voice capture finishes and backend processing begins.
 void audio_playThinkingFiller(int index);

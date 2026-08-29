@@ -58,7 +58,8 @@ class ExpressionAudioContractTest(unittest.TestCase):
 
         self.assertNotIn("audio_playExpressionChange();", recording)
         self.assertNotIn("audio_playExpressionChange();", task)
-    def test_expression_audio_uses_named_spoken_phrase_at_full_volume(self) -> None:
+    def test_expression_audio_uses_named_spoken_phrase_at_runtime_volume(self) -> None:
+        header = AUDIO_HEADER.read_text(encoding="utf-8")
         source = AUDIO_SOURCE.read_text(encoding="utf-8")
         playback = function_body(
             source,
@@ -78,7 +79,29 @@ class ExpressionAudioContractTest(unittest.TestCase):
             "aku confused",
         ):
             self.assertIn(phrase, source)
-        self.assertRegex(playback, r"audio_setVolume\((?:100|SPEAKER_DEFAULT_VOLUME)\);")
+        self.assertNotRegex(playback, r"audio_setVolume\((?:100|SPEAKER_DEFAULT_VOLUME)\);")
+        self.assertIn("audio_triggerExpressionAudio", header)
+        self.assertIn("audio_cancelExpressionAudio", header)
+        self.assertIn("expression_audio_worker_task", source)
+        self.assertIn("audio_play_embedded_wav_clip_cancellable", source)
+
+    def test_runtime_volume_is_not_reset_by_local_audio_entrypoints(self) -> None:
+        source = AUDIO_SOURCE.read_text(encoding="utf-8")
+
+        for signature in (
+            r"void\s+audio_playWakeAck\s*\([^)]*\)",
+            r"void\s+audio_playExpressionAudio\s*\([^)]*\)",
+            r"void\s+audio_playThinkingFiller\s*\([^)]*\)",
+        ):
+            body = function_body(source, signature)
+            self.assertNotIn("audio_setVolume(SPEAKER_DEFAULT_VOLUME)", body)
+
+        worker = function_body(
+            source,
+            r"static\s+void\s+thinking_filler_worker_task\s*\([^)]*\)",
+        )
+        self.assertNotIn("audio_setVolume(SPEAKER_DEFAULT_VOLUME)", worker)
+        self.assertGreaterEqual(source.count("speaker_volume_percent()"), 5)
 
 
 if __name__ == "__main__":

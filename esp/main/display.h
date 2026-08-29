@@ -35,6 +35,12 @@ void display_face(Face face);
 Face display_next_touch_face();
 Face display_get_idle_face();
 
+// Non-blocking five-second shy interaction. This transient animation is not
+// part of the persistent GPIO17 face cycle.
+bool display_start_shy();
+void display_cancel_shy();
+bool display_is_shy_active();
+
 void display_set_mode(DisplayMode mode);
 
 bool display_set_pairing_code(const char code[7], time_t expires_at_epoch);

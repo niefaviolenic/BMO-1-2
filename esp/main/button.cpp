@@ -4,7 +4,6 @@
 #include "display.h"
 #include "pairing.h"
 #include "state.h"
-#include "wakeword.h"
 #include "driver/gpio.h"
 #include "esp_err.h"
 #include "esp_log.h"
@@ -17,18 +16,26 @@
 #define TOUCH_PIN      GPIO_NUM_14
 #define BTN_VOL_UP    GPIO_NUM_15
 #define BTN_VOL_DOWN  GPIO_NUM_16
+#define BTN_EXPRESSION GPIO_NUM_17
 
 #define VOLUME_STEP 5
-#define BUTTON_REPEAT_US 180000LL
 #define BUTTON_DEBOUNCE_US 30000LL
 #define TOUCH_DEBOUNCE_US 30000LL
 
 static const char *TAG="BUTTON";
 
-static int64_t last_up_us = 0;
-static int64_t last_down_us = 0;
-static int64_t vol_up_press_start_us = 0;
-static int64_t vol_down_press_start_us = 0;
+struct DebouncedButtonState
+{
+    bool candidate_pressed;
+    bool stable_pressed;
+    int64_t candidate_since_us;
+};
+
+static DebouncedButtonState volume_up_state = {};
+static DebouncedButtonState volume_down_state = {};
+static bool expression_button_candidate_pressed = false;
+static bool expression_button_stable_pressed = false;
+static int64_t expression_button_candidate_since_us = 0;
 enum class TouchLifecycleState
 {
     TOUCH_ARMED,
@@ -42,6 +49,29 @@ static bool touch_candidate_level = false;
 static bool touch_stable_level = false;
 static int64_t touch_candidate_since_us = 0;
 static int64_t last_touch_diag_us = 0;
+
+static bool update_debounced_button(
+    gpio_num_t pin,
+    DebouncedButtonState &button,
+    int64_t now)
+{
+    const bool pressed = gpio_get_level(pin) == 0;
+
+    if(pressed != button.candidate_pressed)
+    {
+        button.candidate_pressed = pressed;
+        button.candidate_since_us = now;
+    }
+
+    if(button.candidate_pressed != button.stable_pressed &&
+       now - button.candidate_since_us >= BUTTON_DEBOUNCE_US)
+    {
+        button.stable_pressed = button.candidate_pressed;
+        return button.stable_pressed;
+    }
+
+    return false;
+}
 
 static const char *touch_lifecycle_name(TouchLifecycleState state)
 {
@@ -87,7 +117,8 @@ void button_init()
 
     button_config.pin_bit_mask =
         (1ULL << BTN_VOL_UP) |
-        (1ULL << BTN_VOL_DOWN);
+        (1ULL << BTN_VOL_DOWN) |
+        (1ULL << BTN_EXPRESSION);
 
     button_config.mode = GPIO_MODE_INPUT;
     button_config.pull_up_en = GPIO_PULLUP_ENABLE;
@@ -100,6 +131,17 @@ void button_init()
 
     const int64_t now = esp_timer_get_time();
     const bool touch_level = gpio_get_level(TOUCH_PIN) == 1;
+    const bool expression_button_pressed =
+        gpio_get_level(BTN_EXPRESSION) == 0;
+    const bool volume_up_pressed = gpio_get_level(BTN_VOL_UP) == 0;
+    const bool volume_down_pressed = gpio_get_level(BTN_VOL_DOWN) == 0;
+
+    volume_up_state = {volume_up_pressed, volume_up_pressed, now};
+    volume_down_state = {volume_down_pressed, volume_down_pressed, now};
+
+    expression_button_candidate_pressed = expression_button_pressed;
+    expression_button_stable_pressed = expression_button_pressed;
+    expression_button_candidate_since_us = now;
 
     // Synchronize with the physical level at boot. A HIGH input is treated
     // as already consumed until a complete stable release is observed.
@@ -123,6 +165,12 @@ void button_init()
         TOUCH_PIN,
         BTN_VOL_UP,
         BTN_VOL_DOWN);
+
+    ESP_LOGI(
+        TAG,
+        "Expression button ready: pin=%d active_low=1 initial_pressed=%d",
+        BTN_EXPRESSION,
+        expression_button_pressed ? 1 : 0);
 }
 
 //--------------------------------------------------
@@ -131,52 +179,70 @@ void button_update()
 {
     int64_t now = esp_timer_get_time();
 
-    bool volume_up_raw =
-        gpio_get_level(BTN_VOL_UP) == 0;
-
-    bool volume_down_raw =
-        gpio_get_level(BTN_VOL_DOWN) == 0;
-
-    if(volume_up_raw)
+    if(update_debounced_button(BTN_VOL_UP, volume_up_state, now))
     {
-        if(vol_up_press_start_us == 0)
-            vol_up_press_start_us = now;
-        else if(now - vol_up_press_start_us >= BUTTON_DEBOUNCE_US &&
-                now - last_up_us > BUTTON_REPEAT_US)
+        audio_adjustVolume(VOLUME_STEP);
+
+        ESP_LOGI(
+            TAG,
+            "Volume up: %d",
+            audio_getVolume());
+    }
+
+    if(update_debounced_button(BTN_VOL_DOWN, volume_down_state, now))
+    {
+        audio_adjustVolume(-VOLUME_STEP);
+
+        ESP_LOGI(
+            TAG,
+            "Volume down: %d",
+            audio_getVolume());
+    }
+
+    const bool expression_button_pressed =
+        gpio_get_level(BTN_EXPRESSION) == 0;
+
+    if(expression_button_pressed != expression_button_candidate_pressed)
+    {
+        expression_button_candidate_pressed = expression_button_pressed;
+        expression_button_candidate_since_us = now;
+    }
+
+    if(expression_button_candidate_pressed != expression_button_stable_pressed &&
+       now - expression_button_candidate_since_us >= BUTTON_DEBOUNCE_US)
+    {
+        expression_button_stable_pressed = expression_button_candidate_pressed;
+
+        if(expression_button_stable_pressed)
         {
-            last_up_us = now;
-            audio_adjustVolume(VOLUME_STEP);
-
-            ESP_LOGI(
-                TAG,
-                "Volume up: %d",
-                audio_getVolume());
+            if(getState() == JoyState::IDLE)
+            {
+                if(display_pairing_code_is_visible() ||
+                   display_qr_code_is_visible() ||
+                   pairing_get_snapshot().phase != PairingPhase::NONE)
+                {
+                    ESP_LOGW(
+                        TAG,
+                        "Expression button rejected: pairing or QR display active");
+                }
+                else
+                {
+                    const Face next_face = display_next_touch_face();
+                    ESP_LOGI(
+                        TAG,
+                        "Expression button: selected face=%d; playing local expression audio",
+                        (int)next_face);
+                    audio_triggerExpressionAudio((int)next_face);
+                }
+            }
+            else
+            {
+                ESP_LOGW(
+                    TAG,
+                    "Expression button rejected: state=%s (not IDLE)",
+                    joy_state_name(getState()));
+            }
         }
-    }
-    else
-    {
-        vol_up_press_start_us = 0;
-    }
-
-    if(volume_down_raw)
-    {
-        if(vol_down_press_start_us == 0)
-            vol_down_press_start_us = now;
-        else if(now - vol_down_press_start_us >= BUTTON_DEBOUNCE_US &&
-                now - last_down_us > BUTTON_REPEAT_US)
-        {
-            last_down_us = now;
-            audio_adjustVolume(-VOLUME_STEP);
-
-            ESP_LOGI(
-                TAG,
-                "Volume down: %d",
-                audio_getVolume());
-        }
-    }
-    else
-    {
-        vol_down_press_start_us = 0;
     }
 
     bool touch_level =
@@ -236,16 +302,15 @@ void button_update()
                     }
                     else
                     {
-                        const JoyState state_before = getState();
-
-                        // Single tap touch trigger: waking up Joy (alternative to wake word)
-                        audio_triggerWakeAck();
-                        wakeword_task();
-
-                        ESP_LOGI(
-                            TAG,
-                            "Touch accepted: Joy state before=%s - waking up to RECORDING",
-                            joy_state_name(state_before));
+                        if(display_start_shy())
+                        {
+                            audio_triggerExpressionAudio((int)FACE_CUTE);
+                            ESP_LOGI(TAG, "Touch accepted: shy animation started with local cute audio");
+                        }
+                        else
+                        {
+                            ESP_LOGW(TAG, "Touch rejected: shy display could not start");
+                        }
                     }
                 }
                 else
