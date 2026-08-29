@@ -20,6 +20,16 @@ enum DeviceStatus {
   REVOKED
 }
 
+enum ProvisioningSessionStatus {
+  PREPARED
+  RESERVED
+  COMMITTED
+  FINALIZED_PENDING_RUNTIME_ACK
+  COMPLETED
+  EXPIRED
+  CANCELLED
+}
+
 enum PairingStatus {
   ISSUED
   CLAIMED
@@ -284,6 +294,7 @@ model User {
   whatsAppDeliveries          WhatsAppDelivery[]
   bugReports                  BugReport[]
   pushTokens                  MobilePushToken[]
+  provisioningSessions        DeviceProvisioningSession[]
 }
 
 model PasswordCredential {
@@ -366,6 +377,7 @@ model Device {
   name                String                    @db.VarChar(120)
   tokenHash           String                    @db.Char(64)
   status              DeviceStatus              @default(PENDING)
+  bindingResetEpoch   Int                       @default(0)
   pairedAt            DateTime?                 @db.Timestamptz(3)
   revokedAt           DateTime?                 @db.Timestamptz(3)
   lastSeenAt          DateTime?                 @db.Timestamptz(3)
@@ -432,6 +444,56 @@ model HardwareEnrollment {
   @@index([hardwareId, status, expiresAt])
   @@index([codeHash, status])
   @@index([claimedUserId, createdAt])
+}
+
+model HardwareIdentity {
+  hardwareId                    String                     @id @db.VarChar(128)
+  provisioningRef               String                     @unique @db.VarChar(8)
+  manufacturingSecretCiphertext String                     @db.Text
+  manufacturingSecretNonce      String                     @db.VarChar(64)
+  manufacturingSecretTag        String                     @db.VarChar(64)
+  manufacturingSecretKeyVersion Int                        @default(1)
+  provisioningRootCiphertext    String                     @db.Text
+  provisioningRootNonce         String                     @db.VarChar(64)
+  provisioningRootTag           String                     @db.VarChar(64)
+  provisioningRootKeyVersion    Int                        @default(1)
+  resetEpoch                    Int                        @default(0)
+  hardwareRevision              String                     @default("revA") @db.VarChar(32)
+  createdAt                     DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt                     DateTime                   @updatedAt @db.Timestamptz(3)
+  provisioningSessions          DeviceProvisioningSession[]
+}
+
+model DeviceProvisioningSession {
+  id                     String                    @id @default(uuid()) @db.Uuid
+  hardwareId             String                    @db.VarChar(128)
+  userId                 String                    @db.Uuid
+  protocolVersion        Int                       @default(1)
+  setupNonce             String                    @default("") @db.VarChar(128)
+  setupNonceHash         String                    @db.Char(64)
+  preparedChallengeHash  String                    @db.Char(64)
+  resetEpochObserved     Int
+  status                 ProvisioningSessionStatus @default(PREPARED)
+  prepareExpiresAt       DateTime                  @db.Timestamptz(3)
+  reservationExpiresAt   DateTime?                 @db.Timestamptz(3)
+  finalizeExpiresAt      DateTime?                 @db.Timestamptz(3)
+  claimTokenHash         String?                   @db.Char(64)
+  confirmationNonceHash  String?                   @db.Char(64)
+  commitNonceHash        String?                   @db.Char(64)
+  secureStartIssuedAt    DateTime?                 @db.Timestamptz(3)
+  runtimeTokenCiphertext String?                   @db.Text
+  runtimeTokenNonce      String?                   @db.VarChar(64)
+  runtimeTokenTag        String?                   @db.VarChar(64)
+  deviceId               String?                   @db.Uuid
+  createdAt              DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                  @updatedAt @db.Timestamptz(3)
+  finalizedAt            DateTime?                 @db.Timestamptz(3)
+  completedAt            DateTime?                 @db.Timestamptz(3)
+  hardware               HardwareIdentity          @relation(fields: [hardwareId], references: [hardwareId], onDelete: Cascade)
+  user                   User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([hardwareId, status])
+  @@index([userId, status])
 }
 
 model UserSettings {

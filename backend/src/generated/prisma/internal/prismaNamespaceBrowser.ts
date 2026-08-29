@@ -60,6 +60,8 @@ export const ModelName = {
   Device: 'Device',
   DevicePairing: 'DevicePairing',
   HardwareEnrollment: 'HardwareEnrollment',
+  HardwareIdentity: 'HardwareIdentity',
+  DeviceProvisioningSession: 'DeviceProvisioningSession',
   UserSettings: 'UserSettings',
   DeviceSettings: 'DeviceSettings',
   AuditEvent: 'AuditEvent',
@@ -202,6 +204,7 @@ export const DeviceScalarFieldEnum = {
   name: 'name',
   tokenHash: 'tokenHash',
   status: 'status',
+  bindingResetEpoch: 'bindingResetEpoch',
   pairedAt: 'pairedAt',
   revokedAt: 'revokedAt',
   lastSeenAt: 'lastSeenAt',
@@ -246,6 +249,56 @@ export const HardwareEnrollmentScalarFieldEnum = {
 } as const
 
 export type HardwareEnrollmentScalarFieldEnum = (typeof HardwareEnrollmentScalarFieldEnum)[keyof typeof HardwareEnrollmentScalarFieldEnum]
+
+
+export const HardwareIdentityScalarFieldEnum = {
+  hardwareId: 'hardwareId',
+  provisioningRef: 'provisioningRef',
+  manufacturingSecretCiphertext: 'manufacturingSecretCiphertext',
+  manufacturingSecretNonce: 'manufacturingSecretNonce',
+  manufacturingSecretTag: 'manufacturingSecretTag',
+  manufacturingSecretKeyVersion: 'manufacturingSecretKeyVersion',
+  provisioningRootCiphertext: 'provisioningRootCiphertext',
+  provisioningRootNonce: 'provisioningRootNonce',
+  provisioningRootTag: 'provisioningRootTag',
+  provisioningRootKeyVersion: 'provisioningRootKeyVersion',
+  resetEpoch: 'resetEpoch',
+  hardwareRevision: 'hardwareRevision',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type HardwareIdentityScalarFieldEnum = (typeof HardwareIdentityScalarFieldEnum)[keyof typeof HardwareIdentityScalarFieldEnum]
+
+
+export const DeviceProvisioningSessionScalarFieldEnum = {
+  id: 'id',
+  hardwareId: 'hardwareId',
+  userId: 'userId',
+  protocolVersion: 'protocolVersion',
+  setupNonce: 'setupNonce',
+  setupNonceHash: 'setupNonceHash',
+  preparedChallengeHash: 'preparedChallengeHash',
+  resetEpochObserved: 'resetEpochObserved',
+  status: 'status',
+  prepareExpiresAt: 'prepareExpiresAt',
+  reservationExpiresAt: 'reservationExpiresAt',
+  finalizeExpiresAt: 'finalizeExpiresAt',
+  claimTokenHash: 'claimTokenHash',
+  confirmationNonceHash: 'confirmationNonceHash',
+  commitNonceHash: 'commitNonceHash',
+  secureStartIssuedAt: 'secureStartIssuedAt',
+  runtimeTokenCiphertext: 'runtimeTokenCiphertext',
+  runtimeTokenNonce: 'runtimeTokenNonce',
+  runtimeTokenTag: 'runtimeTokenTag',
+  deviceId: 'deviceId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  finalizedAt: 'finalizedAt',
+  completedAt: 'completedAt'
+} as const
+
+export type DeviceProvisioningSessionScalarFieldEnum = (typeof DeviceProvisioningSessionScalarFieldEnum)[keyof typeof DeviceProvisioningSessionScalarFieldEnum]
 
 
 export const UserSettingsScalarFieldEnum = {

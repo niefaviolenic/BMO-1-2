@@ -22,6 +22,7 @@ function appWithOps(
     users: {} as never,
     devices: {} as never,
     pairing: {} as never,
+    provisioning: {} as never,
     settings: {} as never,
     recovery: {} as never,
     profile: {} as never,

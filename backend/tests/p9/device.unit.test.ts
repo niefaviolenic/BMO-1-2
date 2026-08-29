@@ -21,22 +21,35 @@ vi.mock("../../src/p9/db/client.js", () => ({
 import { DeviceService } from "../../src/p9/services/device.service.js";
 
 describe("P9 device ownership lifecycle", () => {
-  it("rejects claiming a second active physical Joy for the same user", async () => {
+  it("allows claiming multiple active physical Joy devices for the same user", async () => {
     const repositories = {
       lockUser: vi.fn().mockResolvedValue(undefined),
       device: {
         count: vi.fn().mockResolvedValue(1),
-        create: vi.fn(),
+        create: vi.fn().mockResolvedValue({ id: "device-2", status: "ACTIVE" }),
       },
     };
 
-    await expect(new DeviceService({} as never, repositories as never).createClaimed({
+    const result = await new DeviceService({} as never, repositories as never).createClaimed({
       userId: "user-1",
       hardwareId: "joy-002",
       name: "Joy",
       tokenHash: "token-hash",
-    })).rejects.toMatchObject({ code: "CONFLICT", status: 409 });
-    expect(repositories.device.create).not.toHaveBeenCalled();
+    });
+    expect(result.id).toBe("device-2");
+    expect(repositories.device.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: "user-1",
+        hardwareId: "joy-002",
+        status: "ACTIVE",
+        settings: {
+          create: {
+            displayName: "Joy",
+            defaultDevice: false,
+          },
+        },
+      }),
+    });
   });
 
   it("clears a revoked default before promoting the replacement", async () => {

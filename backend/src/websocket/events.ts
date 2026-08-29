@@ -127,6 +127,20 @@ export const ProactiveFailedEvent = z.object({
   reason: ProactiveFailedReason,
 }).strict();
 
+export const DeviceResetEvent = z.object({
+  event: z.literal("device_reset"),
+  reset_type: z.enum(["PAIRING_RESET", "FACTORY_RESET"]),
+  previous_reset_epoch: z.number().int().nonnegative(),
+  reset_epoch: z.number().int().positive(),
+  reset_nonce: z.string().min(1).max(128),
+  reset_proof: z.string().min(1).max(128),
+}).strict();
+
+export const DeviceResetAckEvent = z.object({
+  event: z.literal("device_reset_ack"),
+  reset_epoch: z.number().int().positive(),
+}).strict();
+
 export const inboundEventSchema = z.discriminatedUnion("event", [
   z.object({
     event: z.literal("authenticate"),
@@ -180,6 +194,7 @@ export const inboundEventSchema = z.discriminatedUnion("event", [
   ProactiveOfferAcceptedEvent,
   ProactiveDoneEvent,
   ProactiveFailedEvent,
+  DeviceResetEvent,
 ]);
 
 export type InboundEvent = z.infer<typeof inboundEventSchema>;
@@ -237,7 +252,8 @@ export type OutboundEvent =
   | z.infer<typeof ProactiveAudioReadyEvent>
   | z.infer<typeof ProactiveCancelEvent>
   | z.infer<typeof DisplayQrEvent>
-  | z.infer<typeof ClearQrEvent>;
+  | z.infer<typeof ClearQrEvent>
+  | z.infer<typeof DeviceResetAckEvent>;
 
 export type PairingCodeEvent = Extract<OutboundEvent, { event: "pairing_code" }>;
 export type PairingCompletedEvent = Extract<OutboundEvent, { event: "pairing_completed" }>;
@@ -305,4 +321,5 @@ export const outboundEventSchema = z.discriminatedUnion("event", [
   ProactiveCancelEvent,
   DisplayQrEvent,
   ClearQrEvent,
+  DeviceResetAckEvent,
 ]);

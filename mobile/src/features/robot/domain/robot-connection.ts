@@ -22,6 +22,8 @@ export type RobotDeviceInfo = SafeDevice & {
 export type RobotConnectionState = {
   status: RobotConnectionStatus;
   device: RobotDeviceInfo | null;
+  devices: RobotDeviceInfo[];
+  activeDeviceId: string | null;
   isHydrating: boolean;
   isPairing: boolean;
   isUnpairing: boolean;
@@ -31,6 +33,8 @@ export type RobotConnectionState = {
 export const INITIAL_ROBOT_CONNECTION: RobotConnectionState = {
   status: 'disconnected',
   device: null,
+  devices: [],
+  activeDeviceId: null,
   isHydrating: false,
   isPairing: false,
   isUnpairing: false,

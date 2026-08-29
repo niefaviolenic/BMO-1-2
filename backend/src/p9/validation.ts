@@ -156,6 +156,58 @@ export function parseDeviceSettings(value: unknown): z.infer<typeof deviceSettin
   };
 }
 
+
+const provisioningPrepareSchema = z.object({
+  protocol_version: z.literal(1).default(1),
+  hardware_id: z.string().min(1).max(128),
+  provisioning_ref: z.string().min(1).max(8).transform((v) => v.toUpperCase()),
+  setup_nonce: z.string().min(1).max(128),
+  reset_epoch: z.number().int().nonnegative(),
+}).strict();
+
+const provisioningConfirmSchema = z.object({
+  session_id: z.string().uuid(),
+  confirmation: z.object({
+    hardware_id: z.string().min(1).max(128),
+    provisioning_ref: z.string().min(1).max(8).transform((v) => v.toUpperCase()),
+    setup_nonce: z.string().min(1).max(128),
+    reset_epoch: z.number().int().nonnegative(),
+    challenge: z.string().min(1).max(256),
+    confirmation_nonce: z.string().min(1).max(128),
+    proof: z.string().min(1).max(128),
+  }).strict(),
+}).strict();
+
+const claimCommitSchema = z.object({
+  commit_nonce: z.string().min(1).max(128),
+  commit_proof: z.string().min(1).max(128),
+}).strict();
+
+const deviceFinalizeSchema = z.object({
+  reservation_id: z.string().uuid(),
+  claim_token: z.string().min(1).max(256),
+  reset_epoch: z.number().int().nonnegative(),
+  finalize_nonce: z.string().min(1).max(128),
+  firmware_version: z.string().min(1).max(64),
+  hardware_revision: z.string().min(1).max(32),
+  manufacturing_proof: z.string().min(1).max(128),
+}).strict();
+
+export function parseProvisioningPrepare(value: unknown): z.infer<typeof provisioningPrepareSchema> {
+  return provisioningPrepareSchema.parse(value);
+}
+
+export function parseProvisioningConfirm(value: unknown): z.infer<typeof provisioningConfirmSchema> {
+  return provisioningConfirmSchema.parse(value);
+}
+
+export function parseClaimCommit(value: unknown): z.infer<typeof claimCommitSchema> {
+  return claimCommitSchema.parse(value);
+}
+
+export function parseDeviceFinalize(value: unknown): z.infer<typeof deviceFinalizeSchema> {
+  return deviceFinalizeSchema.parse(value);
+}
 export function parsePairingClaim(value: unknown): { code: string } {
   return pairingClaimSchema.parse(value);
 }

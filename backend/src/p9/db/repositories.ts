@@ -15,6 +15,10 @@ export class P9Repositories {
   async lockHardwareEnrollment(hardwareId: string): Promise<void> {
     await this.db.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`hardware-enrollment:${hardwareId}`}, 0))`;
   }
+  async lockHardwareIdentity(hardwareId: string): Promise<void> {
+    await this.db.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`hardware-identity:${hardwareId}`}, 0))`;
+  }
+
 
   async databaseNow(): Promise<Date> {
     const rows = await this.db.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS "now"`;
@@ -541,5 +545,13 @@ export class P9Repositories {
 
   get mobilePushToken() {
     return this.db.mobilePushToken;
+  }
+
+  get hardwareIdentity() {
+    return this.db.hardwareIdentity;
+  }
+
+  get deviceProvisioningSession() {
+    return this.db.deviceProvisioningSession;
   }
 }

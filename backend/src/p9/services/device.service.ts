@@ -11,6 +11,7 @@ export interface ClaimedDeviceInput {
   hardwareId: string;
   name: string;
   tokenHash: string;
+  bindingResetEpoch?: number;
 }
 
 export type DeviceUnpairedHandler = (device: {
@@ -67,9 +68,6 @@ export class DeviceService {
     const activeCount = await repositories.device.count({
       where: { userId: input.userId, status: "ACTIVE" },
     });
-    if (activeCount > 0) {
-      throw new P9Error("CONFLICT", 409, "User already has an active Joy device");
-    }
     const device = await repositories.device.create({
       data: {
         userId: input.userId,
@@ -77,6 +75,7 @@ export class DeviceService {
         name: input.name,
         tokenHash: input.tokenHash,
         status: "ACTIVE",
+        bindingResetEpoch: input.bindingResetEpoch ?? 0,
         pairedAt: new Date(),
         settings: {
           create: {

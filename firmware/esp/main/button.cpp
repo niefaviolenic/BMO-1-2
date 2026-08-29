@@ -3,6 +3,8 @@
 #include "audio.h"
 #include "display.h"
 #include "pairing.h"
+#include "joy_ble_provisioning.h"
+#include "joy_identity.h"
 #include "state.h"
 #include "driver/gpio.h"
 #include "driver/touch_sensor_legacy.h"
@@ -52,6 +54,9 @@ static bool touch_candidate_level = false;
 static bool touch_stable_level = false;
 static int64_t touch_candidate_since_us = 0;
 static int64_t last_touch_diag_us = 0;
+static int64_t touch_press_start_us = 0;
+static bool touch_physical_confirm_triggered = false;
+static bool touch_factory_reset_triggered = false;
 
 // GPIO14 is an ESP32-S3 native touch channel. The previous implementation
 // treated it only as a digital input, which cannot detect a bare capacitive
@@ -408,46 +413,67 @@ void button_update()
 
         if(touch_stable_level)
         {
-            if(touch_state == TouchLifecycleState::TOUCH_ARMED)
-            {
-                touch_state = TouchLifecycleState::TOUCH_CONSUMED;
-                ESP_LOGI(
-                    TAG,
-                    "Touch lifecycle: %s",
-                    touch_lifecycle_name(touch_state));
-
-                if(getState() == JoyState::IDLE)
-                {
-                    if(display_pairing_code_is_visible() || display_qr_code_is_visible() || pairing_get_snapshot().phase != PairingPhase::NONE)
-                    {
-                        ESP_LOGW(TAG, "Touch rejected: robot is in pairing mode or QR display mode");
-                    }
-                    else
-                    {
-                        display_set_idle_face(FACE_HAPPY);
-                        audio_triggerReadyAudio();
-                        ESP_LOGI(
-                            TAG,
-                            "Touch accepted: idle HAPPY face rendered with local I'm ready audio");
-                    }
-                }
-                else
-                {
-                    ESP_LOGW(
-                        TAG,
-                        "Touch rejected: state=%s (not IDLE)",
-                        joy_state_name(getState()));
-                }
-            }
+            touch_press_start_us = now;
+            touch_physical_confirm_triggered = false;
+            touch_factory_reset_triggered = false;
+            touch_state = TouchLifecycleState::TOUCH_CONSUMED;
+            ESP_LOGI(TAG, "Touch press started at %lld us", (long long)now);
         }
         else
         {
-            // Only a stable LOW/released state re-arms the physical input.
             touch_state = TouchLifecycleState::TOUCH_ARMED;
-            ESP_LOGI(
-                TAG,
-                "Touch lifecycle: %s",
-                touch_lifecycle_name(touch_state));
+            const int64_t duration_us = (touch_press_start_us > 0) ? (now - touch_press_start_us) : 0;
+            ESP_LOGI(TAG, "Touch released after %lld ms", (long long)(duration_us / 1000LL));
+
+            if (touch_physical_confirm_triggered || touch_factory_reset_triggered)
+            {
+                ESP_LOGI(TAG, "Touch release consumed by previous confirmation/reset");
+            }
+            else if (duration_us < 5000000LL)
+            {
+                if(getState() == JoyState::IDLE)
+                {
+                    display_set_idle_face(FACE_HAPPY);
+                    audio_triggerReadyAudio();
+                    ESP_LOGI(TAG, "Short touch accepted: idle HAPPY face rendered with local ready audio");
+                }
+                else
+                {
+                    ESP_LOGW(TAG, "Short touch rejected: state=%s (not IDLE)", joy_state_name(getState()));
+                }
+            }
+            else if (duration_us >= 5000000LL && duration_us < 30000000LL)
+            {
+                ESP_LOGI(TAG, "PAIRING_RESET triggered by 5s hold release! Opening 5-min BLE window");
+                joy_identity_increment_reset_epoch(nullptr);
+                joy_runtime_clear_provisioning();
+                joy_ble_start_pairing_window();
+            }
+            touch_press_start_us = 0;
+        }
+    }
+
+    // While held down, check for physical confirmation (>=2s) or factory reset (>=30s)
+    if (touch_stable_level && touch_press_start_us > 0)
+    {
+        const int64_t hold_duration_us = now - touch_press_start_us;
+
+        if (joy_ble_get_state() == JoyBleState::PHYSICAL_CONFIRM_PENDING &&
+            hold_duration_us >= 2000000LL && !touch_physical_confirm_triggered)
+        {
+            touch_physical_confirm_triggered = true;
+            joy_ble_on_physical_hold_2s();
+            display_set_idle_face(FACE_HAPPY);
+            ESP_LOGI(TAG, "2-second hold triggered physical confirmation!");
+        }
+
+        if (hold_duration_us >= 30000000LL && !touch_factory_reset_triggered)
+        {
+            touch_factory_reset_triggered = true;
+            joy_identity_increment_reset_epoch(nullptr);
+            joy_runtime_clear_provisioning();
+            joy_ble_start_pairing_window();
+            ESP_LOGI(TAG, "FACTORY_RESET triggered by continuous 30-second touch hold!");
         }
     }
 }

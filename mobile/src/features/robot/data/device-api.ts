@@ -115,3 +115,86 @@ export async function getDeviceWifi(deviceId: string): Promise<DeviceWifi | null
   const payload = await apiRequest<{ wifi: unknown }>(`/devices/${deviceId}/wifi`);
   return asWifi(payload.wifi);
 }
+
+export type ProvisioningPrepareInput = {
+  protocol_version?: number;
+  hardware_id: string;
+  provisioning_ref: string;
+  setup_nonce: string;
+  reset_epoch: number;
+};
+
+export type ProvisioningPrepareResponse = {
+  session_id: string;
+  challenge: string;
+  expires_at: string;
+};
+
+export type ProvisioningConfirmInput = {
+  session_id: string;
+  confirmation: {
+    hardware_id: string;
+    provisioning_ref: string;
+    setup_nonce: string;
+    reset_epoch: number;
+    challenge: string;
+    confirmation_nonce: string;
+    proof: string;
+  };
+};
+
+export type ProvisioningConfirmResponse = {
+  reservation_id: string;
+  claim_token: string;
+  secure_start_proof: string;
+  security: {
+    scheme: 2;
+    username: string;
+    proof_of_possession: string;
+  };
+  expires_at: string;
+};
+
+export type ClaimCommitInput = {
+  commit_nonce: string;
+  commit_proof: string;
+};
+
+export type ClaimCommitResponse = {
+  status: 'COMMITTED';
+  reservation_id: string;
+};
+
+export type ProvisioningSessionStatusResponse = {
+  status: string;
+  hardware_id: string;
+  device_id: string | null;
+  updated_at: string;
+};
+
+export async function prepareProvisioning(input: ProvisioningPrepareInput): Promise<ProvisioningPrepareResponse> {
+  return apiRequest<ProvisioningPrepareResponse>('/devices/provisioning/prepare', {
+    method: 'POST',
+    body: input,
+  });
+}
+
+export async function confirmProvisioning(input: ProvisioningConfirmInput): Promise<ProvisioningConfirmResponse> {
+  return apiRequest<ProvisioningConfirmResponse>('/devices/provisioning/confirm', {
+    method: 'POST',
+    body: input,
+  });
+}
+
+export async function commitClaim(reservationId: string, input: ClaimCommitInput): Promise<ClaimCommitResponse> {
+  return apiRequest<ClaimCommitResponse>(`/devices/claim-reservations/${reservationId}/commit`, {
+    method: 'POST',
+    body: input,
+  });
+}
+
+export async function getProvisioningStatus(sessionId: string): Promise<ProvisioningSessionStatusResponse> {
+  return apiRequest<ProvisioningSessionStatusResponse>(`/devices/provisioning-sessions/${sessionId}`, {
+    method: 'GET',
+  });
+}

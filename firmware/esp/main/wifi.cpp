@@ -1,5 +1,7 @@
 #include "wifi.h"
 #include "network.h"
+#include "joy_identity.h"
+#include "joy_ble_provisioning.h"
 
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -136,9 +138,7 @@ static void start_time_sync_after_ip()
     }
 }
 
-// Ganti dengan SSID dan Password WiFi kamu
-#define JOY_WIFI_SSID "ARMEY L1-A"
-#define JOY_WIFI_PASS "mautauaja"
+// Wi-Fi credentials loaded dynamically from NVS joy_runtime
 
 static const char *wifi_disconnect_reason_to_string(uint8_t reason)
 {
@@ -175,17 +175,27 @@ static void event_handler(
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
     {
-        ESP_LOGI(WIFI_TAG, "Connecting to WiFi SSID \"%s\"...", JOY_WIFI_SSID);
-        esp_err_t err = esp_wifi_connect();
-        if (err != ESP_OK)
+        const joy_runtime_creds_t *rt = joy_runtime_get();
+        if (rt && strlen(rt->wifi_ssid) > 0)
         {
-            ESP_LOGW(WIFI_TAG, "Failed to start WiFi connection: %s", esp_err_to_name(err));
+            ESP_LOGI(WIFI_TAG, "Connecting to WiFi SSID \"%s\"...", rt->wifi_ssid);
+            esp_err_t err = esp_wifi_connect();
+            if (err != ESP_OK)
+            {
+                ESP_LOGW(WIFI_TAG, "Failed to start WiFi connection: %s", esp_err_to_name(err));
+            }
+        }
+        else
+        {
+            ESP_LOGI(WIFI_TAG, "No Wi-Fi credentials configured; awaiting BLE provisioning");
         }
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_CONNECTED)
     {
         network_set_wifi_connected(true);
-        ESP_LOGI(WIFI_TAG, "Connected to AP \"%s\", waiting for IP...", JOY_WIFI_SSID);
+        const joy_runtime_creds_t *rt = joy_runtime_get();
+        const char *ssid = (rt && rt->wifi_ssid[0]) ? rt->wifi_ssid : "(unknown)";
+        ESP_LOGI(WIFI_TAG, "Connected to AP \"%s\", waiting for IP...", ssid);
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
@@ -200,7 +210,9 @@ static void event_handler(
 
         if (reason == WIFI_REASON_NO_AP_FOUND)
         {
-            ESP_LOGW(WIFI_TAG, "No AP found for SSID \"%s\". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.", JOY_WIFI_SSID);
+            const joy_runtime_creds_t *rt = joy_runtime_get();
+            const char *ssid = (rt && rt->wifi_ssid[0]) ? rt->wifi_ssid : "(unknown)";
+            ESP_LOGW(WIFI_TAG, "No AP found for SSID \"%s\". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.", ssid);
         }
 
         esp_err_t err = esp_wifi_connect();
@@ -216,6 +228,13 @@ static void event_handler(
         network_set_got_ip(true);
         start_time_sync_after_ip();
         ESP_LOGI(WIFI_TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+
+        const joy_runtime_creds_t *rt = joy_runtime_get();
+        if (rt && rt->pending_finalize)
+        {
+            ESP_LOGI(WIFI_TAG, "Triggering backend enrollment finalize after IP acquisition...");
+            joy_ble_finalize_with_backend();
+        }
     }
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_LOST_IP)
     {
@@ -278,17 +297,21 @@ void wifi_init()
     ESP_LOGI(WIFI_TAG, "SNTP event handler register return_code=%s(%d)",
              esp_err_to_name(sntp_event_register_err), (int)sntp_event_register_err);
 
-    wifi_config_t wifi_config = {};
-    strncpy((char*)wifi_config.sta.ssid, JOY_WIFI_SSID, sizeof(wifi_config.sta.ssid));
-    strncpy((char*)wifi_config.sta.password, JOY_WIFI_PASS, sizeof(wifi_config.sta.password));
-    wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+    joy_identity_init();
+    const joy_runtime_creds_t *runtime = joy_runtime_get();
 
-    ESP_LOGI(
-        WIFI_TAG,
-        "WiFi config prepared: ssid=\"%s\", ssid_len=%u, password_len=%u, auth_threshold=WPA2_PSK",
-        (const char*)wifi_config.sta.ssid,
-        (unsigned)strlen((const char*)wifi_config.sta.ssid),
-        (unsigned)strlen((const char*)wifi_config.sta.password));
+    wifi_config_t wifi_config = {};
+    if (runtime && strlen(runtime->wifi_ssid) > 0)
+    {
+        strncpy((char*)wifi_config.sta.ssid, runtime->wifi_ssid, sizeof(wifi_config.sta.ssid));
+        strncpy((char*)wifi_config.sta.password, runtime->wifi_password, sizeof(wifi_config.sta.password));
+        wifi_config.sta.threshold.authmode = (strlen(runtime->wifi_password) > 0) ? WIFI_AUTH_WPA2_PSK : WIFI_AUTH_OPEN;
+        ESP_LOGI(WIFI_TAG, "WiFi config loaded from NVS: ssid=\"%s\"", (const char*)wifi_config.sta.ssid);
+    }
+    else
+    {
+        ESP_LOGI(WIFI_TAG, "No WiFi credentials in NVS. Device ready for BLE provisioning.");
+    }
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));

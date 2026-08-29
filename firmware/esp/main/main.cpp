@@ -6,6 +6,8 @@
 #include "state.h"
 #include "api.h"
 #include "network.h"
+#include "joy_identity.h"
+#include "joy_ble_provisioning.h"
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -62,6 +64,9 @@ extern "C" void app_main()
              (unsigned long)((xTaskGetTickCount() - speaker_diag_start) * portTICK_PERIOD_MS));
 
     button_init();
+    joy_identity_init();
+    joy_ble_provisioning_init();
+
     
     // Inisialisasi koneksi WiFi
     wifi_init();
@@ -82,6 +87,7 @@ extern "C" void app_main()
     while (true)
     {
         button_update();
+        joy_ble_poll();
         vTaskDelay(pdMS_TO_TICKS(20));
     }
 }

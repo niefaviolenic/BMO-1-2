@@ -406,6 +406,8 @@ export const ModelName = {
   Device: 'Device',
   DevicePairing: 'DevicePairing',
   HardwareEnrollment: 'HardwareEnrollment',
+  HardwareIdentity: 'HardwareIdentity',
+  DeviceProvisioningSession: 'DeviceProvisioningSession',
   UserSettings: 'UserSettings',
   DeviceSettings: 'DeviceSettings',
   AuditEvent: 'AuditEvent',
@@ -455,7 +457,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "passwordCredential" | "authIdentity" | "invitation" | "session" | "refreshToken" | "device" | "devicePairing" | "hardwareEnrollment" | "userSettings" | "deviceSettings" | "auditEvent" | "passwordRecovery" | "personalizationSettings" | "chatSession" | "chatMessage" | "chatOperation" | "chatMessageFeedback" | "memoryRecord" | "memoryCandidate" | "memoryAction" | "memoryTopicForget" | "memorySummary" | "schedule" | "scheduleRun" | "proactiveDelivery" | "deliveryAttempt" | "deviceWifiConfiguration" | "deviceTelemetryCurrent" | "deviceLog" | "integrationConnection" | "oAuthState" | "spotifyCredential" | "spotifyAction" | "whatsAppConversation" | "whatsAppConversationAlias" | "whatsAppNotificationRule" | "whatsAppSendRequest" | "whatsAppDelivery" | "bugReport" | "bugReportAttachment" | "deviceSpeechReservation" | "mobilePushToken"
+    modelProps: "user" | "passwordCredential" | "authIdentity" | "invitation" | "session" | "refreshToken" | "device" | "devicePairing" | "hardwareEnrollment" | "hardwareIdentity" | "deviceProvisioningSession" | "userSettings" | "deviceSettings" | "auditEvent" | "passwordRecovery" | "personalizationSettings" | "chatSession" | "chatMessage" | "chatOperation" | "chatMessageFeedback" | "memoryRecord" | "memoryCandidate" | "memoryAction" | "memoryTopicForget" | "memorySummary" | "schedule" | "scheduleRun" | "proactiveDelivery" | "deliveryAttempt" | "deviceWifiConfiguration" | "deviceTelemetryCurrent" | "deviceLog" | "integrationConnection" | "oAuthState" | "spotifyCredential" | "spotifyAction" | "whatsAppConversation" | "whatsAppConversationAlias" | "whatsAppNotificationRule" | "whatsAppSendRequest" | "whatsAppDelivery" | "bugReport" | "bugReportAttachment" | "deviceSpeechReservation" | "mobilePushToken"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1122,6 +1124,154 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.HardwareEnrollmentCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.HardwareEnrollmentCountAggregateOutputType> | number
+        }
+      }
+    }
+    HardwareIdentity: {
+      payload: Prisma.$HardwareIdentityPayload<ExtArgs>
+      fields: Prisma.HardwareIdentityFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.HardwareIdentityFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HardwareIdentityPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.HardwareIdentityFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HardwareIdentityPayload>
+        }
+        findFirst: {
+          args: Prisma.HardwareIdentityFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HardwareIdentityPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.HardwareIdentityFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HardwareIdentityPayload>
+        }
+        findMany: {
+          args: Prisma.HardwareIdentityFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HardwareIdentityPayload>[]
+        }
+        create: {
+          args: Prisma.HardwareIdentityCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HardwareIdentityPayload>
+        }
+        createMany: {
+          args: Prisma.HardwareIdentityCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.HardwareIdentityCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HardwareIdentityPayload>[]
+        }
+        delete: {
+          args: Prisma.HardwareIdentityDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HardwareIdentityPayload>
+        }
+        update: {
+          args: Prisma.HardwareIdentityUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HardwareIdentityPayload>
+        }
+        deleteMany: {
+          args: Prisma.HardwareIdentityDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.HardwareIdentityUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.HardwareIdentityUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HardwareIdentityPayload>[]
+        }
+        upsert: {
+          args: Prisma.HardwareIdentityUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$HardwareIdentityPayload>
+        }
+        aggregate: {
+          args: Prisma.HardwareIdentityAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateHardwareIdentity>
+        }
+        groupBy: {
+          args: Prisma.HardwareIdentityGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.HardwareIdentityGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.HardwareIdentityCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.HardwareIdentityCountAggregateOutputType> | number
+        }
+      }
+    }
+    DeviceProvisioningSession: {
+      payload: Prisma.$DeviceProvisioningSessionPayload<ExtArgs>
+      fields: Prisma.DeviceProvisioningSessionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.DeviceProvisioningSessionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DeviceProvisioningSessionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.DeviceProvisioningSessionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DeviceProvisioningSessionPayload>
+        }
+        findFirst: {
+          args: Prisma.DeviceProvisioningSessionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DeviceProvisioningSessionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.DeviceProvisioningSessionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DeviceProvisioningSessionPayload>
+        }
+        findMany: {
+          args: Prisma.DeviceProvisioningSessionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DeviceProvisioningSessionPayload>[]
+        }
+        create: {
+          args: Prisma.DeviceProvisioningSessionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DeviceProvisioningSessionPayload>
+        }
+        createMany: {
+          args: Prisma.DeviceProvisioningSessionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.DeviceProvisioningSessionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DeviceProvisioningSessionPayload>[]
+        }
+        delete: {
+          args: Prisma.DeviceProvisioningSessionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DeviceProvisioningSessionPayload>
+        }
+        update: {
+          args: Prisma.DeviceProvisioningSessionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DeviceProvisioningSessionPayload>
+        }
+        deleteMany: {
+          args: Prisma.DeviceProvisioningSessionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.DeviceProvisioningSessionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.DeviceProvisioningSessionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DeviceProvisioningSessionPayload>[]
+        }
+        upsert: {
+          args: Prisma.DeviceProvisioningSessionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DeviceProvisioningSessionPayload>
+        }
+        aggregate: {
+          args: Prisma.DeviceProvisioningSessionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateDeviceProvisioningSession>
+        }
+        groupBy: {
+          args: Prisma.DeviceProvisioningSessionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.DeviceProvisioningSessionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.DeviceProvisioningSessionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.DeviceProvisioningSessionCountAggregateOutputType> | number
         }
       }
     }
@@ -3770,6 +3920,7 @@ export const DeviceScalarFieldEnum = {
   name: 'name',
   tokenHash: 'tokenHash',
   status: 'status',
+  bindingResetEpoch: 'bindingResetEpoch',
   pairedAt: 'pairedAt',
   revokedAt: 'revokedAt',
   lastSeenAt: 'lastSeenAt',
@@ -3814,6 +3965,56 @@ export const HardwareEnrollmentScalarFieldEnum = {
 } as const
 
 export type HardwareEnrollmentScalarFieldEnum = (typeof HardwareEnrollmentScalarFieldEnum)[keyof typeof HardwareEnrollmentScalarFieldEnum]
+
+
+export const HardwareIdentityScalarFieldEnum = {
+  hardwareId: 'hardwareId',
+  provisioningRef: 'provisioningRef',
+  manufacturingSecretCiphertext: 'manufacturingSecretCiphertext',
+  manufacturingSecretNonce: 'manufacturingSecretNonce',
+  manufacturingSecretTag: 'manufacturingSecretTag',
+  manufacturingSecretKeyVersion: 'manufacturingSecretKeyVersion',
+  provisioningRootCiphertext: 'provisioningRootCiphertext',
+  provisioningRootNonce: 'provisioningRootNonce',
+  provisioningRootTag: 'provisioningRootTag',
+  provisioningRootKeyVersion: 'provisioningRootKeyVersion',
+  resetEpoch: 'resetEpoch',
+  hardwareRevision: 'hardwareRevision',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type HardwareIdentityScalarFieldEnum = (typeof HardwareIdentityScalarFieldEnum)[keyof typeof HardwareIdentityScalarFieldEnum]
+
+
+export const DeviceProvisioningSessionScalarFieldEnum = {
+  id: 'id',
+  hardwareId: 'hardwareId',
+  userId: 'userId',
+  protocolVersion: 'protocolVersion',
+  setupNonce: 'setupNonce',
+  setupNonceHash: 'setupNonceHash',
+  preparedChallengeHash: 'preparedChallengeHash',
+  resetEpochObserved: 'resetEpochObserved',
+  status: 'status',
+  prepareExpiresAt: 'prepareExpiresAt',
+  reservationExpiresAt: 'reservationExpiresAt',
+  finalizeExpiresAt: 'finalizeExpiresAt',
+  claimTokenHash: 'claimTokenHash',
+  confirmationNonceHash: 'confirmationNonceHash',
+  commitNonceHash: 'commitNonceHash',
+  secureStartIssuedAt: 'secureStartIssuedAt',
+  runtimeTokenCiphertext: 'runtimeTokenCiphertext',
+  runtimeTokenNonce: 'runtimeTokenNonce',
+  runtimeTokenTag: 'runtimeTokenTag',
+  deviceId: 'deviceId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  finalizedAt: 'finalizedAt',
+  completedAt: 'completedAt'
+} as const
+
+export type DeviceProvisioningSessionScalarFieldEnum = (typeof DeviceProvisioningSessionScalarFieldEnum)[keyof typeof DeviceProvisioningSessionScalarFieldEnum]
 
 
 export const UserSettingsScalarFieldEnum = {
@@ -4574,6 +4775,20 @@ export type ListEnumHardwareEnrollmentStatusFieldRefInput<$PrismaModel> = FieldR
 
 
 /**
+ * Reference to a field of type 'ProvisioningSessionStatus'
+ */
+export type EnumProvisioningSessionStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ProvisioningSessionStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'ProvisioningSessionStatus[]'
+ */
+export type ListEnumProvisioningSessionStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ProvisioningSessionStatus[]'>
+    
+
+
+/**
  * Reference to a field of type 'ResponseLength'
  */
 export type EnumResponseLengthFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ResponseLength'>
@@ -5187,6 +5402,8 @@ export type GlobalOmitConfig = {
   device?: Prisma.DeviceOmit
   devicePairing?: Prisma.DevicePairingOmit
   hardwareEnrollment?: Prisma.HardwareEnrollmentOmit
+  hardwareIdentity?: Prisma.HardwareIdentityOmit
+  deviceProvisioningSession?: Prisma.DeviceProvisioningSessionOmit
   userSettings?: Prisma.UserSettingsOmit
   deviceSettings?: Prisma.DeviceSettingsOmit
   auditEvent?: Prisma.AuditEventOmit

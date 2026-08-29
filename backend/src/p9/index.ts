@@ -13,6 +13,8 @@ import { AccessTokenService, SessionService } from "./services/session.service.j
 import { SettingsService } from "./services/settings.service.js";
 import { UserService } from "./services/user.service.js";
 import { DeviceBindingService, type ApplicationDeviceBinding } from "./services/device-binding.service.js";
+import { ProvisioningService } from "./services/provisioning.service.js";
+import crypto from "node:crypto";
 import { createP9Router } from "./http/router.js";
 import type { Router } from "express";
 import type { Logger } from "pino";
@@ -68,6 +70,9 @@ export interface P9Runtime {
   pollWhatsApp(): Promise<{ processed: number; queued: number }>;
   voiceChatHandler: VoiceChatHandler;
   deviceAdditions: DeviceAdditionsService;
+  provisioning: ProvisioningService;
+  handleDeviceReset(hardwareId: string, event: { reset_type: "PAIRING_RESET" | "FACTORY_RESET"; previous_reset_epoch: number; reset_epoch: number; reset_nonce: string; reset_proof: string }): Promise<{ event: "device_reset_ack"; reset_epoch: number }>;
+  completeSessionOnRuntimeAuth(hardwareId: string, deviceId: string): Promise<void>;
   settings: SettingsService;
   close(): Promise<void>;
 }
@@ -149,6 +154,12 @@ export function createP9Runtime(config: P9Config, options: P9RuntimeOptions = {}
     batchSize: config.avatarGcBatchSize,
   });
   const deviceBinding = new DeviceBindingService(repositories);
+  const masterKey = crypto.createHash("sha256").update(config.jwtSecret, "utf8").digest();
+  const provisioning = new ProvisioningService({
+    client,
+    masterKey,
+    mobileEvents: options.mobileEvents ?? noMobileEvents,
+  });
   const memoryGateway = new PostgresMemoryGateway(repositories);
   const memory = new MemoryService({ client, repositories, hermes: options.hermes });
   const proactive = new ProactiveDeliveryService({ client, repositories, mobileEvents: options.mobileEvents ?? noMobileEvents });
@@ -305,7 +316,7 @@ export function createP9Runtime(config: P9Config, options: P9RuntimeOptions = {}
     memoryContext: memoryGateway,
   });
   return {
-    router: createP9Router({ auth, sessions, users, devices, pairing, settings, recovery, profile, avatars, personalization, chat, integrations, schedule, memory, bugReports, deviceAdditions, pushNotifications, accessTokens, repositories, config, includeOps: options.includeOps ?? false, audioService: options.audioService, tempAudio: options.tempAudio, publicBaseUrl: options.publicBaseUrl }),
+    router: createP9Router({ auth, sessions, users, devices, pairing, provisioning, settings, recovery, profile, avatars, personalization, chat, integrations, schedule, memory, bugReports, deviceAdditions, pushNotifications, accessTokens, repositories, config, includeOps: options.includeOps ?? false, audioService: options.audioService, tempAudio: options.tempAudio, publicBaseUrl: options.publicBaseUrl }),
     mediaRouter: createAvatarMediaRouter(avatarStorage),
     initialize: async () => {
       await avatarStorage.initialize();
@@ -318,6 +329,9 @@ export function createP9Runtime(config: P9Config, options: P9RuntimeOptions = {}
     setDeviceSocketBridge: (bridge) => { activeSocketBridge = bridge; integrations.setDeviceSocketBridge(bridge); },
     authenticateMobileSocket: (accessToken) =>
       authenticateMobileAccessToken(accessTokens, sessions, accessToken),
+    provisioning,
+    handleDeviceReset: (hardwareId, event) => provisioning.handleDeviceReset(hardwareId, event),
+    completeSessionOnRuntimeAuth: (hardwareId, deviceId) => provisioning.completeSessionOnRuntimeAuth(hardwareId, deviceId),
     checkReadiness: () => checkP9Readiness(repositories),
     pollWhatsApp: () => integrations.pollWhatsApp(),
     voiceChatHandler: {

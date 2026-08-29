@@ -61,6 +61,12 @@ export const mobileOutboundEventSchema = z.discriminatedUnion("event", [
     errorCode: nullableErrorCode,
   }).strict(),
   z.object({
+    event: z.literal("device_binding_revoked"),
+    deviceId: uuid,
+    hardwareId: z.string().min(1).max(128),
+    reason: z.enum(["PHYSICAL_RESET", "USER_UNPAIR", "REBOUND"]),
+  }).strict(),
+  z.object({
     event: z.literal("proactive_delivery_status"),
     deviceId: uuid,
     deliveryId: uuid,

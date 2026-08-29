@@ -150,6 +150,7 @@ export function createBackendRuntime(config: BackendConfig): BackendRuntime {
       resolveApplicationDevice: (deviceId: string, deviceToken: string) =>
         p9.resolveDeviceBinding(deviceId, deviceToken),
       authorizeApplicationDevice: (binding) => p9.authorizeDeviceBinding(binding),
+      onDeviceReset: async (deviceId, event) => p9.handleDeviceReset(deviceId, event),
       onDeviceNotBound: async (deviceId: string, tokenHash: string) => {
         logger.warn({ device_id: deviceId, diagnostic: "DEVICE_NOT_BOUND" }, "device has no application binding");
         const enrollment = await p9.issueHardwareEnrollment(deviceId, tokenHash);

@@ -8,7 +8,8 @@ export const P9_REQUIRED_MIGRATIONS = [
   "20260818110000_pairing_code_only_enrollment",
   "20260824100000_one_active_device_per_user",
   "20260825_joy_speech_and_schedule_dialog",
-  "20260827120000_mobile_push_tokens"
+  "20260827120000_mobile_push_tokens",
+  "20260829000000_joy_ble_v4_provisioning"
 ] as const;
 
 export interface P9MigrationState {

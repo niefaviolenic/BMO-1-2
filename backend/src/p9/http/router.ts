@@ -21,7 +21,8 @@ import { createAuthRouter } from "./auth.route.js";
 import { createDeviceRouter } from "./device.route.js";
 import { ensureRequestContext, p9ErrorHandler } from "./middleware.js";
 import { createOpsRouter } from "./ops.route.js";
-import { createPairingRouter } from "./pairing.route.js";
+import { createProvisioningRouter } from "./provisioning.route.js";
+import type { ProvisioningService } from "../services/provisioning.service.js";
 import { createSettingsRouter } from "./settings.route.js";
 import { createProfileRouter } from "./profile.route.js";
 import { createPersonalizationRouter } from "./personalization.route.js";
@@ -43,6 +44,7 @@ export interface P9RouterServices {
   users: UserService;
   devices: DeviceService;
   pairing: HardwareEnrollmentService;
+  provisioning: ProvisioningService;
   settings: SettingsService;
   accessTokens: AccessTokenService;
   repositories: P9Repositories;
@@ -76,7 +78,7 @@ export function createP9Router(services: P9RouterServices): Router {
     users: services.users,
     accessTokens: services.accessTokens,
   }));
-  router.use(createPairingRouter(services.pairing, services.accessTokens, services.sessions, services.config));
+  router.use(createProvisioningRouter(services.provisioning, services.devices, services.accessTokens, services.sessions, services.config));
   router.use(createDeviceRouter(services.devices, services.settings, services.accessTokens, services.sessions));
   router.use(createDeviceAdditionsRouter(services.deviceAdditions, services.accessTokens, services.sessions));
   router.use(createSettingsRouter(services.settings, services.accessTokens, services.sessions));

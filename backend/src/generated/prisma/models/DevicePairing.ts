@@ -633,14 +633,6 @@ export type EnumPairingStatusFieldUpdateOperationsInput = {
   set?: $Enums.PairingStatus
 }
 
-export type IntFieldUpdateOperationsInput = {
-  set?: number
-  increment?: number
-  decrement?: number
-  multiply?: number
-  divide?: number
-}
-
 export type DevicePairingCreateWithoutUserInput = {
   id?: string
   codeHash: string

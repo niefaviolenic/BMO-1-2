@@ -87,6 +87,16 @@ export type DevicePairing = Prisma.DevicePairingModel
  */
 export type HardwareEnrollment = Prisma.HardwareEnrollmentModel
 /**
+ * Model HardwareIdentity
+ * 
+ */
+export type HardwareIdentity = Prisma.HardwareIdentityModel
+/**
+ * Model DeviceProvisioningSession
+ * 
+ */
+export type DeviceProvisioningSession = Prisma.DeviceProvisioningSessionModel
+/**
  * Model UserSettings
  * 
  */

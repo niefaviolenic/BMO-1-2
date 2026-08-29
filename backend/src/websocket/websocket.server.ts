@@ -53,6 +53,7 @@ export interface DeviceWebSocketServerOptions {
   authorizeApplicationDevice?: (binding: ApplicationDeviceBinding) => Promise<boolean>;
   onDeviceNotBound?: (deviceId: string, tokenHash: string) => PairingCodeEvent | void | Promise<PairingCodeEvent | void>;
   onPairingModeRequest?: (deviceId: string, tokenHash: string) => PairingCodeEvent | void | Promise<PairingCodeEvent | void>;
+  onDeviceReset?: (deviceId: string, event: Extract<InboundEvent, { event: "device_reset" }>) => Promise<Extract<OutboundEvent, { event: "device_reset_ack" }> | void> | Extract<OutboundEvent, { event: "device_reset_ack" }> | void;
   additiveHandlers?: {
     onEvent: (binding: ApplicationDeviceBinding, event: Exclude<InboundEvent, { event: "authenticate" | "audio_playback_done" | "audio_playback_failed" }>) => void | Promise<void>;
     onAuthenticated: (binding: ApplicationDeviceBinding) => void | Promise<void>;
@@ -358,6 +359,15 @@ export class DeviceWebSocketServer {
         }
       } catch {
         // Pairing lookup/issuance failure must not regress a valid legacy voice connection.
+      }
+      return;
+    }
+    if (event.event === "device_reset") {
+      try {
+        const ack = await this.options.onDeviceReset?.(state.deviceId, event);
+        if (ack) this.#send(socket, ack);
+      } catch {
+        // Reset failure must not crash server.
       }
       return;
     }

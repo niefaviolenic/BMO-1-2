@@ -290,6 +290,7 @@ export type UserWhereInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryListRelationFilter
   bugReports?: Prisma.BugReportListRelationFilter
   pushTokens?: Prisma.MobilePushTokenListRelationFilter
+  provisioningSessions?: Prisma.DeviceProvisioningSessionListRelationFilter
 }
 
 export type UserOrderByWithRelationInput = {
@@ -337,6 +338,7 @@ export type UserOrderByWithRelationInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryOrderByRelationAggregateInput
   bugReports?: Prisma.BugReportOrderByRelationAggregateInput
   pushTokens?: Prisma.MobilePushTokenOrderByRelationAggregateInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionOrderByRelationAggregateInput
 }
 
 export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -387,6 +389,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryListRelationFilter
   bugReports?: Prisma.BugReportListRelationFilter
   pushTokens?: Prisma.MobilePushTokenListRelationFilter
+  provisioningSessions?: Prisma.DeviceProvisioningSessionListRelationFilter
 }, "id" | "email" | "username" | "avatarKey">
 
 export type UserOrderByWithAggregationInput = {
@@ -468,6 +471,7 @@ export type UserCreateInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateInput = {
@@ -515,6 +519,7 @@ export type UserUncheckedCreateInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserUpdateInput = {
@@ -562,6 +567,7 @@ export type UserUpdateInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateInput = {
@@ -609,6 +615,7 @@ export type UserUncheckedUpdateInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateManyInput = {
@@ -831,6 +838,20 @@ export type UserUpdateOneWithoutHardwareEnrollmentsNestedInput = {
   delete?: Prisma.UserWhereInput | boolean
   connect?: Prisma.UserWhereUniqueInput
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutHardwareEnrollmentsInput, Prisma.UserUpdateWithoutHardwareEnrollmentsInput>, Prisma.UserUncheckedUpdateWithoutHardwareEnrollmentsInput>
+}
+
+export type UserCreateNestedOneWithoutProvisioningSessionsInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutProvisioningSessionsInput, Prisma.UserUncheckedCreateWithoutProvisioningSessionsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutProvisioningSessionsInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutProvisioningSessionsNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutProvisioningSessionsInput, Prisma.UserUncheckedCreateWithoutProvisioningSessionsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutProvisioningSessionsInput
+  upsert?: Prisma.UserUpsertWithoutProvisioningSessionsInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutProvisioningSessionsInput, Prisma.UserUpdateWithoutProvisioningSessionsInput>, Prisma.UserUncheckedUpdateWithoutProvisioningSessionsInput>
 }
 
 export type UserCreateNestedOneWithoutUserSettingsInput = {
@@ -1257,6 +1278,7 @@ export type UserCreateWithoutPasswordCredentialInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutPasswordCredentialInput = {
@@ -1303,6 +1325,7 @@ export type UserUncheckedCreateWithoutPasswordCredentialInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutPasswordCredentialInput = {
@@ -1365,6 +1388,7 @@ export type UserUpdateWithoutPasswordCredentialInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutPasswordCredentialInput = {
@@ -1411,6 +1435,7 @@ export type UserUncheckedUpdateWithoutPasswordCredentialInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutIdentitiesInput = {
@@ -1457,6 +1482,7 @@ export type UserCreateWithoutIdentitiesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutIdentitiesInput = {
@@ -1503,6 +1529,7 @@ export type UserUncheckedCreateWithoutIdentitiesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutIdentitiesInput = {
@@ -1565,6 +1592,7 @@ export type UserUpdateWithoutIdentitiesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutIdentitiesInput = {
@@ -1611,6 +1639,7 @@ export type UserUncheckedUpdateWithoutIdentitiesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutInvitationsInput = {
@@ -1657,6 +1686,7 @@ export type UserCreateWithoutInvitationsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutInvitationsInput = {
@@ -1703,6 +1733,7 @@ export type UserUncheckedCreateWithoutInvitationsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutInvitationsInput = {
@@ -1765,6 +1796,7 @@ export type UserUpdateWithoutInvitationsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutInvitationsInput = {
@@ -1811,6 +1843,7 @@ export type UserUncheckedUpdateWithoutInvitationsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutSessionsInput = {
@@ -1857,6 +1890,7 @@ export type UserCreateWithoutSessionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutSessionsInput = {
@@ -1903,6 +1937,7 @@ export type UserUncheckedCreateWithoutSessionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutSessionsInput = {
@@ -1965,6 +2000,7 @@ export type UserUpdateWithoutSessionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutSessionsInput = {
@@ -2011,6 +2047,7 @@ export type UserUncheckedUpdateWithoutSessionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutDevicesInput = {
@@ -2057,6 +2094,7 @@ export type UserCreateWithoutDevicesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutDevicesInput = {
@@ -2103,6 +2141,7 @@ export type UserUncheckedCreateWithoutDevicesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutDevicesInput = {
@@ -2165,6 +2204,7 @@ export type UserUpdateWithoutDevicesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutDevicesInput = {
@@ -2211,6 +2251,7 @@ export type UserUncheckedUpdateWithoutDevicesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutPairingsInput = {
@@ -2257,6 +2298,7 @@ export type UserCreateWithoutPairingsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutPairingsInput = {
@@ -2303,6 +2345,7 @@ export type UserUncheckedCreateWithoutPairingsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutPairingsInput = {
@@ -2365,6 +2408,7 @@ export type UserUpdateWithoutPairingsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutPairingsInput = {
@@ -2411,6 +2455,7 @@ export type UserUncheckedUpdateWithoutPairingsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutHardwareEnrollmentsInput = {
@@ -2457,6 +2502,7 @@ export type UserCreateWithoutHardwareEnrollmentsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutHardwareEnrollmentsInput = {
@@ -2503,6 +2549,7 @@ export type UserUncheckedCreateWithoutHardwareEnrollmentsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutHardwareEnrollmentsInput = {
@@ -2565,6 +2612,7 @@ export type UserUpdateWithoutHardwareEnrollmentsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutHardwareEnrollmentsInput = {
@@ -2584,6 +2632,211 @@ export type UserUncheckedUpdateWithoutHardwareEnrollmentsInput = {
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   devices?: Prisma.DeviceUncheckedUpdateManyWithoutUserNestedInput
   pairings?: Prisma.DevicePairingUncheckedUpdateManyWithoutUserNestedInput
+  userSettings?: Prisma.UserSettingsUncheckedUpdateOneWithoutUserNestedInput
+  auditEvents?: Prisma.AuditEventUncheckedUpdateManyWithoutUserNestedInput
+  passwordRecoveries?: Prisma.PasswordRecoveryUncheckedUpdateManyWithoutUserNestedInput
+  personalizationSettings?: Prisma.PersonalizationSettingsUncheckedUpdateOneWithoutUserNestedInput
+  chatSessions?: Prisma.ChatSessionUncheckedUpdateManyWithoutUserNestedInput
+  chatMessages?: Prisma.ChatMessageUncheckedUpdateManyWithoutUserNestedInput
+  chatOperations?: Prisma.ChatOperationUncheckedUpdateManyWithoutUserNestedInput
+  chatMessageFeedback?: Prisma.ChatMessageFeedbackUncheckedUpdateManyWithoutUserNestedInput
+  memoryRecords?: Prisma.MemoryRecordUncheckedUpdateManyWithoutUserNestedInput
+  memoryCandidates?: Prisma.MemoryCandidateUncheckedUpdateManyWithoutUserNestedInput
+  memoryActions?: Prisma.MemoryActionUncheckedUpdateManyWithoutUserNestedInput
+  memoryTopicForgets?: Prisma.MemoryTopicForgetUncheckedUpdateManyWithoutUserNestedInput
+  memorySummary?: Prisma.MemorySummaryUncheckedUpdateOneWithoutUserNestedInput
+  schedules?: Prisma.ScheduleUncheckedUpdateManyWithoutUserNestedInput
+  proactiveDeliveries?: Prisma.ProactiveDeliveryUncheckedUpdateManyWithoutUserNestedInput
+  deliveryAttempts?: Prisma.DeliveryAttemptUncheckedUpdateManyWithoutUserNestedInput
+  integrationConnections?: Prisma.IntegrationConnectionUncheckedUpdateManyWithoutUserNestedInput
+  oauthStates?: Prisma.OAuthStateUncheckedUpdateManyWithoutUserNestedInput
+  spotifyCredential?: Prisma.SpotifyCredentialUncheckedUpdateOneWithoutUserNestedInput
+  spotifyActions?: Prisma.SpotifyActionUncheckedUpdateManyWithoutUserNestedInput
+  whatsAppConversations?: Prisma.WhatsAppConversationUncheckedUpdateManyWithoutUserNestedInput
+  whatsAppConversationAliases?: Prisma.WhatsAppConversationAliasUncheckedUpdateManyWithoutUserNestedInput
+  whatsAppNotificationRules?: Prisma.WhatsAppNotificationRuleUncheckedUpdateManyWithoutUserNestedInput
+  whatsAppSendRequests?: Prisma.WhatsAppSendRequestUncheckedUpdateManyWithoutUserNestedInput
+  whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
+  bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
+  pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutProvisioningSessionsInput = {
+  id?: string
+  email: string
+  displayName?: string | null
+  dateOfBirth?: Date | string | null
+  username?: string | null
+  avatarKey?: string | null
+  avatarContentType?: string | null
+  avatarByteSize?: number | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  identities?: Prisma.AuthIdentityCreateNestedManyWithoutUserInput
+  passwordCredential?: Prisma.PasswordCredentialCreateNestedOneWithoutUserInput
+  invitations?: Prisma.InvitationCreateNestedManyWithoutUserInput
+  sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
+  devices?: Prisma.DeviceCreateNestedManyWithoutUserInput
+  pairings?: Prisma.DevicePairingCreateNestedManyWithoutUserInput
+  hardwareEnrollments?: Prisma.HardwareEnrollmentCreateNestedManyWithoutClaimedUserInput
+  userSettings?: Prisma.UserSettingsCreateNestedOneWithoutUserInput
+  auditEvents?: Prisma.AuditEventCreateNestedManyWithoutUserInput
+  passwordRecoveries?: Prisma.PasswordRecoveryCreateNestedManyWithoutUserInput
+  personalizationSettings?: Prisma.PersonalizationSettingsCreateNestedOneWithoutUserInput
+  chatSessions?: Prisma.ChatSessionCreateNestedManyWithoutUserInput
+  chatMessages?: Prisma.ChatMessageCreateNestedManyWithoutUserInput
+  chatOperations?: Prisma.ChatOperationCreateNestedManyWithoutUserInput
+  chatMessageFeedback?: Prisma.ChatMessageFeedbackCreateNestedManyWithoutUserInput
+  memoryRecords?: Prisma.MemoryRecordCreateNestedManyWithoutUserInput
+  memoryCandidates?: Prisma.MemoryCandidateCreateNestedManyWithoutUserInput
+  memoryActions?: Prisma.MemoryActionCreateNestedManyWithoutUserInput
+  memoryTopicForgets?: Prisma.MemoryTopicForgetCreateNestedManyWithoutUserInput
+  memorySummary?: Prisma.MemorySummaryCreateNestedOneWithoutUserInput
+  schedules?: Prisma.ScheduleCreateNestedManyWithoutUserInput
+  proactiveDeliveries?: Prisma.ProactiveDeliveryCreateNestedManyWithoutUserInput
+  deliveryAttempts?: Prisma.DeliveryAttemptCreateNestedManyWithoutUserInput
+  integrationConnections?: Prisma.IntegrationConnectionCreateNestedManyWithoutUserInput
+  oauthStates?: Prisma.OAuthStateCreateNestedManyWithoutUserInput
+  spotifyCredential?: Prisma.SpotifyCredentialCreateNestedOneWithoutUserInput
+  spotifyActions?: Prisma.SpotifyActionCreateNestedManyWithoutUserInput
+  whatsAppConversations?: Prisma.WhatsAppConversationCreateNestedManyWithoutUserInput
+  whatsAppConversationAliases?: Prisma.WhatsAppConversationAliasCreateNestedManyWithoutUserInput
+  whatsAppNotificationRules?: Prisma.WhatsAppNotificationRuleCreateNestedManyWithoutUserInput
+  whatsAppSendRequests?: Prisma.WhatsAppSendRequestCreateNestedManyWithoutUserInput
+  whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
+  bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
+  pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutProvisioningSessionsInput = {
+  id?: string
+  email: string
+  displayName?: string | null
+  dateOfBirth?: Date | string | null
+  username?: string | null
+  avatarKey?: string | null
+  avatarContentType?: string | null
+  avatarByteSize?: number | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  identities?: Prisma.AuthIdentityUncheckedCreateNestedManyWithoutUserInput
+  passwordCredential?: Prisma.PasswordCredentialUncheckedCreateNestedOneWithoutUserInput
+  invitations?: Prisma.InvitationUncheckedCreateNestedManyWithoutUserInput
+  sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
+  devices?: Prisma.DeviceUncheckedCreateNestedManyWithoutUserInput
+  pairings?: Prisma.DevicePairingUncheckedCreateNestedManyWithoutUserInput
+  hardwareEnrollments?: Prisma.HardwareEnrollmentUncheckedCreateNestedManyWithoutClaimedUserInput
+  userSettings?: Prisma.UserSettingsUncheckedCreateNestedOneWithoutUserInput
+  auditEvents?: Prisma.AuditEventUncheckedCreateNestedManyWithoutUserInput
+  passwordRecoveries?: Prisma.PasswordRecoveryUncheckedCreateNestedManyWithoutUserInput
+  personalizationSettings?: Prisma.PersonalizationSettingsUncheckedCreateNestedOneWithoutUserInput
+  chatSessions?: Prisma.ChatSessionUncheckedCreateNestedManyWithoutUserInput
+  chatMessages?: Prisma.ChatMessageUncheckedCreateNestedManyWithoutUserInput
+  chatOperations?: Prisma.ChatOperationUncheckedCreateNestedManyWithoutUserInput
+  chatMessageFeedback?: Prisma.ChatMessageFeedbackUncheckedCreateNestedManyWithoutUserInput
+  memoryRecords?: Prisma.MemoryRecordUncheckedCreateNestedManyWithoutUserInput
+  memoryCandidates?: Prisma.MemoryCandidateUncheckedCreateNestedManyWithoutUserInput
+  memoryActions?: Prisma.MemoryActionUncheckedCreateNestedManyWithoutUserInput
+  memoryTopicForgets?: Prisma.MemoryTopicForgetUncheckedCreateNestedManyWithoutUserInput
+  memorySummary?: Prisma.MemorySummaryUncheckedCreateNestedOneWithoutUserInput
+  schedules?: Prisma.ScheduleUncheckedCreateNestedManyWithoutUserInput
+  proactiveDeliveries?: Prisma.ProactiveDeliveryUncheckedCreateNestedManyWithoutUserInput
+  deliveryAttempts?: Prisma.DeliveryAttemptUncheckedCreateNestedManyWithoutUserInput
+  integrationConnections?: Prisma.IntegrationConnectionUncheckedCreateNestedManyWithoutUserInput
+  oauthStates?: Prisma.OAuthStateUncheckedCreateNestedManyWithoutUserInput
+  spotifyCredential?: Prisma.SpotifyCredentialUncheckedCreateNestedOneWithoutUserInput
+  spotifyActions?: Prisma.SpotifyActionUncheckedCreateNestedManyWithoutUserInput
+  whatsAppConversations?: Prisma.WhatsAppConversationUncheckedCreateNestedManyWithoutUserInput
+  whatsAppConversationAliases?: Prisma.WhatsAppConversationAliasUncheckedCreateNestedManyWithoutUserInput
+  whatsAppNotificationRules?: Prisma.WhatsAppNotificationRuleUncheckedCreateNestedManyWithoutUserInput
+  whatsAppSendRequests?: Prisma.WhatsAppSendRequestUncheckedCreateNestedManyWithoutUserInput
+  whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
+  bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
+  pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutProvisioningSessionsInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutProvisioningSessionsInput, Prisma.UserUncheckedCreateWithoutProvisioningSessionsInput>
+}
+
+export type UserUpsertWithoutProvisioningSessionsInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutProvisioningSessionsInput, Prisma.UserUncheckedUpdateWithoutProvisioningSessionsInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutProvisioningSessionsInput, Prisma.UserUncheckedCreateWithoutProvisioningSessionsInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutProvisioningSessionsInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutProvisioningSessionsInput, Prisma.UserUncheckedUpdateWithoutProvisioningSessionsInput>
+}
+
+export type UserUpdateWithoutProvisioningSessionsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  displayName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  dateOfBirth?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  username?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  avatarKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  avatarContentType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  avatarByteSize?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  identities?: Prisma.AuthIdentityUpdateManyWithoutUserNestedInput
+  passwordCredential?: Prisma.PasswordCredentialUpdateOneWithoutUserNestedInput
+  invitations?: Prisma.InvitationUpdateManyWithoutUserNestedInput
+  sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
+  devices?: Prisma.DeviceUpdateManyWithoutUserNestedInput
+  pairings?: Prisma.DevicePairingUpdateManyWithoutUserNestedInput
+  hardwareEnrollments?: Prisma.HardwareEnrollmentUpdateManyWithoutClaimedUserNestedInput
+  userSettings?: Prisma.UserSettingsUpdateOneWithoutUserNestedInput
+  auditEvents?: Prisma.AuditEventUpdateManyWithoutUserNestedInput
+  passwordRecoveries?: Prisma.PasswordRecoveryUpdateManyWithoutUserNestedInput
+  personalizationSettings?: Prisma.PersonalizationSettingsUpdateOneWithoutUserNestedInput
+  chatSessions?: Prisma.ChatSessionUpdateManyWithoutUserNestedInput
+  chatMessages?: Prisma.ChatMessageUpdateManyWithoutUserNestedInput
+  chatOperations?: Prisma.ChatOperationUpdateManyWithoutUserNestedInput
+  chatMessageFeedback?: Prisma.ChatMessageFeedbackUpdateManyWithoutUserNestedInput
+  memoryRecords?: Prisma.MemoryRecordUpdateManyWithoutUserNestedInput
+  memoryCandidates?: Prisma.MemoryCandidateUpdateManyWithoutUserNestedInput
+  memoryActions?: Prisma.MemoryActionUpdateManyWithoutUserNestedInput
+  memoryTopicForgets?: Prisma.MemoryTopicForgetUpdateManyWithoutUserNestedInput
+  memorySummary?: Prisma.MemorySummaryUpdateOneWithoutUserNestedInput
+  schedules?: Prisma.ScheduleUpdateManyWithoutUserNestedInput
+  proactiveDeliveries?: Prisma.ProactiveDeliveryUpdateManyWithoutUserNestedInput
+  deliveryAttempts?: Prisma.DeliveryAttemptUpdateManyWithoutUserNestedInput
+  integrationConnections?: Prisma.IntegrationConnectionUpdateManyWithoutUserNestedInput
+  oauthStates?: Prisma.OAuthStateUpdateManyWithoutUserNestedInput
+  spotifyCredential?: Prisma.SpotifyCredentialUpdateOneWithoutUserNestedInput
+  spotifyActions?: Prisma.SpotifyActionUpdateManyWithoutUserNestedInput
+  whatsAppConversations?: Prisma.WhatsAppConversationUpdateManyWithoutUserNestedInput
+  whatsAppConversationAliases?: Prisma.WhatsAppConversationAliasUpdateManyWithoutUserNestedInput
+  whatsAppNotificationRules?: Prisma.WhatsAppNotificationRuleUpdateManyWithoutUserNestedInput
+  whatsAppSendRequests?: Prisma.WhatsAppSendRequestUpdateManyWithoutUserNestedInput
+  whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
+  bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
+  pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutProvisioningSessionsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  displayName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  dateOfBirth?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  username?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  avatarKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  avatarContentType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  avatarByteSize?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  identities?: Prisma.AuthIdentityUncheckedUpdateManyWithoutUserNestedInput
+  passwordCredential?: Prisma.PasswordCredentialUncheckedUpdateOneWithoutUserNestedInput
+  invitations?: Prisma.InvitationUncheckedUpdateManyWithoutUserNestedInput
+  sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
+  devices?: Prisma.DeviceUncheckedUpdateManyWithoutUserNestedInput
+  pairings?: Prisma.DevicePairingUncheckedUpdateManyWithoutUserNestedInput
+  hardwareEnrollments?: Prisma.HardwareEnrollmentUncheckedUpdateManyWithoutClaimedUserNestedInput
   userSettings?: Prisma.UserSettingsUncheckedUpdateOneWithoutUserNestedInput
   auditEvents?: Prisma.AuditEventUncheckedUpdateManyWithoutUserNestedInput
   passwordRecoveries?: Prisma.PasswordRecoveryUncheckedUpdateManyWithoutUserNestedInput
@@ -2657,6 +2910,7 @@ export type UserCreateWithoutUserSettingsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutUserSettingsInput = {
@@ -2703,6 +2957,7 @@ export type UserUncheckedCreateWithoutUserSettingsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutUserSettingsInput = {
@@ -2765,6 +3020,7 @@ export type UserUpdateWithoutUserSettingsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutUserSettingsInput = {
@@ -2811,6 +3067,7 @@ export type UserUncheckedUpdateWithoutUserSettingsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutAuditEventsInput = {
@@ -2857,6 +3114,7 @@ export type UserCreateWithoutAuditEventsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutAuditEventsInput = {
@@ -2903,6 +3161,7 @@ export type UserUncheckedCreateWithoutAuditEventsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutAuditEventsInput = {
@@ -2965,6 +3224,7 @@ export type UserUpdateWithoutAuditEventsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutAuditEventsInput = {
@@ -3011,6 +3271,7 @@ export type UserUncheckedUpdateWithoutAuditEventsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutPasswordRecoveriesInput = {
@@ -3057,6 +3318,7 @@ export type UserCreateWithoutPasswordRecoveriesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutPasswordRecoveriesInput = {
@@ -3103,6 +3365,7 @@ export type UserUncheckedCreateWithoutPasswordRecoveriesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutPasswordRecoveriesInput = {
@@ -3165,6 +3428,7 @@ export type UserUpdateWithoutPasswordRecoveriesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutPasswordRecoveriesInput = {
@@ -3211,6 +3475,7 @@ export type UserUncheckedUpdateWithoutPasswordRecoveriesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutPersonalizationSettingsInput = {
@@ -3257,6 +3522,7 @@ export type UserCreateWithoutPersonalizationSettingsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutPersonalizationSettingsInput = {
@@ -3303,6 +3569,7 @@ export type UserUncheckedCreateWithoutPersonalizationSettingsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutPersonalizationSettingsInput = {
@@ -3365,6 +3632,7 @@ export type UserUpdateWithoutPersonalizationSettingsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutPersonalizationSettingsInput = {
@@ -3411,6 +3679,7 @@ export type UserUncheckedUpdateWithoutPersonalizationSettingsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutChatSessionsInput = {
@@ -3457,6 +3726,7 @@ export type UserCreateWithoutChatSessionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutChatSessionsInput = {
@@ -3503,6 +3773,7 @@ export type UserUncheckedCreateWithoutChatSessionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutChatSessionsInput = {
@@ -3565,6 +3836,7 @@ export type UserUpdateWithoutChatSessionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutChatSessionsInput = {
@@ -3611,6 +3883,7 @@ export type UserUncheckedUpdateWithoutChatSessionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutChatMessagesInput = {
@@ -3657,6 +3930,7 @@ export type UserCreateWithoutChatMessagesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutChatMessagesInput = {
@@ -3703,6 +3977,7 @@ export type UserUncheckedCreateWithoutChatMessagesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutChatMessagesInput = {
@@ -3765,6 +4040,7 @@ export type UserUpdateWithoutChatMessagesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutChatMessagesInput = {
@@ -3811,6 +4087,7 @@ export type UserUncheckedUpdateWithoutChatMessagesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutChatOperationsInput = {
@@ -3857,6 +4134,7 @@ export type UserCreateWithoutChatOperationsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutChatOperationsInput = {
@@ -3903,6 +4181,7 @@ export type UserUncheckedCreateWithoutChatOperationsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutChatOperationsInput = {
@@ -3965,6 +4244,7 @@ export type UserUpdateWithoutChatOperationsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutChatOperationsInput = {
@@ -4011,6 +4291,7 @@ export type UserUncheckedUpdateWithoutChatOperationsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutChatMessageFeedbackInput = {
@@ -4057,6 +4338,7 @@ export type UserCreateWithoutChatMessageFeedbackInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutChatMessageFeedbackInput = {
@@ -4103,6 +4385,7 @@ export type UserUncheckedCreateWithoutChatMessageFeedbackInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutChatMessageFeedbackInput = {
@@ -4165,6 +4448,7 @@ export type UserUpdateWithoutChatMessageFeedbackInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutChatMessageFeedbackInput = {
@@ -4211,6 +4495,7 @@ export type UserUncheckedUpdateWithoutChatMessageFeedbackInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutMemoryRecordsInput = {
@@ -4257,6 +4542,7 @@ export type UserCreateWithoutMemoryRecordsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutMemoryRecordsInput = {
@@ -4303,6 +4589,7 @@ export type UserUncheckedCreateWithoutMemoryRecordsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutMemoryRecordsInput = {
@@ -4365,6 +4652,7 @@ export type UserUpdateWithoutMemoryRecordsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutMemoryRecordsInput = {
@@ -4411,6 +4699,7 @@ export type UserUncheckedUpdateWithoutMemoryRecordsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutMemoryCandidatesInput = {
@@ -4457,6 +4746,7 @@ export type UserCreateWithoutMemoryCandidatesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutMemoryCandidatesInput = {
@@ -4503,6 +4793,7 @@ export type UserUncheckedCreateWithoutMemoryCandidatesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutMemoryCandidatesInput = {
@@ -4565,6 +4856,7 @@ export type UserUpdateWithoutMemoryCandidatesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutMemoryCandidatesInput = {
@@ -4611,6 +4903,7 @@ export type UserUncheckedUpdateWithoutMemoryCandidatesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutMemoryActionsInput = {
@@ -4657,6 +4950,7 @@ export type UserCreateWithoutMemoryActionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutMemoryActionsInput = {
@@ -4703,6 +4997,7 @@ export type UserUncheckedCreateWithoutMemoryActionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutMemoryActionsInput = {
@@ -4765,6 +5060,7 @@ export type UserUpdateWithoutMemoryActionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutMemoryActionsInput = {
@@ -4811,6 +5107,7 @@ export type UserUncheckedUpdateWithoutMemoryActionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutMemoryTopicForgetsInput = {
@@ -4857,6 +5154,7 @@ export type UserCreateWithoutMemoryTopicForgetsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutMemoryTopicForgetsInput = {
@@ -4903,6 +5201,7 @@ export type UserUncheckedCreateWithoutMemoryTopicForgetsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutMemoryTopicForgetsInput = {
@@ -4965,6 +5264,7 @@ export type UserUpdateWithoutMemoryTopicForgetsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutMemoryTopicForgetsInput = {
@@ -5011,6 +5311,7 @@ export type UserUncheckedUpdateWithoutMemoryTopicForgetsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutMemorySummaryInput = {
@@ -5057,6 +5358,7 @@ export type UserCreateWithoutMemorySummaryInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutMemorySummaryInput = {
@@ -5103,6 +5405,7 @@ export type UserUncheckedCreateWithoutMemorySummaryInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutMemorySummaryInput = {
@@ -5165,6 +5468,7 @@ export type UserUpdateWithoutMemorySummaryInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutMemorySummaryInput = {
@@ -5211,6 +5515,7 @@ export type UserUncheckedUpdateWithoutMemorySummaryInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutSchedulesInput = {
@@ -5257,6 +5562,7 @@ export type UserCreateWithoutSchedulesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutSchedulesInput = {
@@ -5303,6 +5609,7 @@ export type UserUncheckedCreateWithoutSchedulesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutSchedulesInput = {
@@ -5365,6 +5672,7 @@ export type UserUpdateWithoutSchedulesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutSchedulesInput = {
@@ -5411,6 +5719,7 @@ export type UserUncheckedUpdateWithoutSchedulesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutProactiveDeliveriesInput = {
@@ -5457,6 +5766,7 @@ export type UserCreateWithoutProactiveDeliveriesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutProactiveDeliveriesInput = {
@@ -5503,6 +5813,7 @@ export type UserUncheckedCreateWithoutProactiveDeliveriesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutProactiveDeliveriesInput = {
@@ -5565,6 +5876,7 @@ export type UserUpdateWithoutProactiveDeliveriesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutProactiveDeliveriesInput = {
@@ -5611,6 +5923,7 @@ export type UserUncheckedUpdateWithoutProactiveDeliveriesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutDeliveryAttemptsInput = {
@@ -5657,6 +5970,7 @@ export type UserCreateWithoutDeliveryAttemptsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutDeliveryAttemptsInput = {
@@ -5703,6 +6017,7 @@ export type UserUncheckedCreateWithoutDeliveryAttemptsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutDeliveryAttemptsInput = {
@@ -5765,6 +6080,7 @@ export type UserUpdateWithoutDeliveryAttemptsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutDeliveryAttemptsInput = {
@@ -5811,6 +6127,7 @@ export type UserUncheckedUpdateWithoutDeliveryAttemptsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutIntegrationConnectionsInput = {
@@ -5857,6 +6174,7 @@ export type UserCreateWithoutIntegrationConnectionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutIntegrationConnectionsInput = {
@@ -5903,6 +6221,7 @@ export type UserUncheckedCreateWithoutIntegrationConnectionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutIntegrationConnectionsInput = {
@@ -5965,6 +6284,7 @@ export type UserUpdateWithoutIntegrationConnectionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutIntegrationConnectionsInput = {
@@ -6011,6 +6331,7 @@ export type UserUncheckedUpdateWithoutIntegrationConnectionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutOauthStatesInput = {
@@ -6057,6 +6378,7 @@ export type UserCreateWithoutOauthStatesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutOauthStatesInput = {
@@ -6103,6 +6425,7 @@ export type UserUncheckedCreateWithoutOauthStatesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutOauthStatesInput = {
@@ -6165,6 +6488,7 @@ export type UserUpdateWithoutOauthStatesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutOauthStatesInput = {
@@ -6211,6 +6535,7 @@ export type UserUncheckedUpdateWithoutOauthStatesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutSpotifyCredentialInput = {
@@ -6257,6 +6582,7 @@ export type UserCreateWithoutSpotifyCredentialInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutSpotifyCredentialInput = {
@@ -6303,6 +6629,7 @@ export type UserUncheckedCreateWithoutSpotifyCredentialInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutSpotifyCredentialInput = {
@@ -6365,6 +6692,7 @@ export type UserUpdateWithoutSpotifyCredentialInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutSpotifyCredentialInput = {
@@ -6411,6 +6739,7 @@ export type UserUncheckedUpdateWithoutSpotifyCredentialInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutSpotifyActionsInput = {
@@ -6457,6 +6786,7 @@ export type UserCreateWithoutSpotifyActionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutSpotifyActionsInput = {
@@ -6503,6 +6833,7 @@ export type UserUncheckedCreateWithoutSpotifyActionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutSpotifyActionsInput = {
@@ -6565,6 +6896,7 @@ export type UserUpdateWithoutSpotifyActionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutSpotifyActionsInput = {
@@ -6611,6 +6943,7 @@ export type UserUncheckedUpdateWithoutSpotifyActionsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutWhatsAppConversationsInput = {
@@ -6657,6 +6990,7 @@ export type UserCreateWithoutWhatsAppConversationsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutWhatsAppConversationsInput = {
@@ -6703,6 +7037,7 @@ export type UserUncheckedCreateWithoutWhatsAppConversationsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutWhatsAppConversationsInput = {
@@ -6765,6 +7100,7 @@ export type UserUpdateWithoutWhatsAppConversationsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutWhatsAppConversationsInput = {
@@ -6811,6 +7147,7 @@ export type UserUncheckedUpdateWithoutWhatsAppConversationsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutWhatsAppConversationAliasesInput = {
@@ -6857,6 +7194,7 @@ export type UserCreateWithoutWhatsAppConversationAliasesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutWhatsAppConversationAliasesInput = {
@@ -6903,6 +7241,7 @@ export type UserUncheckedCreateWithoutWhatsAppConversationAliasesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutWhatsAppConversationAliasesInput = {
@@ -6965,6 +7304,7 @@ export type UserUpdateWithoutWhatsAppConversationAliasesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutWhatsAppConversationAliasesInput = {
@@ -7011,6 +7351,7 @@ export type UserUncheckedUpdateWithoutWhatsAppConversationAliasesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutWhatsAppNotificationRulesInput = {
@@ -7057,6 +7398,7 @@ export type UserCreateWithoutWhatsAppNotificationRulesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutWhatsAppNotificationRulesInput = {
@@ -7103,6 +7445,7 @@ export type UserUncheckedCreateWithoutWhatsAppNotificationRulesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutWhatsAppNotificationRulesInput = {
@@ -7165,6 +7508,7 @@ export type UserUpdateWithoutWhatsAppNotificationRulesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutWhatsAppNotificationRulesInput = {
@@ -7211,6 +7555,7 @@ export type UserUncheckedUpdateWithoutWhatsAppNotificationRulesInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutWhatsAppSendRequestsInput = {
@@ -7257,6 +7602,7 @@ export type UserCreateWithoutWhatsAppSendRequestsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutWhatsAppSendRequestsInput = {
@@ -7303,6 +7649,7 @@ export type UserUncheckedCreateWithoutWhatsAppSendRequestsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutWhatsAppSendRequestsInput = {
@@ -7365,6 +7712,7 @@ export type UserUpdateWithoutWhatsAppSendRequestsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutWhatsAppSendRequestsInput = {
@@ -7411,6 +7759,7 @@ export type UserUncheckedUpdateWithoutWhatsAppSendRequestsInput = {
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutWhatsAppDeliveriesInput = {
@@ -7457,6 +7806,7 @@ export type UserCreateWithoutWhatsAppDeliveriesInput = {
   whatsAppSendRequests?: Prisma.WhatsAppSendRequestCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutWhatsAppDeliveriesInput = {
@@ -7503,6 +7853,7 @@ export type UserUncheckedCreateWithoutWhatsAppDeliveriesInput = {
   whatsAppSendRequests?: Prisma.WhatsAppSendRequestUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutWhatsAppDeliveriesInput = {
@@ -7565,6 +7916,7 @@ export type UserUpdateWithoutWhatsAppDeliveriesInput = {
   whatsAppSendRequests?: Prisma.WhatsAppSendRequestUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutWhatsAppDeliveriesInput = {
@@ -7611,6 +7963,7 @@ export type UserUncheckedUpdateWithoutWhatsAppDeliveriesInput = {
   whatsAppSendRequests?: Prisma.WhatsAppSendRequestUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutBugReportsInput = {
@@ -7657,6 +8010,7 @@ export type UserCreateWithoutBugReportsInput = {
   whatsAppSendRequests?: Prisma.WhatsAppSendRequestCreateNestedManyWithoutUserInput
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutBugReportsInput = {
@@ -7703,6 +8057,7 @@ export type UserUncheckedCreateWithoutBugReportsInput = {
   whatsAppSendRequests?: Prisma.WhatsAppSendRequestUncheckedCreateNestedManyWithoutUserInput
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   pushTokens?: Prisma.MobilePushTokenUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutBugReportsInput = {
@@ -7765,6 +8120,7 @@ export type UserUpdateWithoutBugReportsInput = {
   whatsAppSendRequests?: Prisma.WhatsAppSendRequestUpdateManyWithoutUserNestedInput
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutBugReportsInput = {
@@ -7811,6 +8167,7 @@ export type UserUncheckedUpdateWithoutBugReportsInput = {
   whatsAppSendRequests?: Prisma.WhatsAppSendRequestUncheckedUpdateManyWithoutUserNestedInput
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   pushTokens?: Prisma.MobilePushTokenUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutPushTokensInput = {
@@ -7857,6 +8214,7 @@ export type UserCreateWithoutPushTokensInput = {
   whatsAppSendRequests?: Prisma.WhatsAppSendRequestCreateNestedManyWithoutUserInput
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutPushTokensInput = {
@@ -7903,6 +8261,7 @@ export type UserUncheckedCreateWithoutPushTokensInput = {
   whatsAppSendRequests?: Prisma.WhatsAppSendRequestUncheckedCreateNestedManyWithoutUserInput
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedCreateNestedManyWithoutUserInput
   bugReports?: Prisma.BugReportUncheckedCreateNestedManyWithoutUserInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutPushTokensInput = {
@@ -7965,6 +8324,7 @@ export type UserUpdateWithoutPushTokensInput = {
   whatsAppSendRequests?: Prisma.WhatsAppSendRequestUpdateManyWithoutUserNestedInput
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutPushTokensInput = {
@@ -8011,6 +8371,7 @@ export type UserUncheckedUpdateWithoutPushTokensInput = {
   whatsAppSendRequests?: Prisma.WhatsAppSendRequestUncheckedUpdateManyWithoutUserNestedInput
   whatsAppDeliveries?: Prisma.WhatsAppDeliveryUncheckedUpdateManyWithoutUserNestedInput
   bugReports?: Prisma.BugReportUncheckedUpdateManyWithoutUserNestedInput
+  provisioningSessions?: Prisma.DeviceProvisioningSessionUncheckedUpdateManyWithoutUserNestedInput
 }
 
 
@@ -8048,6 +8409,7 @@ export type UserCountOutputType = {
   whatsAppDeliveries: number
   bugReports: number
   pushTokens: number
+  provisioningSessions: number
 }
 
 export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -8080,6 +8442,7 @@ export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.I
   whatsAppDeliveries?: boolean | UserCountOutputTypeCountWhatsAppDeliveriesArgs
   bugReports?: boolean | UserCountOutputTypeCountBugReportsArgs
   pushTokens?: boolean | UserCountOutputTypeCountPushTokensArgs
+  provisioningSessions?: boolean | UserCountOutputTypeCountProvisioningSessionsArgs
 }
 
 /**
@@ -8295,6 +8658,13 @@ export type UserCountOutputTypeCountPushTokensArgs<ExtArgs extends runtime.Types
   where?: Prisma.MobilePushTokenWhereInput
 }
 
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountProvisioningSessionsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.DeviceProvisioningSessionWhereInput
+}
+
 
 export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -8341,6 +8711,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   whatsAppDeliveries?: boolean | Prisma.User$whatsAppDeliveriesArgs<ExtArgs>
   bugReports?: boolean | Prisma.User$bugReportsArgs<ExtArgs>
   pushTokens?: boolean | Prisma.User$pushTokensArgs<ExtArgs>
+  provisioningSessions?: boolean | Prisma.User$provisioningSessionsArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["user"]>
 
@@ -8419,6 +8790,7 @@ export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   whatsAppDeliveries?: boolean | Prisma.User$whatsAppDeliveriesArgs<ExtArgs>
   bugReports?: boolean | Prisma.User$bugReportsArgs<ExtArgs>
   pushTokens?: boolean | Prisma.User$pushTokensArgs<ExtArgs>
+  provisioningSessions?: boolean | Prisma.User$provisioningSessionsArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type UserIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
@@ -8461,6 +8833,7 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     whatsAppDeliveries: Prisma.$WhatsAppDeliveryPayload<ExtArgs>[]
     bugReports: Prisma.$BugReportPayload<ExtArgs>[]
     pushTokens: Prisma.$MobilePushTokenPayload<ExtArgs>[]
+    provisioningSessions: Prisma.$DeviceProvisioningSessionPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -8901,6 +9274,7 @@ export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Typ
   whatsAppDeliveries<T extends Prisma.User$whatsAppDeliveriesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$whatsAppDeliveriesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$WhatsAppDeliveryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   bugReports<T extends Prisma.User$bugReportsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$bugReportsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$BugReportPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   pushTokens<T extends Prisma.User$pushTokensArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$pushTokensArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$MobilePushTokenPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  provisioningSessions<T extends Prisma.User$provisioningSessionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$provisioningSessionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DeviceProvisioningSessionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -10121,6 +10495,30 @@ export type User$pushTokensArgs<ExtArgs extends runtime.Types.Extensions.Interna
   take?: number
   skip?: number
   distinct?: Prisma.MobilePushTokenScalarFieldEnum | Prisma.MobilePushTokenScalarFieldEnum[]
+}
+
+/**
+ * User.provisioningSessions
+ */
+export type User$provisioningSessionsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the DeviceProvisioningSession
+   */
+  select?: Prisma.DeviceProvisioningSessionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the DeviceProvisioningSession
+   */
+  omit?: Prisma.DeviceProvisioningSessionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.DeviceProvisioningSessionInclude<ExtArgs> | null
+  where?: Prisma.DeviceProvisioningSessionWhereInput
+  orderBy?: Prisma.DeviceProvisioningSessionOrderByWithRelationInput | Prisma.DeviceProvisioningSessionOrderByWithRelationInput[]
+  cursor?: Prisma.DeviceProvisioningSessionWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.DeviceProvisioningSessionScalarFieldEnum | Prisma.DeviceProvisioningSessionScalarFieldEnum[]
 }
 
 /**

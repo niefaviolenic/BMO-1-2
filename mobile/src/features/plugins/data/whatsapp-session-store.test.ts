@@ -50,7 +50,7 @@ describe('WhatsAppSessionStore (State 1 Only Fresh QR Flow)', () => {
 
     vi.spyOn(whatsappApi, 'connectWhatsApp').mockResolvedValue({
       connection: mockConnection,
-      pairing: null,
+      pairing: null as unknown as WhatsAppPairing,
     });
     vi.spyOn(whatsappApi, 'fetchWhatsAppStatus').mockResolvedValue(mockConnection);
     vi.spyOn(whatsappApi, 'fetchWhatsAppQr').mockResolvedValue(mockQr);
@@ -78,7 +78,7 @@ describe('WhatsAppSessionStore (State 1 Only Fresh QR Flow)', () => {
 
     vi.spyOn(whatsappApi, 'connectWhatsApp').mockResolvedValue({
       connection: mockConnection,
-      pairing: null,
+      pairing: null as unknown as WhatsAppPairing,
     });
     const fetchStatusSpy = vi.spyOn(whatsappApi, 'fetchWhatsAppStatus').mockResolvedValue(mockConnection);
     const fetchQrSpy = vi.spyOn(whatsappApi, 'fetchWhatsAppQr').mockResolvedValue(mockQr);
@@ -113,7 +113,7 @@ describe('WhatsAppSessionStore (State 1 Only Fresh QR Flow)', () => {
         connectedAt: null,
         scopes: [],
       },
-      pairing: null,
+      pairing: null as unknown as WhatsAppPairing,
     });
     vi.spyOn(whatsappApi, 'fetchWhatsAppStatus').mockResolvedValue({
       provider: 'whatsapp',

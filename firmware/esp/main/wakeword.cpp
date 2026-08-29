@@ -180,7 +180,7 @@ static size_t preroll_drain_locked(int16_t *dest, size_t max_samples)
     return count_to_copy;
 }
 
-static void preroll_reset()
+[[maybe_unused]] static void preroll_reset()
 {
     portENTER_CRITICAL(&preroll_mux);
     preroll_count = 0;

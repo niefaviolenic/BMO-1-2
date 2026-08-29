@@ -28,6 +28,19 @@ export const DeviceStatus = {
 export type DeviceStatus = (typeof DeviceStatus)[keyof typeof DeviceStatus]
 
 
+export const ProvisioningSessionStatus = {
+  PREPARED: 'PREPARED',
+  RESERVED: 'RESERVED',
+  COMMITTED: 'COMMITTED',
+  FINALIZED_PENDING_RUNTIME_ACK: 'FINALIZED_PENDING_RUNTIME_ACK',
+  COMPLETED: 'COMPLETED',
+  EXPIRED: 'EXPIRED',
+  CANCELLED: 'CANCELLED'
+} as const
+
+export type ProvisioningSessionStatus = (typeof ProvisioningSessionStatus)[keyof typeof ProvisioningSessionStatus]
+
+
 export const PairingStatus = {
   ISSUED: 'ISSUED',
   CLAIMED: 'CLAIMED',

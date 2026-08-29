@@ -20,8 +20,18 @@ export type DeviceModel = runtime.Types.Result.DefaultSelection<Prisma.$DevicePa
 
 export type AggregateDevice = {
   _count: DeviceCountAggregateOutputType | null
+  _avg: DeviceAvgAggregateOutputType | null
+  _sum: DeviceSumAggregateOutputType | null
   _min: DeviceMinAggregateOutputType | null
   _max: DeviceMaxAggregateOutputType | null
+}
+
+export type DeviceAvgAggregateOutputType = {
+  bindingResetEpoch: number | null
+}
+
+export type DeviceSumAggregateOutputType = {
+  bindingResetEpoch: number | null
 }
 
 export type DeviceMinAggregateOutputType = {
@@ -31,6 +41,7 @@ export type DeviceMinAggregateOutputType = {
   name: string | null
   tokenHash: string | null
   status: $Enums.DeviceStatus | null
+  bindingResetEpoch: number | null
   pairedAt: Date | null
   revokedAt: Date | null
   lastSeenAt: Date | null
@@ -45,6 +56,7 @@ export type DeviceMaxAggregateOutputType = {
   name: string | null
   tokenHash: string | null
   status: $Enums.DeviceStatus | null
+  bindingResetEpoch: number | null
   pairedAt: Date | null
   revokedAt: Date | null
   lastSeenAt: Date | null
@@ -59,6 +71,7 @@ export type DeviceCountAggregateOutputType = {
   name: number
   tokenHash: number
   status: number
+  bindingResetEpoch: number
   pairedAt: number
   revokedAt: number
   lastSeenAt: number
@@ -68,6 +81,14 @@ export type DeviceCountAggregateOutputType = {
 }
 
 
+export type DeviceAvgAggregateInputType = {
+  bindingResetEpoch?: true
+}
+
+export type DeviceSumAggregateInputType = {
+  bindingResetEpoch?: true
+}
+
 export type DeviceMinAggregateInputType = {
   id?: true
   userId?: true
@@ -75,6 +96,7 @@ export type DeviceMinAggregateInputType = {
   name?: true
   tokenHash?: true
   status?: true
+  bindingResetEpoch?: true
   pairedAt?: true
   revokedAt?: true
   lastSeenAt?: true
@@ -89,6 +111,7 @@ export type DeviceMaxAggregateInputType = {
   name?: true
   tokenHash?: true
   status?: true
+  bindingResetEpoch?: true
   pairedAt?: true
   revokedAt?: true
   lastSeenAt?: true
@@ -103,6 +126,7 @@ export type DeviceCountAggregateInputType = {
   name?: true
   tokenHash?: true
   status?: true
+  bindingResetEpoch?: true
   pairedAt?: true
   revokedAt?: true
   lastSeenAt?: true
@@ -149,6 +173,18 @@ export type DeviceAggregateArgs<ExtArgs extends runtime.Types.Extensions.Interna
   /**
    * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
    * 
+   * Select which fields to average
+  **/
+  _avg?: DeviceAvgAggregateInputType
+  /**
+   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+   * 
+   * Select which fields to sum
+  **/
+  _sum?: DeviceSumAggregateInputType
+  /**
+   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+   * 
    * Select which fields to find the minimum value
   **/
   _min?: DeviceMinAggregateInputType
@@ -179,6 +215,8 @@ export type DeviceGroupByArgs<ExtArgs extends runtime.Types.Extensions.InternalA
   take?: number
   skip?: number
   _count?: DeviceCountAggregateInputType | true
+  _avg?: DeviceAvgAggregateInputType
+  _sum?: DeviceSumAggregateInputType
   _min?: DeviceMinAggregateInputType
   _max?: DeviceMaxAggregateInputType
 }
@@ -190,12 +228,15 @@ export type DeviceGroupByOutputType = {
   name: string
   tokenHash: string
   status: $Enums.DeviceStatus
+  bindingResetEpoch: number
   pairedAt: Date | null
   revokedAt: Date | null
   lastSeenAt: Date | null
   createdAt: Date
   updatedAt: Date
   _count: DeviceCountAggregateOutputType | null
+  _avg: DeviceAvgAggregateOutputType | null
+  _sum: DeviceSumAggregateOutputType | null
   _min: DeviceMinAggregateOutputType | null
   _max: DeviceMaxAggregateOutputType | null
 }
@@ -225,6 +266,7 @@ export type DeviceWhereInput = {
   name?: Prisma.StringFilter<"Device"> | string
   tokenHash?: Prisma.StringFilter<"Device"> | string
   status?: Prisma.EnumDeviceStatusFilter<"Device"> | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFilter<"Device"> | number
   pairedAt?: Prisma.DateTimeNullableFilter<"Device"> | Date | string | null
   revokedAt?: Prisma.DateTimeNullableFilter<"Device"> | Date | string | null
   lastSeenAt?: Prisma.DateTimeNullableFilter<"Device"> | Date | string | null
@@ -254,6 +296,7 @@ export type DeviceOrderByWithRelationInput = {
   name?: Prisma.SortOrder
   tokenHash?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  bindingResetEpoch?: Prisma.SortOrder
   pairedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   revokedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   lastSeenAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -287,6 +330,7 @@ export type DeviceWhereUniqueInput = Prisma.AtLeast<{
   name?: Prisma.StringFilter<"Device"> | string
   tokenHash?: Prisma.StringFilter<"Device"> | string
   status?: Prisma.EnumDeviceStatusFilter<"Device"> | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFilter<"Device"> | number
   pairedAt?: Prisma.DateTimeNullableFilter<"Device"> | Date | string | null
   revokedAt?: Prisma.DateTimeNullableFilter<"Device"> | Date | string | null
   lastSeenAt?: Prisma.DateTimeNullableFilter<"Device"> | Date | string | null
@@ -316,14 +360,17 @@ export type DeviceOrderByWithAggregationInput = {
   name?: Prisma.SortOrder
   tokenHash?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  bindingResetEpoch?: Prisma.SortOrder
   pairedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   revokedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   lastSeenAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.DeviceCountOrderByAggregateInput
+  _avg?: Prisma.DeviceAvgOrderByAggregateInput
   _max?: Prisma.DeviceMaxOrderByAggregateInput
   _min?: Prisma.DeviceMinOrderByAggregateInput
+  _sum?: Prisma.DeviceSumOrderByAggregateInput
 }
 
 export type DeviceScalarWhereWithAggregatesInput = {
@@ -336,6 +383,7 @@ export type DeviceScalarWhereWithAggregatesInput = {
   name?: Prisma.StringWithAggregatesFilter<"Device"> | string
   tokenHash?: Prisma.StringWithAggregatesFilter<"Device"> | string
   status?: Prisma.EnumDeviceStatusWithAggregatesFilter<"Device"> | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntWithAggregatesFilter<"Device"> | number
   pairedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Device"> | Date | string | null
   revokedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Device"> | Date | string | null
   lastSeenAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Device"> | Date | string | null
@@ -349,6 +397,7 @@ export type DeviceCreateInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -378,6 +427,7 @@ export type DeviceUncheckedCreateInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -405,6 +455,7 @@ export type DeviceUpdateInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -434,6 +485,7 @@ export type DeviceUncheckedUpdateInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -462,6 +514,7 @@ export type DeviceCreateManyInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -475,6 +528,7 @@ export type DeviceUpdateManyMutationInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -489,6 +543,7 @@ export type DeviceUncheckedUpdateManyInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -523,11 +578,16 @@ export type DeviceCountOrderByAggregateInput = {
   name?: Prisma.SortOrder
   tokenHash?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  bindingResetEpoch?: Prisma.SortOrder
   pairedAt?: Prisma.SortOrder
   revokedAt?: Prisma.SortOrder
   lastSeenAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+}
+
+export type DeviceAvgOrderByAggregateInput = {
+  bindingResetEpoch?: Prisma.SortOrder
 }
 
 export type DeviceMaxOrderByAggregateInput = {
@@ -537,6 +597,7 @@ export type DeviceMaxOrderByAggregateInput = {
   name?: Prisma.SortOrder
   tokenHash?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  bindingResetEpoch?: Prisma.SortOrder
   pairedAt?: Prisma.SortOrder
   revokedAt?: Prisma.SortOrder
   lastSeenAt?: Prisma.SortOrder
@@ -551,11 +612,16 @@ export type DeviceMinOrderByAggregateInput = {
   name?: Prisma.SortOrder
   tokenHash?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  bindingResetEpoch?: Prisma.SortOrder
   pairedAt?: Prisma.SortOrder
   revokedAt?: Prisma.SortOrder
   lastSeenAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+}
+
+export type DeviceSumOrderByAggregateInput = {
+  bindingResetEpoch?: Prisma.SortOrder
 }
 
 export type DeviceScalarRelationFilter = {
@@ -623,6 +689,14 @@ export type DeviceUpdateOneWithoutClientSessionsNestedInput = {
 
 export type EnumDeviceStatusFieldUpdateOperationsInput = {
   set?: $Enums.DeviceStatus
+}
+
+export type IntFieldUpdateOperationsInput = {
+  set?: number
+  increment?: number
+  decrement?: number
+  multiply?: number
+  divide?: number
 }
 
 export type DeviceCreateNestedOneWithoutPairingsInput = {
@@ -829,6 +903,7 @@ export type DeviceCreateWithoutUserInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -856,6 +931,7 @@ export type DeviceUncheckedCreateWithoutUserInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -913,6 +989,7 @@ export type DeviceScalarWhereInput = {
   name?: Prisma.StringFilter<"Device"> | string
   tokenHash?: Prisma.StringFilter<"Device"> | string
   status?: Prisma.EnumDeviceStatusFilter<"Device"> | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFilter<"Device"> | number
   pairedAt?: Prisma.DateTimeNullableFilter<"Device"> | Date | string | null
   revokedAt?: Prisma.DateTimeNullableFilter<"Device"> | Date | string | null
   lastSeenAt?: Prisma.DateTimeNullableFilter<"Device"> | Date | string | null
@@ -926,6 +1003,7 @@ export type DeviceCreateWithoutClientSessionsInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -954,6 +1032,7 @@ export type DeviceUncheckedCreateWithoutClientSessionsInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -996,6 +1075,7 @@ export type DeviceUpdateWithoutClientSessionsInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1024,6 +1104,7 @@ export type DeviceUncheckedUpdateWithoutClientSessionsInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1050,6 +1131,7 @@ export type DeviceCreateWithoutPairingsInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -1078,6 +1160,7 @@ export type DeviceUncheckedCreateWithoutPairingsInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -1120,6 +1203,7 @@ export type DeviceUpdateWithoutPairingsInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1148,6 +1232,7 @@ export type DeviceUncheckedUpdateWithoutPairingsInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1174,6 +1259,7 @@ export type DeviceCreateWithoutHardwareEnrollmentsInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -1202,6 +1288,7 @@ export type DeviceUncheckedCreateWithoutHardwareEnrollmentsInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -1244,6 +1331,7 @@ export type DeviceUpdateWithoutHardwareEnrollmentsInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1272,6 +1360,7 @@ export type DeviceUncheckedUpdateWithoutHardwareEnrollmentsInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1298,6 +1387,7 @@ export type DeviceCreateWithoutSettingsInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -1326,6 +1416,7 @@ export type DeviceUncheckedCreateWithoutSettingsInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -1368,6 +1459,7 @@ export type DeviceUpdateWithoutSettingsInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1396,6 +1488,7 @@ export type DeviceUncheckedUpdateWithoutSettingsInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1422,6 +1515,7 @@ export type DeviceCreateWithoutAuditEventsInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -1450,6 +1544,7 @@ export type DeviceUncheckedCreateWithoutAuditEventsInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -1492,6 +1587,7 @@ export type DeviceUpdateWithoutAuditEventsInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1520,6 +1616,7 @@ export type DeviceUncheckedUpdateWithoutAuditEventsInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1546,6 +1643,7 @@ export type DeviceCreateWithoutChatSessionsInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -1574,6 +1672,7 @@ export type DeviceUncheckedCreateWithoutChatSessionsInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -1616,6 +1715,7 @@ export type DeviceUpdateWithoutChatSessionsInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1644,6 +1744,7 @@ export type DeviceUncheckedUpdateWithoutChatSessionsInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1670,6 +1771,7 @@ export type DeviceCreateWithoutSourceChatMessagesInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -1698,6 +1800,7 @@ export type DeviceUncheckedCreateWithoutSourceChatMessagesInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -1740,6 +1843,7 @@ export type DeviceUpdateWithoutSourceChatMessagesInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1768,6 +1872,7 @@ export type DeviceUncheckedUpdateWithoutSourceChatMessagesInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1794,6 +1899,7 @@ export type DeviceCreateWithoutTargetSchedulesInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -1822,6 +1928,7 @@ export type DeviceUncheckedCreateWithoutTargetSchedulesInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -1864,6 +1971,7 @@ export type DeviceUpdateWithoutTargetSchedulesInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1892,6 +2000,7 @@ export type DeviceUncheckedUpdateWithoutTargetSchedulesInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1918,6 +2027,7 @@ export type DeviceCreateWithoutProactiveDeliveriesInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -1946,6 +2056,7 @@ export type DeviceUncheckedCreateWithoutProactiveDeliveriesInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -1988,6 +2099,7 @@ export type DeviceUpdateWithoutProactiveDeliveriesInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2016,6 +2128,7 @@ export type DeviceUncheckedUpdateWithoutProactiveDeliveriesInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2042,6 +2155,7 @@ export type DeviceCreateWithoutDeliveryAttemptsInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -2070,6 +2184,7 @@ export type DeviceUncheckedCreateWithoutDeliveryAttemptsInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -2112,6 +2227,7 @@ export type DeviceUpdateWithoutDeliveryAttemptsInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2140,6 +2256,7 @@ export type DeviceUncheckedUpdateWithoutDeliveryAttemptsInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2166,6 +2283,7 @@ export type DeviceCreateWithoutWifiConfigurationsInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -2194,6 +2312,7 @@ export type DeviceUncheckedCreateWithoutWifiConfigurationsInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -2236,6 +2355,7 @@ export type DeviceUpdateWithoutWifiConfigurationsInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2264,6 +2384,7 @@ export type DeviceUncheckedUpdateWithoutWifiConfigurationsInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2290,6 +2411,7 @@ export type DeviceCreateWithoutTelemetryCurrentInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -2318,6 +2440,7 @@ export type DeviceUncheckedCreateWithoutTelemetryCurrentInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -2360,6 +2483,7 @@ export type DeviceUpdateWithoutTelemetryCurrentInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2388,6 +2512,7 @@ export type DeviceUncheckedUpdateWithoutTelemetryCurrentInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2414,6 +2539,7 @@ export type DeviceCreateWithoutLogsInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -2442,6 +2568,7 @@ export type DeviceUncheckedCreateWithoutLogsInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -2484,6 +2611,7 @@ export type DeviceUpdateWithoutLogsInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2512,6 +2640,7 @@ export type DeviceUncheckedUpdateWithoutLogsInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2538,6 +2667,7 @@ export type DeviceCreateWithoutSpeechReservationInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -2566,6 +2696,7 @@ export type DeviceUncheckedCreateWithoutSpeechReservationInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -2608,6 +2739,7 @@ export type DeviceUpdateWithoutSpeechReservationInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2636,6 +2768,7 @@ export type DeviceUncheckedUpdateWithoutSpeechReservationInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2662,6 +2795,7 @@ export type DeviceCreateManyUserInput = {
   name: string
   tokenHash: string
   status?: $Enums.DeviceStatus
+  bindingResetEpoch?: number
   pairedAt?: Date | string | null
   revokedAt?: Date | string | null
   lastSeenAt?: Date | string | null
@@ -2675,6 +2809,7 @@ export type DeviceUpdateWithoutUserInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2702,6 +2837,7 @@ export type DeviceUncheckedUpdateWithoutUserInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2729,6 +2865,7 @@ export type DeviceUncheckedUpdateManyWithoutUserInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.EnumDeviceStatusFieldUpdateOperationsInput | $Enums.DeviceStatus
+  bindingResetEpoch?: Prisma.IntFieldUpdateOperationsInput | number
   pairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2864,6 +3001,7 @@ export type DeviceSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   name?: boolean
   tokenHash?: boolean
   status?: boolean
+  bindingResetEpoch?: boolean
   pairedAt?: boolean
   revokedAt?: boolean
   lastSeenAt?: boolean
@@ -2894,6 +3032,7 @@ export type DeviceSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extens
   name?: boolean
   tokenHash?: boolean
   status?: boolean
+  bindingResetEpoch?: boolean
   pairedAt?: boolean
   revokedAt?: boolean
   lastSeenAt?: boolean
@@ -2909,6 +3048,7 @@ export type DeviceSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extens
   name?: boolean
   tokenHash?: boolean
   status?: boolean
+  bindingResetEpoch?: boolean
   pairedAt?: boolean
   revokedAt?: boolean
   lastSeenAt?: boolean
@@ -2924,6 +3064,7 @@ export type DeviceSelectScalar = {
   name?: boolean
   tokenHash?: boolean
   status?: boolean
+  bindingResetEpoch?: boolean
   pairedAt?: boolean
   revokedAt?: boolean
   lastSeenAt?: boolean
@@ -2931,7 +3072,7 @@ export type DeviceSelectScalar = {
   updatedAt?: boolean
 }
 
-export type DeviceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "hardwareId" | "name" | "tokenHash" | "status" | "pairedAt" | "revokedAt" | "lastSeenAt" | "createdAt" | "updatedAt", ExtArgs["result"]["device"]>
+export type DeviceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "hardwareId" | "name" | "tokenHash" | "status" | "bindingResetEpoch" | "pairedAt" | "revokedAt" | "lastSeenAt" | "createdAt" | "updatedAt", ExtArgs["result"]["device"]>
 export type DeviceInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   clientSessions?: boolean | Prisma.Device$clientSessionsArgs<ExtArgs>
@@ -2983,6 +3124,7 @@ export type $DevicePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs
     name: string
     tokenHash: string
     status: $Enums.DeviceStatus
+    bindingResetEpoch: number
     pairedAt: Date | null
     revokedAt: Date | null
     lastSeenAt: Date | null
@@ -3432,6 +3574,7 @@ export interface DeviceFieldRefs {
   readonly name: Prisma.FieldRef<"Device", 'String'>
   readonly tokenHash: Prisma.FieldRef<"Device", 'String'>
   readonly status: Prisma.FieldRef<"Device", 'DeviceStatus'>
+  readonly bindingResetEpoch: Prisma.FieldRef<"Device", 'Int'>
   readonly pairedAt: Prisma.FieldRef<"Device", 'DateTime'>
   readonly revokedAt: Prisma.FieldRef<"Device", 'DateTime'>
   readonly lastSeenAt: Prisma.FieldRef<"Device", 'DateTime'>

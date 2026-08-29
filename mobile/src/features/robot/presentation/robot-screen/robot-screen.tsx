@@ -1,7 +1,12 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
-import { ArrowUpRight, Ellipsis, ShoppingBag } from 'lucide-react-native';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ArrowUpRight,
+  Bluetooth,
+  Ellipsis,
+  ShoppingBag,
+} from 'lucide-react-native';
 import {
   Alert,
   ScrollView,
@@ -216,6 +221,15 @@ export function RobotScreen({
             <View style={styles.section} testID={`${testID}-connection-section`}>
               <Text style={[styles.sectionTitle, { color: theme.textMuted }]}>Connect Options</Text>
               <RobotOptionCard
+                title="I Already Have a Joy Robot"
+                description="Pair via Bluetooth BLE"
+                leftIcon={
+                  <Bluetooth
+                    size={20}
+                    color={theme.icon}
+                    strokeWidth={1.75}
+                  />
+                }
                 onPress={() => setShowPairSheet(true)}
                 style={{ width: sectionWidth }}
                 testID={`${testID}-have-robot-card`}

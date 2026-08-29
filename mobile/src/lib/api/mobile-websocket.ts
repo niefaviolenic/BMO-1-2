@@ -99,6 +99,13 @@ export type WhatsAppNotificationEvent = {
   conversationType: string;
   receivedAt: string;
 };
+export type DeviceBindingRevokedEvent = {
+  event: 'device_binding_revoked';
+  deviceId: string;
+  hardwareId: string;
+  reason: 'PHYSICAL_RESET' | 'USER_UNPAIR' | 'REBOUND';
+};
+
 
 export type MobileInboundEvent =
   | ChatThinkingEvent
@@ -112,6 +119,7 @@ export type MobileInboundEvent =
   | IntegrationStatusEvent
   | NotificationEvent
   | WhatsAppNotificationEvent
+  | DeviceBindingRevokedEvent
   | { event: string };
 
 export function isDeviceStatusEvent(event: MobileInboundEvent): event is DeviceStatusEvent {
@@ -131,6 +139,12 @@ export function isWhatsAppNotificationEvent(
 ): event is WhatsAppNotificationEvent {
   return event.event === 'whatsapp_notification';
 }
+export function isDeviceBindingRevokedEvent(
+  event: MobileInboundEvent,
+): event is DeviceBindingRevokedEvent {
+  return event.event === 'device_binding_revoked';
+}
+
 
 type Listener = (event: MobileInboundEvent) => void;
 
