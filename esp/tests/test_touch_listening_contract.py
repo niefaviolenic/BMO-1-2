@@ -144,13 +144,13 @@ class TouchListeningContractTest(unittest.TestCase):
             self.assertIn(message, button)
         self.assertIn("Idle face set", display)
 
-    def test_touch_uses_native_capacitive_backend_with_gpio_fallback(self) -> None:
+    def test_touch_uses_ttp223_digital_backend(self) -> None:
         button = BUTTON_SOURCE.read_text(encoding="utf-8")
 
-        self.assertIn("touch_pad_init()", button)
-        self.assertIn("TOUCH_PAD_NUM14", button)
-        self.assertIn("native_touch_baseline_ready", button)
-        self.assertIn("GPIO digital fallback", button)
+        self.assertIn("TTP223 digital GPIO", button)
+        self.assertIn("gpio_get_level(TOUCH_PIN) == 1", button)
+        self.assertNotIn("touch_pad_init()", button)
+        self.assertNotIn("TOUCH_PAD_NUM14", button)
 
     def test_shy_animation_is_non_blocking_local_and_transient(self) -> None:
         header = DISPLAY_HEADER.read_text(encoding="utf-8")
@@ -225,7 +225,7 @@ class TouchListeningContractTest(unittest.TestCase):
         button = BUTTON_SOURCE.read_text(encoding="utf-8")
         init = function_body(button, r"void\s+button_init\s*\([^)]*\)")
 
-        self.assertIn("gpio_get_level(TOUCH_PIN)", init)
+        self.assertIn("read_touch_level()", init)
         self.assertIn("TOUCH_BOOT_HIGH_LOCKOUT", init)
         self.assertIn("TOUCH_ARMED", init)
         self.assertIn("touch_stable_level", init)
