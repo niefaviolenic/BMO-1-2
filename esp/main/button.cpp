@@ -5,9 +5,12 @@
 #include "pairing.h"
 #include "state.h"
 #include "driver/gpio.h"
+#include "driver/touch_sensor_legacy.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 //--------------------------------------------------
 // Touch + volume input pins.
@@ -49,6 +52,115 @@ static bool touch_candidate_level = false;
 static bool touch_stable_level = false;
 static int64_t touch_candidate_since_us = 0;
 static int64_t last_touch_diag_us = 0;
+
+// GPIO14 is an ESP32-S3 native touch channel. The previous implementation
+// treated it only as a digital input, which cannot detect a bare capacitive
+// pad. Keep the digital fallback if native touch setup is unavailable.
+static constexpr touch_pad_t TOUCH_CHANNEL = TOUCH_PAD_NUM14;
+static bool native_touch_enabled = false;
+static bool native_touch_level = false;
+static bool native_touch_baseline_ready = false;
+static uint32_t native_touch_raw = 0;
+static uint32_t native_touch_baseline = 0;
+static uint32_t native_touch_threshold = 0;
+static uint64_t native_touch_calibration_sum = 0;
+static int native_touch_calibration_samples = 0;
+
+static bool native_touch_init()
+{
+    if(touch_pad_init() != ESP_OK)
+        return false;
+
+    if(touch_pad_set_fsm_mode(TOUCH_FSM_MODE_SW) != ESP_OK ||
+       touch_pad_set_voltage(
+           TOUCH_HVOLT_2V7,
+           TOUCH_LVOLT_0V5,
+           TOUCH_HVOLT_ATTEN_0V5) != ESP_OK ||
+       touch_pad_set_idle_channel_connect(TOUCH_PAD_CONN_HIGHZ) != ESP_OK ||
+       touch_pad_set_charge_discharge_times(500) != ESP_OK ||
+       touch_pad_set_measurement_interval(0x0f) != ESP_OK ||
+       touch_pad_set_cnt_mode(
+           TOUCH_CHANNEL,
+           TOUCH_PAD_SLOPE_7,
+           TOUCH_PAD_TIE_OPT_FLOAT) != ESP_OK ||
+       touch_pad_config(TOUCH_CHANNEL) != ESP_OK ||
+       touch_pad_set_channel_mask(1U << TOUCH_CHANNEL) != ESP_OK)
+    {
+        (void)touch_pad_deinit();
+        return false;
+    }
+
+    native_touch_enabled = true;
+    native_touch_level = false;
+    native_touch_baseline_ready = false;
+    native_touch_raw = 0;
+    native_touch_baseline = 0;
+    native_touch_threshold = 0;
+    native_touch_calibration_sum = 0;
+    native_touch_calibration_samples = 0;
+
+    return touch_pad_sw_start() == ESP_OK;
+}
+
+static bool native_touch_update()
+{
+    if(!native_touch_enabled || !touch_pad_meas_is_done())
+        return native_touch_level;
+
+    uint32_t raw = 0;
+    if(touch_pad_read_raw_data(TOUCH_CHANNEL, &raw) != ESP_OK)
+        return native_touch_level;
+
+    native_touch_raw = raw;
+
+    if(!native_touch_baseline_ready)
+    {
+        native_touch_calibration_sum += raw;
+        native_touch_calibration_samples++;
+
+        if(native_touch_calibration_samples >= 16)
+        {
+            native_touch_baseline = static_cast<uint32_t>(
+                native_touch_calibration_sum /
+                static_cast<uint64_t>(native_touch_calibration_samples));
+            native_touch_threshold = native_touch_baseline / 20U;
+            if(native_touch_threshold < 100U)
+                native_touch_threshold = 100U;
+            native_touch_baseline_ready = true;
+
+            ESP_LOGI(
+                TAG,
+                "Native touch calibrated: baseline=%lu threshold=%lu",
+                (unsigned long)native_touch_baseline,
+                (unsigned long)native_touch_threshold);
+        }
+    }
+    else
+    {
+        const uint32_t delta = raw >= native_touch_baseline ?
+            raw - native_touch_baseline :
+            native_touch_baseline - raw;
+        native_touch_level = delta >= native_touch_threshold;
+
+        // Track slow environmental drift only while the pad is released.
+        if(!native_touch_level)
+        {
+            native_touch_baseline =
+                (native_touch_baseline * 99U + raw) / 100U;
+        }
+    }
+
+    (void)touch_pad_sw_start();
+    return native_touch_level;
+}
+
+static bool read_touch_level()
+{
+    if(native_touch_enabled)
+        return native_touch_update();
+
+    return gpio_get_level(TOUCH_PIN) == 1;
+}
 
 static bool update_debounced_button(
     gpio_num_t pin,
@@ -101,17 +213,22 @@ static const char *joy_state_name(JoyState state)
 
 void button_init()
 {
-    gpio_config_t touch_config = {};
+    const bool native_touch_ready = native_touch_init();
 
-    touch_config.pin_bit_mask = 1ULL << TOUCH_PIN;
-    touch_config.mode = GPIO_MODE_INPUT;
-    touch_config.pull_up_en = GPIO_PULLUP_DISABLE;
-    touch_config.pull_down_en = GPIO_PULLDOWN_ENABLE;
-    touch_config.intr_type = GPIO_INTR_DISABLE;
+    if(!native_touch_ready)
+    {
+        gpio_config_t touch_config = {};
 
-    ESP_ERROR_CHECK(
-        gpio_config(
-            &touch_config));
+        touch_config.pin_bit_mask = 1ULL << TOUCH_PIN;
+        touch_config.mode = GPIO_MODE_INPUT;
+        touch_config.pull_up_en = GPIO_PULLUP_DISABLE;
+        touch_config.pull_down_en = GPIO_PULLDOWN_ENABLE;
+        touch_config.intr_type = GPIO_INTR_DISABLE;
+
+        ESP_ERROR_CHECK(
+            gpio_config(
+                &touch_config));
+    }
 
     gpio_config_t button_config = {};
 
@@ -130,7 +247,8 @@ void button_init()
             &button_config));
 
     const int64_t now = esp_timer_get_time();
-    const bool touch_level = gpio_get_level(TOUCH_PIN) == 1;
+    const bool touch_level = native_touch_enabled ?
+        native_touch_level : gpio_get_level(TOUCH_PIN) == 1;
     const bool expression_button_pressed =
         gpio_get_level(BTN_EXPRESSION) == 0;
     const bool volume_up_pressed = gpio_get_level(BTN_VOL_UP) == 0;
@@ -158,6 +276,11 @@ void button_init()
         touch_level ? 1 : 0,
         touch_stable_level ? 1 : 0,
         touch_lifecycle_name(touch_state));
+
+    ESP_LOGI(
+        TAG,
+        "Touch backend: %s",
+        native_touch_enabled ? "ESP32-S3 capacitive" : "GPIO digital fallback");
 
     ESP_LOGI(
         TAG,
@@ -245,8 +368,7 @@ void button_update()
         }
     }
 
-    bool touch_level =
-        gpio_get_level(TOUCH_PIN) == 1;
+    const bool touch_level = read_touch_level();
 
     if(now - last_touch_diag_us >= 2000000LL)
     {
@@ -302,15 +424,11 @@ void button_update()
                     }
                     else
                     {
-                        if(display_start_shy())
-                        {
-                            audio_triggerExpressionAudio((int)FACE_CUTE);
-                            ESP_LOGI(TAG, "Touch accepted: shy animation started with local cute audio");
-                        }
-                        else
-                        {
-                            ESP_LOGW(TAG, "Touch rejected: shy display could not start");
-                        }
+                        display_set_idle_face(FACE_HAPPY);
+                        audio_triggerReadyAudio();
+                        ESP_LOGI(
+                            TAG,
+                            "Touch accepted: idle HAPPY face rendered with local I'm ready audio");
                     }
                 }
                 else
@@ -324,8 +442,7 @@ void button_update()
         }
         else
         {
-            // Only a stable LOW release re-arms the physical input. This is
-            // also the boot-high lockout exit path.
+            // Only a stable LOW/released state re-arms the physical input.
             touch_state = TouchLifecycleState::TOUCH_ARMED;
             ESP_LOGI(
                 TAG,

@@ -13,6 +13,7 @@ idf_component_register(
         "audio_wav/09.wav"
         "audio_wav/10.wav"
         "audio_wav/wake_ack.wav"
+        "audio_wav/ready.wav"
         "audio_wav/thinking_01.wav"
         "audio_wav/thinking_02.wav"
         "audio_wav/thinking_03.wav"

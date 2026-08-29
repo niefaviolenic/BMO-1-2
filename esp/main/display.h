@@ -31,6 +31,9 @@ void display_sleep();
 
 void display_face(Face face);
 
+// Set the persistent idle face and render it immediately when idle.
+void display_set_idle_face(Face face);
+
 // Touch follows the Face declaration order and wraps after FACE_CONFUSED.
 Face display_next_touch_face();
 Face display_get_idle_face();

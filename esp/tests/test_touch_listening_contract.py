@@ -114,8 +114,8 @@ class TouchListeningContractTest(unittest.TestCase):
 
         self.assertIn("touch_level != touch_candidate_level", update)
         self.assertIn("touch_candidate_level != touch_stable_level", update)
-        self.assertIn("display_start_shy()", update)
-        self.assertIn("audio_triggerExpressionAudio((int)FACE_CUTE)", update)
+        self.assertIn("display_set_idle_face(FACE_HAPPY)", update)
+        self.assertIn("audio_triggerReadyAudio()", update)
         self.assertNotIn("audio_triggerWakeAck()", update)
         self.assertNotIn("wakeword_task()", update)
         self.assertIn("getState() == JoyState::IDLE", update)
@@ -126,11 +126,11 @@ class TouchListeningContractTest(unittest.TestCase):
 
         self.assertEqual(len(re.findall(r"\bwakeword_task\s*\(\s*\)", update)), 0)
         self.assertNotIn("audio_triggerWakeAck()", update)
-        self.assertIn("display_start_shy()", update)
-        self.assertIn("audio_triggerExpressionAudio((int)FACE_CUTE)", update)
+        self.assertIn("display_set_idle_face(FACE_HAPPY)", update)
+        self.assertIn("audio_triggerReadyAudio()", update)
         self.assertIn("TOUCH_CONSUMED", update)
 
-    def test_touch_runtime_diagnostics_cover_the_shy_handoff(self) -> None:
+    def test_touch_runtime_diagnostics_cover_the_ready_handoff(self) -> None:
         button = BUTTON_SOURCE.read_text(encoding="utf-8")
         display = DISPLAY_SOURCE.read_text(encoding="utf-8")
 
@@ -139,11 +139,18 @@ class TouchListeningContractTest(unittest.TestCase):
             "Touch stable",
             "Touch lifecycle",
             "Touch accepted",
-            "shy animation started",
+            "idle HAPPY face rendered",
         ):
             self.assertIn(message, button)
-        self.assertIn("Shy animation started", display)
-        self.assertIn("Shy animation finished", display)
+        self.assertIn("Idle face set", display)
+
+    def test_touch_uses_native_capacitive_backend_with_gpio_fallback(self) -> None:
+        button = BUTTON_SOURCE.read_text(encoding="utf-8")
+
+        self.assertIn("touch_pad_init()", button)
+        self.assertIn("TOUCH_PAD_NUM14", button)
+        self.assertIn("native_touch_baseline_ready", button)
+        self.assertIn("GPIO digital fallback", button)
 
     def test_shy_animation_is_non_blocking_local_and_transient(self) -> None:
         header = DISPLAY_HEADER.read_text(encoding="utf-8")

@@ -1590,6 +1590,38 @@ void display_face(
     unlock_display();
 }
 
+void display_set_idle_face(Face face)
+{
+    if(!display_ready)
+    {
+        ESP_LOGW(TAG, "Display not ready");
+        return;
+    }
+
+    cancel_shy_animation();
+
+    if(!lock_display(pdMS_TO_TICKS(1000)))
+    {
+        ESP_LOGW(TAG, "Display busy");
+        return;
+    }
+
+    current_touch_face = face;
+
+    if(current_display_mode == DisplayMode::IDLE)
+    {
+        if(qr_code_active)
+            draw_qr_overlay_locked();
+        else if(pairing_code_active)
+            draw_pairing_overlay_locked();
+        else
+            draw_face_locked(current_touch_face);
+    }
+
+    unlock_display();
+    ESP_LOGI(TAG, "Idle face set: face=%s(%d)", face_name(face), (int)face);
+}
+
 Face display_next_touch_face()
 {
     Face next_face = current_touch_face;

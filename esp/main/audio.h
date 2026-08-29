@@ -31,6 +31,11 @@ void audio_playExpressionAudio(int expression_index);
 void audio_triggerExpressionAudio(int expression_index);
 void audio_cancelExpressionAudio();
 
+// Play the local spoken "I'm ready" cue without contacting the backend.
+void audio_playReady();
+void audio_triggerReadyAudio();
+void audio_cancelReadyAudio();
+
 // Play a dynamic thinking filler phrase (0..4) or random thinking filler
 // when voice capture finishes and backend processing begins.
 void audio_playThinkingFiller(int index);

@@ -47,6 +47,9 @@ static volatile bool thinking_filler_running = false;
 static volatile bool thinking_filler_stop_requested = false;
 static volatile bool expression_audio_running = false;
 static volatile bool expression_audio_stop_requested = false;
+static TaskHandle_t ready_audio_worker_task_handle = NULL;
+static volatile bool ready_audio_running = false;
+static volatile bool ready_audio_stop_requested = false;
 static int pending_expression_index = -1;
 static portMUX_TYPE expression_audio_mux = portMUX_INITIALIZER_UNLOCKED;
 static int last_thinking_filler_index = -1;
@@ -98,6 +101,8 @@ extern const uint8_t _binary_10_wav_start[];
 extern const uint8_t _binary_10_wav_end[];
 extern const uint8_t _binary_wake_ack_wav_start[];
 extern const uint8_t _binary_wake_ack_wav_end[];
+extern const uint8_t _binary_ready_wav_start[];
+extern const uint8_t _binary_ready_wav_end[];
 extern const uint8_t _binary_thinking_01_wav_start[];
 extern const uint8_t _binary_thinking_01_wav_end[];
 extern const uint8_t _binary_thinking_02_wav_start[];
@@ -359,6 +364,12 @@ static esp_err_t speaker_write_silence(
 
 //--------------------------------------------------
 
+static bool audio_play_embedded_wav_clip_cancellable(
+    const uint8_t *start,
+    const uint8_t *end,
+    const char *clip_name,
+    volatile bool *stop_flag);
+
 static void wake_ack_worker_task(void *param)
 {
     while(true)
@@ -373,6 +384,37 @@ static void wake_ack_worker_task(void *param)
 
 static void thinking_filler_worker_task(void *param);
 static void expression_audio_worker_task(void *param);
+
+static void ready_audio_worker_task(void *param)
+{
+    while(true)
+    {
+        (void)ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+        if(ready_audio_stop_requested || !local_expression_is_allowed())
+            continue;
+
+        ready_audio_running = true;
+        ESP_LOGI(TAG, "Local ready worker playing \"I'm ready\"");
+
+        const bool played = audio_play_embedded_wav_clip_cancellable(
+            _binary_ready_wav_start,
+            _binary_ready_wav_end,
+            "ready",
+            &ready_audio_stop_requested);
+
+        ready_audio_running = false;
+
+        if(!played && !ready_audio_stop_requested)
+        {
+            ESP_LOGW(TAG, "Ready WAV unavailable; using hello cue fallback");
+            audio_playHello();
+        }
+
+        if(!ready_audio_stop_requested)
+            (void)speaker_write_silence(30);
+    }
+}
 
 void audio_init()
 {
@@ -534,6 +576,22 @@ void audio_init()
         {
             ESP_LOGE(TAG, "Failed to create expression_audio task");
             expression_audio_task_handle = NULL;
+        }
+    }
+    if(ready_audio_worker_task_handle == NULL)
+    {
+        BaseType_t ret = xTaskCreatePinnedToCore(
+            ready_audio_worker_task,
+            "ready_audio",
+            4096,
+            NULL,
+            5,
+            &ready_audio_worker_task_handle,
+            0);
+        if(ret != pdPASS)
+        {
+            ESP_LOGE(TAG, "Failed to create ready_audio task");
+            ready_audio_worker_task_handle = NULL;
         }
     }
 }
@@ -809,6 +867,9 @@ void audio_triggerWakeAck()
 {
     // Wakeword audio has priority over local touch/expression audio. The
     // detection and recording path itself remains unchanged.
+    ready_audio_stop_requested = true;
+    if(ready_audio_worker_task_handle != NULL)
+        xTaskNotifyGive(ready_audio_worker_task_handle);
     audio_cancelExpressionAudio();
 
     if(wake_ack_worker_task_handle != NULL)
@@ -820,6 +881,49 @@ void audio_triggerWakeAck()
         ESP_LOGW(TAG, "wake_ack_worker task not ready, falling back to direct playback");
         audio_playWakeAck();
     }
+}
+
+void audio_playReady()
+{
+    ESP_LOGI(TAG, "Play local ready phrase");
+    (void)audio_set_sample_rate(SPEAKER_SAMPLE_RATE);
+
+    if(audio_play_embedded_wav_clip(
+           _binary_ready_wav_start,
+           _binary_ready_wav_end,
+           "ready"))
+    {
+        return;
+    }
+
+    ESP_LOGW(TAG, "Ready WAV unavailable; using hello cue fallback");
+    audio_playHello();
+}
+
+void audio_triggerReadyAudio()
+{
+    if(!speaker_ready)
+        return;
+
+    audio_cancelExpressionAudio();
+    ready_audio_stop_requested = false;
+
+    if(ready_audio_worker_task_handle != NULL)
+    {
+        xTaskNotifyGive(ready_audio_worker_task_handle);
+    }
+    else
+    {
+        ESP_LOGW(TAG, "ready_audio task not ready, falling back to direct playback");
+        audio_playReady();
+    }
+}
+
+void audio_cancelReadyAudio()
+{
+    ready_audio_stop_requested = true;
+    if(ready_audio_worker_task_handle != NULL)
+        xTaskNotifyGive(ready_audio_worker_task_handle);
 }
 
 //--------------------------------------------------
@@ -845,6 +949,8 @@ void audio_triggerExpressionAudio(int expression_index)
         ESP_LOGW(TAG, "Expression audio request rejected: index=%d", expression_index);
         return;
     }
+
+    audio_cancelReadyAudio();
 
     portENTER_CRITICAL(&expression_audio_mux);
     pending_expression_index = expression_index;
