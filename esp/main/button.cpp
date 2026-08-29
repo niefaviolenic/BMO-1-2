@@ -13,7 +13,7 @@
 // Touch + volume input pins.
 //--------------------------------------------------
 
-#define TOUCH_PIN      GPIO_NUM_14
+#define TOUCH_PIN      GPIO_NUM_3
 #define BTN_VOL_UP    GPIO_NUM_15
 #define BTN_VOL_DOWN  GPIO_NUM_16
 #define BTN_EXPRESSION GPIO_NUM_17
