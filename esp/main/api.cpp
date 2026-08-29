@@ -341,14 +341,15 @@ static void stop_ws_if_started(const char *source)
 }
 
 // Skip ID3 tags
-static int skip_id3_tag(esp_http_client_handle_t http_client, uint8_t *first_chunk,
+static int skip_id3_tag(esp_http_client_handle_t http_client, uint8_t *chunk,
                         int chunk_len, int *skipped_out, uint64_t *received_total) {
-    if (chunk_len >= 10 && first_chunk[0] == 'I' && first_chunk[1] == 'D' && first_chunk[2] == '3') {
-        uint32_t tag_size = ((first_chunk[6] & 0x7F) << 21) |
-                            ((first_chunk[7] & 0x7F) << 14) |
-                            ((first_chunk[8] & 0x7F) << 7) |
-                            (first_chunk[9] & 0x7F);
-        uint32_t total_skip = tag_size + 10;
+    if (chunk_len >= 10 && chunk[0] == 'I' && chunk[1] == 'D' && chunk[2] == '3') {
+        bool has_footer = (chunk[5] & 0x10) != 0;
+        uint32_t tag_size = ((chunk[6] & 0x7F) << 21) |
+                            ((chunk[7] & 0x7F) << 14) |
+                            ((chunk[8] & 0x7F) << 7) |
+                            (chunk[9] & 0x7F);
+        uint32_t total_skip = tag_size + 10 + (has_footer ? 10 : 0);
         ESP_LOGI(TAG, "Detected ID3v2 tag of size %lu bytes. Skipping...", (unsigned long)total_skip);
         
         uint32_t already_read = chunk_len;
@@ -367,13 +368,14 @@ static int skip_id3_tag(esp_http_client_handle_t http_client, uint8_t *first_chu
                 *received_total += (uint64_t)r;
                 to_skip -= r;
             }
-            *skipped_out = chunk_len; // Skipped all of the first chunk
+            *skipped_out = chunk_len; // Skipped all of the current chunk in buffer
             return 0;
         }
     }
     *skipped_out = 0;
     return 0;
 }
+
 
 // Generate UUID v4
 static void generate_uuid_v4(char *buf) {
@@ -1531,7 +1533,6 @@ static JoyPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
     
     int bytes_left = 0;
     uint8_t *read_ptr = mp3_stream_buf;
-    bool checked_id3 = false;
     bool playback_started = false;
     bool is_eof = false;
     bool read_failed = false;
@@ -1624,9 +1625,8 @@ static JoyPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
             }
         }
         
-        // 2. Skip ID3 tags on the first chunk
-        if (!checked_id3 && bytes_left >= 10) {
-            checked_id3 = true;
+        // 2. Skip ID3 tags whenever encountered in stream
+        if (bytes_left >= 10 && read_ptr[0] == 'I' && read_ptr[1] == 'D' && read_ptr[2] == '3') {
             int skipped = 0;
             if (skip_id3_tag(http_client, read_ptr, bytes_left, &skipped,
                              &received_bytes) == 0) {
@@ -1639,6 +1639,7 @@ static JoyPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
                 }
                 read_ptr += skipped;
                 bytes_left -= skipped;
+                continue;
             } else {
                 read_failed = true;
                 result = JOY_PLAYBACK_DOWNLOAD_FAILED;

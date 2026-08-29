@@ -67,16 +67,16 @@ class ExpressionAudioContractTest(unittest.TestCase):
         )
 
         for phrase in (
-            "aku happy",
-            "aku cute",
-            "aku excited",
-            "aku sleepy",
-            "aku angry",
-            "aku sedih",
-            "aku wink",
-            "aku surprised",
-            "aku love",
-            "aku confused",
+            "I am happy",
+            "I am cute",
+            "I am excited",
+            "I am sleepy",
+            "I am angry",
+            "I am sad",
+            "wink",
+            "I am surprised",
+            "I love you",
+            "I am confused",
         ):
             self.assertIn(phrase, source)
         self.assertNotRegex(playback, r"audio_setVolume\((?:100|SPEAKER_DEFAULT_VOLUME)\);")

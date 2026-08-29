@@ -114,14 +114,15 @@ sequenceDiagram
 - **ID3 Tag Handling**: Otomatis mendeteksi dan melewati ID3v2 metadata header tanpa membuat decoder corrupt.
 - **Optimasi Latensi (Hermes Streaming Pipeline)**: Backend menggunakan streaming SSE (`stream: true`) dengan *SentenceSplitter* dan pipelined TTS synthesis, sehingga chunk audio MP3 pertama tersedia seketika dan event WS `audio_ready` diterima dalam waktu TTFA (Time-To-First-Audio) ~1.7s. ESP32 langsung mengunduh dan men-decode chunk tersebut secara realtime menggunakan buffer 32 KB + 2 KB pre-buffer.
 - **Audio Ekspresi, Cue Lokal & Dynamic Thinking Filler Voice**:
-  - **Wake-up Acknowledgment Cue**: Embedded WAV `audio_wav/wake_ack.wav` (durasi $\le 600\text{ ms}$, 16kHz 16-bit Mono PCM WAV) atau dual-tone fallback synthesizer (rising chime: 659 Hz $\to$ 880 Hz) yang diputar seketika wake word *"Hi Joy"* terdeteksi.
-  - **Dynamic Thinking Filler Voice ("Zero Dead-Air Latency Masking")**: Begitu user selesai berbicara dan upload WAV diterima oleh backend (`JOY_UPLOAD_ACCEPTED`), firmware seketika memutar salah satu dari 5 audio clip filler berpikir secara dinamis/acak (`thinking_01.wav` .. `thinking_05.wav`) melalui speaker MAX98357A:
-    1. `thinking_01.wav`: *"bentar aku pikir dulu"* (~1.2s, pleasant melodic thinking phrase)
-    2. `thinking_02.wav`: *"aku lagi proses dulu pertanyaannya"* (~1.4s, pleasant harmonic phrase)
-    3. `thinking_03.wav`: *"tunggu sebentar ya"* (~1.0s, pleasant melodic phrase)
-    4. `thinking_04.wav`: *"hmm coba aku cari tahu dulu"* (~1.3s, pleasant harmonic phrase)
-    5. `thinking_05.wav`: *"bentar ya joy lagi mikir"* (~1.1s, pleasant melodic phrase)
+  - **Wake-up Acknowledgment Spoken Cue ("Yes?")**: Embedded WAV `audio_wav/wake_ack.wav` (durasi $\le 600\text{ ms}$, 16kHz 16-bit Mono PCM WAV disintesis menggunakan Piper TTS `en_GB-semaine-medium:prudence`) atau dual-tone fallback synthesizer (rising chime: 659 Hz $\to$ 880 Hz) yang diputar seketika wake word *"Hi Joy"* atau sensor sentuh terdeteksi.
+  - **Dynamic Thinking Filler Voice ("Zero Dead-Air Latency Masking")**: Begitu user selesai berbicara dan upload WAV diterima oleh backend (`JOY_UPLOAD_ACCEPTED`), firmware seketika memutar salah satu dari 5 audio clip filler berpikir secara dinamis/acak (`thinking_01.wav` .. `thinking_05.wav`) menggunakan suara persona Piper TTS Inggris melalui speaker MAX98357A:
+    1. `thinking_01.wav`: *"Let me think for a moment."* (~1.4s, Piper TTS)
+    2. `thinking_02.wav`: *"Processing your question."* (~1.4s, Piper TTS)
+    3. `thinking_03.wav`: *"Just a second."* (~1.0s, Piper TTS)
+    4. `thinking_04.wav`: *"Hmm let me check that for you."* (~1.4s, Piper TTS)
+    5. `thinking_05.wav`: *"Hold on, Joy is thinking."* (~1.6s, Piper TTS)
     Setiap clip adalah 16kHz 16-bit Mono PCM canonical WAV, dilengkapi dengan fallback tone melody sintetis jika WAV corrupt/tidak tersedia. Fitur ini menghilangkan jeda hening (*dead air*) selama LLM dan TTS backend memproses jawaban.
+  - **Audio Ekspresi Wajah Lokal (`01.wav` .. `10.wav`)**: 10 audio clip ucapan ekspresi wajah lokal (`"I am happy"`, `"I am cute"`, `"I am excited"`, `"I am sleepy"`, `"I am angry"`, `"I am sad"`, `"wink"`, `"I am surprised"`, `"I love you"`, `"I am confused"`) menggunakan Piper TTS persona Bahasa Inggris yang diputar saat animasi wajah di LCD berganti di mode `IDLE`.
   - **Interaksi Sentuh (Touch-to-Wake)**: Sensor capacitive touch pada GPIO 14 mendukung single tap touch untuk langsung membangunkan Joy (*wake acknowledgement cue* `wake_ack.wav` + transisi `JoyState::RECORDING`), berfungsi sebagai alternatif fisik independen untuk wake word *"Hi Joy"*.
   - **Dynamic Thinking Filler Loop Controls**: Background FreeRTOS task dapat memutar loop acak filler berpikir secara non-blocking (`audio_startThinkingFillerLoop()`, `audio_stopThinkingFillerLoop()`) dan dihentikan seketika saat audio response siap diputar (`audio_ready`) atau request gagal.
 

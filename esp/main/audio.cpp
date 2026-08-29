@@ -142,16 +142,16 @@ static const char *expression_phrase(int expression_index)
 {
     switch(expression_index)
     {
-        case 0: return "aku happy";
-        case 1: return "aku cute";
-        case 2: return "aku excited";
-        case 3: return "aku sleepy";
-        case 4: return "aku angry";
-        case 5: return "aku sedih";
-        case 6: return "aku wink";
-        case 7: return "aku surprised";
-        case 8: return "aku love";
-        case 9: return "aku confused";
+        case 0: return "I am happy";
+        case 1: return "I am cute";
+        case 2: return "I am excited";
+        case 3: return "I am sleepy";
+        case 4: return "I am angry";
+        case 5: return "I am sad";
+        case 6: return "wink";
+        case 7: return "I am surprised";
+        case 8: return "I love you";
+        case 9: return "I am confused";
         default: return "unknown expression";
     }
 }

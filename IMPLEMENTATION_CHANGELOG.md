@@ -192,3 +192,29 @@ Verification evidence: focused suppression contracts pass; full `python -m unitt
 - Behavior before: Touch sensor on GPIO 14 was an expression-only cycler that rotated idle faces and played local face audio clips.
 - Behavior after: Tapping the touch sensor on GPIO 14 immediately wakes Joy up, plays the pleasant rising wake acknowledgment chime (`wake_ack.wav`), transitions the LCD to `DisplayMode::LISTENING`, and initiates seamless voice capture to record the user's speech, matching the exact behavior of the acoustic "Hi Joy" wake word.
 - Verification evidence: Full Python contract test suite passes 105/105 tests across 14 suites (`python3 -m unittest discover -s esp/tests`).
+
+## Change — Migration of Dynamic Thinking Filler Audio to Piper TTS (`en_GB-semaine-medium:prudence`)
+
+- Goal: Align all 5 embedded dynamic thinking filler audio clips (`thinking_01.wav` .. `thinking_05.wav`) with the backend production Piper TTS voice persona (`en_GB-semaine-medium`, speaker: `prudence`, speaker_id: `0`), eliminating voice timbre mismatch between local latency-masking speech and backend streamed audio responses.
+- Files/functions affected:
+  - `esp/main/audio_wav/generate_thinking_clips.py` (updated synthesis generator to use Piper TTS with `en_GB-semaine-medium:prudence`, 16kHz resampling, silence trimming, and loudness normalization `-16 LUFS`).
+  - `esp/main/audio_wav/thinking_01.wav` .. `thinking_05.wav` (regenerated 16kHz 16-bit Mono PCM canonical WAV clips using Piper TTS model).
+  - `esp/tests/test_thinking_filler_contract.py` (verified 100% compliance with embedded clip formats, durations, symbols, and playback triggers).
+- Behavior before: Thinking filler voice clips were synthesized with Edge-TTS (`en-US-AnaNeural`), creating an audible voice mismatch when the backend responded with Piper TTS (`en_GB-semaine-medium:prudence`).
+- Behavior after: Both local thinking filler voice clips and backend streaming voice responses share the exact same Piper TTS `prudence` voice persona and acoustic profile.
+- Verification evidence: 110/110 tests pass across all suites in `esp/tests/` (`python3 -m unittest discover -s esp/tests`).
+
+## Change — Migration of Wake Acknowledgment Cue & Local Expression Clips to Piper TTS English
+
+- Goal: Complete the harmonization of all on-device embedded audio assets to the English Piper TTS persona (`en_GB-semaine-medium`, speaker: `prudence`, speaker_id: `0`), migrating both the wake acknowledgment cue (`wake_ack.wav`) and all 10 local facial expression audio clips (`01.wav` .. `10.wav`).
+- Files/functions affected:
+  - `esp/main/audio_wav/wake_ack.wav` (regenerated as conversational spoken response *"Yes?"* using Piper TTS, 16kHz 16-bit Mono PCM, duration ~506ms <= 600ms limit).
+  - `esp/main/audio_wav/01.wav` .. `10.wav` (regenerated as English spoken expression clips: *"I am happy"*, *"I am cute"*, *"I am excited"*, *"I am sleepy"*, *"I am angry"*, *"I am sad"*, *"wink"*, *"I am surprised"*, *"I love you"*, *"I am confused"* using Piper TTS).
+  - `esp/main/audio.cpp` (`expression_phrase` updated from Indonesian strings to canonical English expression phrases).
+  - `esp/main/audio_wav/generate_wake_ack_clip.py` & `esp/main/audio_wav/generate_expression_clips.py` (added standalone generator scripts with silence trimming, 16kHz resampling, and -16 LUFS normalization).
+  - `esp/tests/test_expression_audio_contract.py` (updated contract tests to assert new English phrase strings).
+  - `esp/tests/test_wake_ack_contract.py` (verified <= 600ms wake cue duration and contract integrity).
+  - `README.md` (updated documentation to reflect English Piper TTS for all local audio cues).
+- Behavior before: Wake cue was a synthetic electronic chime, and expression audio clips were in Indonesian with legacy Edge TTS.
+- Behavior after: Every on-device audio clip (wake acknowledgment, thinking fillers, facial expressions) is fully in English using the exact same Piper TTS `prudence` persona as the backend voice pipeline.
+- Verification evidence: 110/110 tests pass across all 14 suites in `esp/tests/` (`python3 -m unittest discover -s esp/tests`).

@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-Generate canonical dynamic thinking filler WAV files for Joy.
+Generate canonical dynamic thinking filler WAV files for Joy using Piper TTS.
+Voice persona matches Joy Backend: en_GB-semaine-medium (prudence, speaker_id=0).
 
 Clips:
-1. thinking_01.wav - "let me think for a moment" (~1.2s)
-2. thinking_02.wav - "processing your question" (~1.3s)
-3. thinking_03.wav - "just a second" (~1.1s)
-4. thinking_04.wav - "hmm let me check that for you" (~1.3s)
-5. thinking_05.wav - "hold on joy is thinking" (~1.2s)
+1. thinking_01.wav - "Let me think for a moment."
+2. thinking_02.wav - "Processing your question."
+3. thinking_03.wav - "Just a second."
+4. thinking_04.wav - "Hmm let me check that for you."
+5. thinking_05.wav - "Hold on, Joy is thinking."
 
 Format specifications:
 - Sample Rate: 16000 Hz
@@ -17,15 +18,14 @@ Format specifications:
 - Duration: 500ms - 2500ms
 """
 
-import asyncio
 import math
 import os
+from pathlib import Path
 import shutil
 import struct
 import subprocess
 import tempfile
 import wave
-from pathlib import Path
 
 SAMPLE_RATE = 16000
 AUDIO_DIR = Path(__file__).resolve().parent
@@ -73,7 +73,9 @@ THINKING_CLIPS = {
     },
 }
 
-VOICE = "en-US-AnaNeural"
+PIPER_MODEL_NAME = "en_GB-semaine-medium"
+PIPER_SPEAKER_NAME = "prudence"
+PIPER_SPEAKER_ID = 0
 
 
 def synthesize_fallback_clip(notes: list, duration_s: float, sample_rate: int = 16000, max_amplitude: int = 22000) -> bytes:
@@ -113,28 +115,35 @@ def synthesize_fallback_clip(notes: list, duration_s: float, sample_rate: int = 
     return bytes(pcm_bytes)
 
 
-async def generate_tts_clip(text: str, out_path: Path, rate: str = "+25%", tempo: float = 1.0):
-    import edge_tts
+def generate_piper_clip(text: str, out_path: Path, model_path: Path | None = None, config_path: Path | None = None):
+    """Synthesize speech using piper-tts and normalize to 16kHz 16-bit mono WAV."""
+    from piper import PiperVoice, SynthesisConfig
 
-    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_mp3:
-        tmp_mp3_path = tmp_mp3.name
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_raw:
+        tmp_raw_path = tmp_raw.name
 
     try:
-        communicate = edge_tts.Communicate(text, VOICE, rate=rate)
-        await communicate.save(tmp_mp3_path)
+        if model_path and model_path.exists():
+            voice = PiperVoice.load(model_path, config_path=config_path, use_cuda=False)
+        else:
+            from piper.download import find_voice
+            model_p, config_p = find_voice(PIPER_MODEL_NAME)
+            voice = PiperVoice.load(model_p, config_path=config_p, use_cuda=False)
 
-        ffmpeg_bin = shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg"
+        syn_config = SynthesisConfig(speaker_id=PIPER_SPEAKER_ID)
+        with wave.open(tmp_raw_path, "wb") as wf:
+            voice.synthesize_wav(text, wf, syn_config=syn_config)
+
+        ffmpeg_bin = shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg" or "ffmpeg"
         af_filter = (
             "silenceremove=start_periods=1:start_duration=0.01:start_threshold=-35dB,"
-            "areverse,silenceremove=start_periods=1:start_duration=0.01:start_threshold=-35dB,areverse"
+            "areverse,silenceremove=start_periods=1:start_duration=0.01:start_threshold=-35dB,areverse,"
+            "loudnorm=I=-16:TP=-1.5:LRA=11"
         )
-        if tempo != 1.0:
-            af_filter += f",atempo={tempo}"
-        af_filter += ",loudnorm=I=-16:TP=-1.5:LRA=11"
 
         cmd = [
             ffmpeg_bin, "-y",
-            "-i", tmp_mp3_path,
+            "-i", tmp_raw_path,
             "-af", af_filter,
             "-ar", str(SAMPLE_RATE),
             "-ac", "1",
@@ -143,18 +152,17 @@ async def generate_tts_clip(text: str, out_path: Path, rate: str = "+25%", tempo
         ]
         subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     finally:
-        if os.path.exists(tmp_mp3_path):
-            os.unlink(tmp_mp3_path)
-
+        if os.path.exists(tmp_raw_path):
+            os.unlink(tmp_raw_path)
 
 def generate_all_clips():
     AUDIO_DIR.mkdir(parents=True, exist_ok=True)
     generated_files = []
 
-    has_edge_tts = False
+    has_piper = False
     try:
-        import edge_tts
-        has_edge_tts = True
+        import piper
+        has_piper = True
     except ImportError:
         pass
 
@@ -162,13 +170,12 @@ def generate_all_clips():
         out_path = AUDIO_DIR / filename
         used_tts = False
 
-        if has_edge_tts:
+        if has_piper:
             try:
-                asyncio.run(generate_tts_clip(info["phrase"], out_path, rate=info.get("rate", "+25%"), tempo=info.get("tempo", 1.0)))
+                generate_piper_clip(info["phrase"], out_path)
                 used_tts = True
             except Exception as e:
-                print(f"Warning: TTS synthesis for {filename} failed ({e}), falling back to harmonic synthesizer")
-
+                print(f"Warning: Piper TTS synthesis for {filename} failed ({e}), falling back to harmonic synthesizer")
         if not used_tts:
             pcm_data = synthesize_fallback_clip(info["notes"], info["duration"], SAMPLE_RATE)
             with wave.open(str(out_path), "wb") as wf:
@@ -184,7 +191,7 @@ def generate_all_clips():
             nframes = wf.getnframes()
             dur_ms = (nframes * 1000) / framerate
 
-            mode_str = "Spoken Voice (Edge TTS)" if used_tts else "Synthesized Harmonic"
+            mode_str = f"Spoken Voice (Piper {PIPER_MODEL_NAME}:{PIPER_SPEAKER_NAME})" if used_tts else "Synthesized Harmonic"
             print(
                 f"Generated {filename} [{mode_str}] (\"{info['phrase']}\"): "
                 f"{nchannels}ch, {sampwidth*8}bit, {framerate}Hz, {dur_ms:.1f}ms ({dur_ms/1000:.2f}s)"
