@@ -137,8 +137,8 @@ static void start_time_sync_after_ip()
 }
 
 // Ganti dengan SSID dan Password WiFi kamu
-#define JOY_WIFI_SSID "ARMEY L1-A"
-#define JOY_WIFI_PASS "mautauaja"
+#define JOY_WIFI_SSID "Jagurawi"
+#define JOY_WIFI_PASS "loanakbengkel?"
 
 static const char *wifi_disconnect_reason_to_string(uint8_t reason)
 {
