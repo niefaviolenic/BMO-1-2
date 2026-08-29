@@ -1,0 +1,29 @@
+Gate 4 physical retest — sanitized summary
+Date: 2026-08-18 09:43 +07:00
+
+Artifact verification (read-only): PASS
+- build/all_bmo.bin: 1,253,952 bytes; SHA-256 EE19260C30DC567A73CE03B3B4E86708C8E24C156DA630FABC6CEBE6271AA452.
+- build/all_bmo.elf: 12,599,916 bytes; SHA-256 12E05D55F3C71CEFBE17FB2C9CF69893A53DA39D2D9F056CEEDD73D55407A74F.
+- No build, flash, Ninja, CMake, fullclean, or incremental verification was run.
+
+Board/monitor:
+- COM7 present as USB-Enhanced-SERIAL CH343.
+- Serial monitor opened on COM7 and remained active during the readiness attempt.
+- Monitor stopped after the environmental blocker was observed; exit code 0.
+
+Readiness result:
+- WiFi/IP: BLOCKED before association; repeated reason=201 (NO_AP_FOUND).
+- SNTP: NOT_REACHED.
+- TLS: NOT_REACHED.
+- WSS/authentication: NOT_REACHED.
+- backend_state=idle: NOT_REACHED.
+
+Gate 4 physical result:
+- RETEST_BLOCKED_BY_NETWORK_AUTHORITY / AP_NOT_FOUND.
+- Operator voice trigger was not requested because readiness prerequisites were not met.
+- Hi Joy, recording, WAV, upload, HTTP response, backend event, download, decode, playback, and audio_playback_done: NOT_CAPTURED.
+- Historical RECORDING_NOT_COMPLETING is not re-proven by this retest and remains a separate historical record; the latest corrective artifact was not exercised through recording.
+- Gate 4 remains PENDING; no firmware PASS/FAIL conclusion is made from this network-blocked retest.
+
+Sanitized serial capture: serial-gate4-retest-2026-08-18-sanitized.log
+Credential safety: SSID/password/device token/raw audio not recorded.

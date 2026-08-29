@@ -1,0 +1,15 @@
+Step 3 corrective static review (sanitized)
+Timestamp: 2026-08-14 15:51:31 +07:00
+Scope: esp/main/api.cpp, validate_canonical_wav() only
+
+Finding fixed:
+- The fmt payload pointer is wav + payload_offset, where payload_offset is offset + 8.
+- chunk_bytes == 16 remains validated separately before reading the payload.
+- Canonical fmt reads are now: +0 (u16 format), +2 (u16 channels), +4 (u32 sample rate), +8 (u32 byte rate), +12 (u16 block align), +14 (u16 bits per sample).
+- The highest byte read is fmt + 15. No read uses fmt + 16, fmt + 18, or read_le32(fmt).
+- Safe metadata logging records only format, channels, sample rate, byte rate, block align, and bits per sample.
+
+Preserved unchanged:
+- WAV writer, recording, microphone configuration, WebSocket, HTTP classification, backend, credentials, router, playback, and download.
+
+Result: PASS

@@ -1,0 +1,30 @@
+Step 4 recording lifecycle corrective implementation — static review
+Date: 2026-08-15
+Scope: esp/main/wakeword.cpp, esp/main/wakeword.h, esp/main/state.cpp only
+
+Review result: PASS — source stable for the single corrective official build.
+
+Findings addressed:
+- i2s_channel_read uses a bounded 100 ms timeout; portMAX_DELAY is absent from the listener.
+- recording_started_tick uses the monotonic FreeRTOS tick; the 60 second deadline is checked after every read, including timeout/no-data paths.
+- Silence completion remains SILENCE_THRESHOLD=800 with a 2500 ms silence duration.
+- RecordingStatus is synchronized with a FreeRTOS portMUX and distinguishes IDLE, ACTIVE, COMPLETED, FAILED, and ABORTED.
+- WAV header finalization has one call site and publishes COMPLETED only after a non-empty, in-bounds buffer is finalized.
+- FAILED/ABORTED recordings return zero size and a null upload buffer; state.cpp skips upload unless status is COMPLETED with data.
+- Allocation, I2S error/partial-read, and state watchdog failures return to a safe non-uploading state.
+- State machine watchdog is bounded at 65000 ms and calls abort_recording on timeout.
+- BMOState access is synchronized with a FreeRTOS portMUX; recording data/status accesses are synchronized with a separate portMUX.
+- Progress diagnostics are rate-limited to one per second and contain only context, elapsed_ms, samples, and silence_ms. Finish/failure reasons contain no audio or credential data.
+
+Static assertions:
+- portMAX_DELAY in wakeword.cpp: ABSENT
+- write_wav_header call sites: one definition plus one finalization call
+- SILENCE_THRESHOLD: unchanged at 800
+- RECORD_DURATION_SEC: unchanged at 60
+- backend/router/credential files touched by this corrective patch: NONE
+- build/flash/network actions during this review: NONE
+
+Source SHA-256 at review:
+- esp/main/wakeword.cpp: 317580756F161D66B55FF6BDA64F7DAA48C2AB67451E4692352E671F1F0CBD78
+- esp/main/wakeword.h: 821F0BE95DF23F7729E45618672EAF3883DFE51ADD726EE28952966AED36C17D
+- esp/main/state.cpp: C16F60CECD160650A9FEA766D566E89B1040EFCEA40B8922E2A59F16D01C4126

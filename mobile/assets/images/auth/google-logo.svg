@@ -1,0 +1,13 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Google Logo" clip-path="url(#clip0_0_14)">
+<path id="GoogleBlue" d="M23.52 12.27C23.52 11.41 23.44 10.59 23.3 9.82H12V14.45H18.46C18.18 15.92 17.33 17.17 16.08 18.01V20.97H19.93C22.18 18.89 23.52 15.86 23.52 12.27Z" fill="#4285F4"/>
+<path id="GoogleGreen" d="M12 24C15.24 24 17.96 22.92 19.93 20.97L16.08 18.01C15.01 18.73 13.62 19.16 12 19.16C8.87 19.16 6.22 17.04 5.27 14.19H1.28V17.29C3.25 21.2 7.31 24 12 24Z" fill="#34A853"/>
+<path id="GoogleYellow" d="M5.27 14.19C5.03 13.47 4.89 12.7 4.89 11.91C4.89 11.12 5.03 10.35 5.27 9.63V6.53H1.28C0.46 8.15 0 9.98 0 11.91C0 13.84 0.46 15.67 1.28 17.29L5.27 14.19Z" fill="#FBBC05"/>
+<path id="GoogleRed" d="M12 4.75C13.77 4.75 15.35 5.36 16.6 6.55L20.02 3.13C17.95 1.19 15.24 0 12 0C7.31 0 3.25 2.8 1.28 6.71L5.27 9.81C6.22 6.96 8.87 4.75 12 4.75Z" fill="#EA4335"/>
+</g>
+<defs>
+<clipPath id="clip0_0_14">
+<rect width="24" height="24" fill="white"/>
+</clipPath>
+</defs>
+</svg>

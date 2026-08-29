@@ -1,0 +1,26 @@
+Gate 4 physical retest with authorized 2.4 GHz AP — sanitized summary
+Date: 2026-08-18 11:10:52 +07:00
+
+Artifact and board:
+- Installed all_bmo.bin SHA-256 matched EE19260C30DC567A73CE03B3B4E86708C8E24C156DA630FABC6CEBE6271AA452.
+- Installed all_bmo.elf SHA-256 matched 12E05D55F3C71CEFBE17FB2C9CF69893A53DA39D2D9F056CEEDD73D55407A74F.
+- COM7 present as USB-Enhanced-SERIAL CH343.
+- No source, backend, router, credential, build, or flash change.
+
+Serial readiness:
+- Monitor opened on COM7 and was active during the attempt.
+- NO_AP_FOUND count: 27.
+- IP: NOT_OBTAINED.
+- SNTP: NOT_REACHED.
+- TLS: NOT_REACHED.
+- WSS/authentication: NOT_REACHED.
+- backend_state=idle: NOT_REACHED.
+
+Gate 4 result:
+- BLOCKED / BLOCKED_BY_2_4_GHZ_AP_AVAILABILITY remains applicable; the authorized-AP confirmation was not observable by the ESP during this capture.
+- Operator wake-word test was not requested because readiness prerequisites were not met.
+- Hi Joy, recording lifecycle, WAV, upload, HTTP response, backend event, download, decode, playback, and audio_playback_done: NOT_CAPTURED.
+- Historical RECORDING_NOT_COMPLETING remains separate and is not re-proven against the corrective artifact.
+
+Sanitized serial log: serial-gate4-retest-2026-08-18-authorized-2p4-sanitized.log
+Credential safety: SSID/password/device token/raw audio not recorded.

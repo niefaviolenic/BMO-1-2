@@ -1,0 +1,45 @@
+SERIAL_CAPTURE=boot_auth
+PORT=COM7
+BAUD=115200
+SECRETS=REDACTED
+I (33850) WAKE: Mic peak: 123
+I (37050) WAKE: Mic peak: 229
+I (40260) WAKE: Mic peak: 162
+I (43450) WAKE: Mic peak: 69
+I (46650) WAKE: Mic peak: 63
+I (49860) WAKE: Mic peak: 60
+I (53050) WAKE: Mic peak: 161
+I (56250) WAKE: Mic peak: 446
+I (59460) WAKE: Mic peak: 176
+I (62650) WAKE: Mic peak: 61
+I (65850) WAKE: Mic peak: 73
+
+SERIAL_CAPTURE=step3_upload
+I (88260) WAKE: Mic peak: 85
+I (91450) WAKE: Mic peak: 46
+I (94650) WAKE: Mic peak: 151
+I (97860) WAKE: Mic peak: 100
+I (101050) WAKE: Mic peak: 376
+I (104250) WAKE: Mic peak: 158
+I (107460) WAKE: Mic peak: 191
+I (110650) WAKE: Mic peak: 59
+I (113850) WAKE: Mic peak: 175
+I (117060) WAKE: Mic peak: 231
+I (120250) WAKE: Mic peak: 73
+I (123450) WAKE: Mic peak: 74
+I (126660) WAKE: Mic peak: 90
+I (129850) WAKE: Mic peak: 106
+I (133050) WAKE: Mic peak: 488
+I (136260) WAKE: Mic peak: 149
+I (139450) WAKE: Mic peak: 221
+I (142650) WAKE: Mic peak: 283
+I (145860) WAKE: Mic peak: 130
+I (149050) WAKE: Mic peak: 427
+I (152250) WAKE: Mic peak: 188
+I (155460) WAKE: Mic peak: 93
+I (158650) WAKE: Mic peak: 101
+I (161850) WAKE: Mic peak: 54
+I (165060) WAKE: Mic peak: 50
+I (168250) WAKE: Mic peak: 84
+I (171450) WAKE: Mic peak: 392
+I (174660) WAKE: Mic peak: 313

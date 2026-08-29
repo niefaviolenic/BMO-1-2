@@ -1,0 +1,10 @@
+build/
+venv/
+.vscode/
+sdkconfig.old
+
+*.bin
+*.elf
+*.map
+*.o
+*.obj

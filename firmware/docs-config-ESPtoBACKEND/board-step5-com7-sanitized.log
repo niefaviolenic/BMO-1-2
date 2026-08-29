@@ -1,0 +1,5 @@
+Step 5 WiFi revision board probe (sanitized)
+Command: esptool --chip esp32s3 --port COM7 chip-id
+Exit code: 0
+Connected to ESP32-S3 on COM7 (QFN56, revision v0.2)
+MAC values redacted.

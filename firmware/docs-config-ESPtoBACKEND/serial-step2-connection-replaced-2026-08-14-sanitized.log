@@ -1,0 +1,37 @@
+[HOST_CAPTURE_DURATION_SECONDS=45]
+I (234179) API: Received WS event: connection_replaced
+W (234179) API: WS connection replaced by new session; stopping use of this connection
+I (234179) API: WS lifecycle seq=5 event=state_down_before source=connection_replaced now_ms=221690 delta_ms=208520 event_data_unavailable lifecycle_state=terminal ws_client_started=1 ws_connected=1 ws_authenticated=1
+I (234199) API: WS lifecycle seq=6 event=state_down_after source=connection_replaced now_ms=221710 delta_ms=20 event_data_unavailable lifecycle_state=terminal ws_client_started=1 ws_connected=0 ws_authenticated=0
+W (234219) API: WS reconnect suppressed after connection_replaced until reboot
+E (234229) websocket_client: Client cannot be stopped from websocket task
+I (234249) API: WS lifecycle seq=7 event=stop_call_before source=monitor_connection_replaced now_ms=221760 delta_ms=50 event_data_unavailable lifecycle_state=terminal ws_client_started=1 ws_connected=0 ws_authenticated=0
+W (234259) transport_ws: esp_transport_ws_poll_connection_closed: unexpected data readable on socket=54
+W (234259) websocket_client: Connection terminated while waiting for clean TCP close
+W (234269) API: WS diagnostics phase=closed_before_mark now_ms=233030 since_disconnect_ms=0 error_type=none(0) close_status=1000 handshake_status=0 transport_errno=1007597424 tls_err=0 tls_stack=0 tls_flags=4194304 ws_connected=0 ws_authenticated=0
+I (234289) API: WebSocket closed
+I (234299) API: WS lifecycle seq=8 event=state_down_before source=event_closed now_ms=221810 delta_ms=50 event_data_unavailable lifecycle_state=terminal ws_client_started=1 ws_connected=0 ws_authenticated=0
+I (234309) API: WS lifecycle seq=9 event=state_down_after source=event_closed now_ms=221820 delta_ms=10 event_data_unavailable lifecycle_state=terminal ws_client_started=1 ws_connected=0 ws_authenticated=0
+I (234329) API: WS lifecycle seq=10 event=event_closed source=websocket_event now_ms=221840 delta_ms=20 event_data_available lifecycle_state=terminal ws_client_started=1 ws_connected=0 ws_authenticated=0
+W (234349) API: WS diagnostics phase=closed_after_mark now_ms=233110 since_disconnect_ms=50 error_type=none(0) close_status=1000 handshake_status=0 transport_errno=1007597424 tls_err=0 tls_stack=0 tls_flags=4194304 ws_connected=0 ws_authenticated=0
+I (234369) API: WS lifecycle seq=11 event=state_down_before source=event_finish now_ms=221880 delta_ms=40 event_data_unavailable lifecycle_state=terminal ws_client_started=0 ws_connected=0 ws_authenticated=0
+I (234389) API: WS lifecycle seq=12 event=state_down_after source=event_finish now_ms=221900 delta_ms=20 event_data_unavailable lifecycle_state=terminal ws_client_started=0 ws_connected=0 ws_authenticated=0
+I (234409) API: WS lifecycle seq=13 event=event_finish source=websocket_event now_ms=221920 delta_ms=20 event_data_available lifecycle_state=stopped ws_client_started=0 ws_connected=0 ws_authenticated=0
+I (234429) API: WS lifecycle seq=14 event=stop_call_after source=monitor_connection_replaced now_ms=221940 delta_ms=20 event_data_unavailable lifecycle_state=stopped ws_client_started=0 ws_connected=0 ws_authenticated=0
+I (234439) API: WS lifecycle operation=stop source=monitor_connection_replaced return_code=ESP_OK(0)
+I (234449) API: WS lifecycle seq=15 event=state_down_before source=monitor_connection_replaced now_ms=221960 delta_ms=20 event_data_unavailable lifecycle_state=stopped ws_client_started=0 ws_connected=0 ws_authenticated=0
+I (234469) API: WS lifecycle seq=16 event=state_down_after source=monitor_connection_replaced now_ms=221980 delta_ms=20 event_data_unavailable lifecycle_state=stopped ws_client_started=0 ws_connected=0 ws_authenticated=0
+I (235509) WAKE: Mic peak: 516
+I (238719) WAKE: Mic peak: 143
+I (241919) WAKE: Mic peak: 123
+I (245109) WAKE: Mic peak: 321
+I (248319) WAKE: Mic peak: 142
+I (251519) WAKE: Mic peak: 126
+I (254709) WAKE: Mic peak: 87
+I (257919) WAKE: Mic peak: 51
+I (261119) WAKE: Mic peak: 52
+I (264309) WAKE: Mic peak: 53
+I (267519) WAKE: Mic peak: 109
+I (270719) WAKE: Mic peak: 581
+I (273909) WAKE: Mic peak: 93
+I (277119) WAKE: Mic peak: 86

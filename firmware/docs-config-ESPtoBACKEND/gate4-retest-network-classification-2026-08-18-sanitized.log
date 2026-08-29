@@ -1,0 +1,19 @@
+Gate 4 retest blocker reclassification — sanitized
+Date: 2026-08-18
+
+Read-only evidence supplied by operator:
+- Firmware target SSID matches the network currently used by the host; SSID value is intentionally omitted.
+- Host radio: channel 40, 802.11ac, 5 GHz.
+- ESP32-S3 radio capability: 2.4 GHz only.
+- Serial retest result: 25 occurrences of NO_AP_FOUND; no authentication-failure evidence.
+- Availability of a 2.4 GHz instance for the target SSID: not evidenced.
+
+Classification:
+- Gate 4: PENDING / BLOCKED_BY_2_4_GHZ_AP_AVAILABILITY.
+- Historical RECORDING_NOT_COMPLETING: retained separately; not re-proven against the corrective artifact.
+
+Resume policy:
+- Authorized 2.4 GHz with the same SSID/password: reuse the installed corrective artifact; no build or flash.
+- Different 2.4 GHz credentials: stop and request authorization before credential change and one new build/flash cycle.
+- No independent router changes.
+- Backend remains read-only as an integration endpoint.

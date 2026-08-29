@@ -1,0 +1,16 @@
+Step 4 corrective official build result (sanitized)
+Date: 2026-08-14 (Asia/Jakarta)
+
+Command:
+cmd.exe /d /c call "C:\esp\v6.0.1\esp-idf\export.bat" && set "PYTHONUTF8=1" && set "PYTHONIOENCODING=utf-8" && "C:\Users\violenic\.espressif\python_env\idf6.0_py3.13_env\Scripts\python.exe" "C:\esp\v6.0.1\esp-idf\tools\idf.py" -B "D:\BMO\all_bmo\esp\build" build
+
+Build exit code: 0
+Result: Project build complete
+EDR/CreateProcess/PermissionDenied error: not observed
+No post-build Ninja, dry-run, incremental verification, CMake, fullclean, or build-folder deletion was performed.
+
+Application artifacts from this single official build:
+- build/all_bmo.bin | size 1252016 bytes | timestamp 2026-08-14T16:29:26.0486689+07:00 | SHA-256 F5B9A7DBAB57719573E901838A8841EDEC00C10114A37A38670751B87E2A8F62
+- build/all_bmo.elf | size 12588132 bytes | timestamp 2026-08-14T16:29:25.3964342+07:00 | SHA-256 97F9111FDA32E01D4652B97289BA47987A89659F7549978C51B4AA0B5AB5BD47
+
+ESP-IDF size check: PASS; all_bmo.bin binary size 0x131ab0 bytes; smallest app partition has 40% free.

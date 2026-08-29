@@ -1,0 +1,17 @@
+Step 4 physical capture attempt (sanitized)
+Date: 2026-08-15 (Asia/Jakarta)
+Capture process: serial monitor on COM7 was verified active (fresh process); stopped after repeated environmental AP failures.
+
+Boot evidence:
+- Firmware booted from the flashed Step 4 artifact.
+- ESP32-S3 application identified itself with ELF SHA prefix 97f9111fd (full artifact hash recorded in build/flash logs).
+- Microphone and wakeword initialization completed.
+
+Network outcome:
+- Repeated WiFi disconnect reason 201 (NO_AP_FOUND).
+- AP was not found; no IP, SNTP readiness, TLS, or WSS authentication occurred in this capture.
+- No router, backend, credential, or source action was taken.
+
+Gate 4 outcome:
+- No audio transaction was attempted because WSS was not authenticated.
+- Gate 4 remains NOT CLOSED / BLOCKED_BY_NETWORK_AUTHORITY.

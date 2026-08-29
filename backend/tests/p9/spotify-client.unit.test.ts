@@ -1,0 +1,338 @@
+import { describe, expect, it, vi } from "vitest";
+
+import { SpotifyApiClient, SpotifyProviderError } from "../../src/p9/providers/spotify.client.js";
+
+function response(body: unknown, status = 200): Response {
+  return new Response(status === 204 ? null : JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+}
+
+function emptyResponse(status: number): Response {
+  return new Response(null, { status });
+}
+
+describe("SpotifyApiClient", () => {
+  it("exchanges an authorization code using the confidential server client", async () => {
+    const fetcher = vi.fn().mockResolvedValue(response({
+      access_token: "access-secret",
+      refresh_token: "refresh-secret",
+      expires_in: 3600,
+      scope: "user-read-private user-modify-playback-state",
+    }));
+    const client = new SpotifyApiClient({ clientId: "client-id", clientSecret: "client-secret", fetcher });
+
+    await expect(client.exchangeCode("authorization-code", "https://api.example/callback")).resolves.toEqual({
+      accessToken: "access-secret",
+      refreshToken: "refresh-secret",
+      expiresIn: 3600,
+      scopes: ["user-read-private", "user-modify-playback-state"],
+    });
+    expect(fetcher).toHaveBeenCalledWith("https://accounts.spotify.com/api/token", expect.objectContaining({
+      method: "POST",
+      headers: expect.objectContaining({ authorization: expect.stringMatching(/^Basic /u), "content-type": "application/x-www-form-urlencoded" }),
+    }));
+    const init = fetcher.mock.calls[0]?.[1] as RequestInit;
+    expect(String(init.body)).toContain("grant_type=authorization_code");
+    expect(String(init.body)).toContain("redirect_uri=https%3A%2F%2Fapi.example%2Fcallback");
+    expect(String(init.body)).not.toContain("client-secret");
+  });
+
+    it("safely filters null items in search categories such as private playlists", async () => {
+    const fetcher = vi.fn().mockResolvedValue(response({
+      tracks: { items: [null, { id: "t1", name: "Song 1", uri: "spotify:track:t1", artists: [], album: null }] },
+      artists: { items: [null] },
+      albums: { items: [null] },
+      playlists: { items: [null, { id: "p1", name: "Playlist 1", uri: "spotify:playlist:p1", images: [] }] },
+    }));
+    const client = new SpotifyApiClient({ clientId: "id", clientSecret: "secret", fetcher });
+    const res = await client.search("access-token", "query", ["track", "artist", "album", "playlist"]);
+    expect(res.tracks).toHaveLength(1);
+    expect(res.tracks[0]?.id).toBe("t1");
+    expect(res.playlists).toHaveLength(1);
+    expect(res.playlists[0]?.id).toBe("p1");
+    expect(res.artists).toHaveLength(0);
+    expect(res.albums).toHaveLength(0);
+  });
+
+  it("normalizes search results without returning the raw provider envelope", async () => {
+    const fetcher = vi.fn().mockResolvedValue(response({
+      tracks: {
+        items: [{
+          id: "t1",
+          name: "Backburner",
+          uri: "spotify:track:t1",
+          artists: [{ name: "NIKI" }],
+          album: {
+            name: "Nicole",
+            images: [{ url: "https://image.test/nicole.jpg", height: 640, width: 640 }],
+          },
+        }],
+      },
+      artists: { items: [{ id: "a1", name: "NIKI", uri: "spotify:artist:a1" }] },
+      albums: { items: [] },
+      playlists: { items: [] },
+      secret_provider_field: "must-not-leak",
+    }));
+    const client = new SpotifyApiClient({ clientId: "id", clientSecret: "secret", fetcher });
+
+    await expect(client.search("access-token", "Backburner", ["track", "artist"])).resolves.toEqual({
+      tracks: [{
+        id: "t1",
+        name: "Backburner",
+        uri: "spotify:track:t1",
+        artists: ["NIKI"],
+        album: {
+          id: null,
+          name: "Nicole",
+          uri: null,
+          images: [{ url: "https://image.test/nicole.jpg", height: 640, width: 640 }],
+        },
+        imageUrl: "https://image.test/nicole.jpg",
+      }],
+      artists: [{ id: "a1", name: "NIKI", uri: "spotify:artist:a1" }],
+      albums: [],
+      playlists: [],
+    });
+    expect(fetcher.mock.calls[0]?.[0]).toContain("type=track%2Cartist");
+    const requestHeaders = fetcher.mock.calls[0]?.[1] && new Headers((fetcher.mock.calls[0]?.[1] as RequestInit).headers);
+    expect(requestHeaders?.get("authorization")).toBe("Bearer access-token");
+    expect(requestHeaders?.get("accept")).toBe("application/json");
+  });
+
+  it("normalizes playback state with complete track, album, artwork and artist metadata", async () => {
+    const fetcher = vi.fn().mockResolvedValue(response({
+      is_playing: true,
+      progress_ms: 45000,
+      shuffle_state: false,
+      repeat_state: "off",
+      device: {
+        id: "dev-1",
+        name: "MacBook Pro",
+        type: "Computer",
+        is_active: true,
+        is_restricted: false,
+        volume_percent: 75,
+        supports_volume: true,
+      },
+      item: {
+        id: "track-123",
+        name: "High School in Jakarta",
+        uri: "spotify:track:track-123",
+        duration_ms: 219000,
+        artists: [{ name: "NIKI" }, { name: "Rich Brian" }],
+        album: {
+          id: "album-456",
+          name: "Nicole",
+          uri: "spotify:album:album-456",
+          images: [
+            { url: "https://i.scdn.co/image/ab67616d0000b273abc1", height: 640, width: 640 },
+            { url: "https://i.scdn.co/image/ab67616d00001e02abc2", height: 300, width: 300 },
+          ],
+        },
+      },
+      context: {
+        uri: "spotify:album:album-456",
+      },
+    }));
+    const client = new SpotifyApiClient({ clientId: "id", clientSecret: "secret", fetcher });
+
+    const playback = await client.playback("access-token");
+    expect(playback).toEqual({
+      isPlaying: true,
+      device: {
+        id: "dev-1",
+        name: "MacBook Pro",
+        type: "Computer",
+        isActive: true,
+        isRestricted: false,
+        volumePercent: 75,
+        supportsVolume: true,
+      },
+      track: {
+        id: "track-123",
+        name: "High School in Jakarta",
+        uri: "spotify:track:track-123",
+        artists: ["NIKI", "Rich Brian"],
+        album: {
+          id: "album-456",
+          name: "Nicole",
+          uri: "spotify:album:album-456",
+          images: [
+            { url: "https://i.scdn.co/image/ab67616d0000b273abc1", height: 640, width: 640 },
+            { url: "https://i.scdn.co/image/ab67616d00001e02abc2", height: 300, width: 300 },
+          ],
+        },
+        imageUrl: "https://i.scdn.co/image/ab67616d0000b273abc1",
+        durationMs: 219000,
+      },
+      item: {
+        id: "track-123",
+        name: "High School in Jakarta",
+        uri: "spotify:track:track-123",
+        artists: ["NIKI", "Rich Brian"],
+        album: {
+          id: "album-456",
+          name: "Nicole",
+          uri: "spotify:album:album-456",
+          images: [
+            { url: "https://i.scdn.co/image/ab67616d0000b273abc1", height: 640, width: 640 },
+            { url: "https://i.scdn.co/image/ab67616d00001e02abc2", height: 300, width: 300 },
+          ],
+        },
+        imageUrl: "https://i.scdn.co/image/ab67616d0000b273abc1",
+        durationMs: 219000,
+      },
+      contextUri: "spotify:album:album-456",
+      itemUri: "spotify:track:track-123",
+      itemName: "High School in Jakarta",
+      progressMs: 45000,
+      durationMs: 219000,
+      shuffleState: false,
+      repeatState: "off",
+    });
+  });
+
+  it("returns null playback when player returns 204 No Content", async () => {
+    const fetcher = vi.fn().mockResolvedValue(response(null, 204));
+    const client = new SpotifyApiClient({ clientId: "id", clientSecret: "secret", fetcher });
+
+    await expect(client.playback("access-token")).resolves.toBeNull();
+  });
+
+  it("passes the authenticated account market to search", async () => {
+    const fetcher = vi.fn().mockResolvedValue(response({ tracks: { items: [] }, artists: { items: [] }, albums: { items: [] }, playlists: { items: [] } }));
+    const client = new SpotifyApiClient({ clientId: "id", clientSecret: "secret", fetcher });
+
+    await client.search("access-token", "Backburner", ["track"], "ID");
+
+    expect(fetcher.mock.calls[0]?.[0]).toContain("market=ID");
+  });
+
+  it("normalizes the current Spotify account without exposing provider fields", async () => {
+    const fetcher = vi.fn().mockResolvedValue(response({ account_id: "spotify-account", id: "spotify-profile", country: "ID", product: "premium", email: "secret@example.test" }));
+    const client = new SpotifyApiClient({ clientId: "id", clientSecret: "secret", fetcher });
+
+    const currentUser = await client.currentUser("access-token");
+    expect(currentUser).toEqual({ accountId: "spotify-account", profileId: "spotify-profile", market: "ID", product: "premium" });
+    const requestHeaders = fetcher.mock.calls[0]?.[1] && new Headers((fetcher.mock.calls[0]?.[1] as RequestInit).headers);
+    expect(requestHeaders?.get("authorization")).toBe("Bearer access-token");
+    expect(requestHeaders?.get("authorization")).not.toContain("spotify-account");
+    expect(JSON.stringify(currentUser)).not.toContain("access-token");
+  });
+
+  it("uses Spotify user id as accountId when account_id is absent", async () => {
+    const fetcher = vi.fn().mockResolvedValue(response({ id: "spotify-profile", country: "ID", product: "premium" }));
+    const client = new SpotifyApiClient({ clientId: "id", clientSecret: "secret", fetcher });
+
+    await expect(client.currentUser("access-token")).resolves.toEqual({
+      accountId: "spotify-profile",
+      profileId: "spotify-profile",
+      market: "ID",
+      product: "premium",
+    });
+  });
+
+  it("maps the explicit playback capability set to allowlisted Spotify endpoints", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(response({ devices: [{ id: "d1", name: "Laptop", type: "Computer", is_active: true, is_restricted: false, volume_percent: 50, supports_volume: true }] }))
+      .mockResolvedValueOnce(response(null, 204))
+      .mockResolvedValueOnce(response(null, 204))
+      .mockResolvedValueOnce(response(null, 204))
+      .mockResolvedValueOnce(response(null, 204))
+      .mockResolvedValueOnce(response(null, 204))
+      .mockResolvedValueOnce(response(null, 204))
+      .mockResolvedValueOnce(response(null, 204))
+      .mockResolvedValueOnce(response(null, 204))
+      .mockResolvedValueOnce(response(null, 204))
+      .mockResolvedValueOnce(response(null, 204))
+      .mockResolvedValueOnce(response(null, 204))
+      .mockResolvedValueOnce(response(null, 204))
+      .mockResolvedValueOnce(response(null, 204));
+    fetcher.mockResolvedValueOnce(response(null, 204));
+    const client = new SpotifyApiClient({ clientId: "id", clientSecret: "secret", fetcher });
+
+    await client.devices("access");
+    for (const [action, payload] of [
+      ["RESUME", {}], ["PAUSE", {}], ["NEXT", {}], ["PREVIOUS", {}],
+      ["PLAY_TRACK", { uri: "spotify:track:t1" }], ["PLAY_ARTIST", { uri: "spotify:artist:a1" }], ["PLAY_ALBUM", { uri: "spotify:album:al1" }], ["PLAY_PLAYLIST", { uri: "spotify:playlist:p1" }], ["TRANSFER", { deviceId: "d1", play: true }],
+      ["SEEK", { positionMs: 12_000 }], ["VOLUME", { volume: 50 }],
+      ["SHUFFLE", { state: true }], ["REPEAT", { state: "context" }],
+    ] as const) {
+      await client.action("access", action, payload);
+    }
+    expect(fetcher.mock.calls.map(([url, init]) => `${init?.method}:${url}`).slice(1)).toEqual([
+      "PUT:https://api.spotify.com/v1/me/player/play",
+      "PUT:https://api.spotify.com/v1/me/player/pause",
+      "POST:https://api.spotify.com/v1/me/player/next",
+      "POST:https://api.spotify.com/v1/me/player/previous",
+      "PUT:https://api.spotify.com/v1/me/player/play",
+      "PUT:https://api.spotify.com/v1/me/player/play",
+      "PUT:https://api.spotify.com/v1/me/player/play",
+      "PUT:https://api.spotify.com/v1/me/player/play",
+      "PUT:https://api.spotify.com/v1/me/player",
+      "PUT:https://api.spotify.com/v1/me/player/seek?position_ms=12000",
+      "PUT:https://api.spotify.com/v1/me/player/volume?volume_percent=50",
+      "PUT:https://api.spotify.com/v1/me/player/shuffle?state=true",
+      "PUT:https://api.spotify.com/v1/me/player/repeat?state=context",
+    ]);
+  });
+
+  it("normalizes provider failures and never exposes response bodies", async () => {
+    const fetcher = vi.fn().mockResolvedValue(response({ error: "invalid_grant", secret: "provider-secret" }, 401));
+    const client = new SpotifyApiClient({ clientId: "id", clientSecret: "secret", fetcher });
+
+    await expect(client.refreshToken("refresh-token")).rejects.toMatchObject({ status: 401, code: "INVALID_GRANT" });
+    await expect(client.refreshToken("refresh-token")).rejects.not.toThrow("provider-secret");
+    expect(fetcher).toHaveBeenCalled();
+    expect(new SpotifyProviderError(503, "PROVIDER_UNAVAILABLE").message).not.toContain("secret");
+  });
+
+  it("distinguishes invalid_grant from an ordinary revoked API access token", async () => {
+    const fetcher = vi.fn().mockResolvedValue(response({ error: "invalid_grant", error_description: "refresh-secret" }, 400));
+    const client = new SpotifyApiClient({ clientId: "id", clientSecret: "secret", fetcher });
+
+    await expect(client.refreshToken("refresh-token")).rejects.toMatchObject({ status: 400, code: "INVALID_GRANT" });
+    await expect(client.refreshToken("refresh-token")).rejects.not.toThrow("refresh-secret");
+  });
+
+  it("maps provider playback authorization failures to Premium-required", async () => {
+    const fetcher = vi.fn().mockResolvedValue(response({ error: { status: 403, message: "Premium required" } }, 403));
+    const client = new SpotifyApiClient({ clientId: "id", clientSecret: "secret", fetcher });
+
+    await expect(client.action("access-token", "PAUSE", {})).rejects.toMatchObject({ status: 403, code: "PREMIUM_REQUIRED" });
+  });
+
+  it.each([204, 200, 201, 202, 206])("accepts PAUSE when Spotify returns successful %s with an empty body", async (status) => {
+    const fetcher = vi.fn().mockResolvedValue(emptyResponse(status));
+    const client = new SpotifyApiClient({ clientId: "id", clientSecret: "secret", fetcher });
+
+    await expect(client.action("access-token", "PAUSE", {})).resolves.toEqual({ code: "SPOTIFY_COMMAND_ACCEPTED" });
+  });
+
+  it("continues to normalize a non-2xx PAUSE response as a safe provider error", async () => {
+    const fetcher = vi.fn().mockResolvedValue(response({ error: { status: 403, message: "Premium required", secret: "provider-secret" } }, 403));
+    const client = new SpotifyApiClient({ clientId: "id", clientSecret: "secret", fetcher });
+
+    await expect(client.action("access-token", "PAUSE", {})).rejects.toMatchObject({ status: 403, code: "PREMIUM_REQUIRED" });
+    await expect(client.action("access-token", "PAUSE", {})).rejects.not.toThrow("provider-secret");
+  });
+
+  it.each([
+    [429, "RATE_LIMITED"],
+    [500, "PROVIDER_UNAVAILABLE"],
+    [504, "PROVIDER_UNAVAILABLE"],
+  ] as const)("maps provider status %s to a safe %s result", async (status, code) => {
+    const fetcher = vi.fn().mockResolvedValue(response({ error: "provider-secret" }, status));
+    const client = new SpotifyApiClient({ clientId: "id", clientSecret: "secret", fetcher });
+
+    await expect(client.action("access-token", "PAUSE", {})).rejects.toMatchObject({ status, code });
+    await expect(client.action("access-token", "PAUSE", {})).rejects.not.toThrow("provider-secret");
+  });
+
+  it("rejects a track action when the semantic URI is not a Spotify track URI", async () => {
+    const fetcher = vi.fn().mockResolvedValue(response(null, 204));
+    const client = new SpotifyApiClient({ clientId: "id", clientSecret: "secret", fetcher });
+
+    await expect(client.action("access-token", "PLAY_TRACK", { uri: "https://example.test/track" })).rejects.toMatchObject({ code: "PROVIDER_REQUEST_FAILED" });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+});

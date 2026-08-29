@@ -1,0 +1,80 @@
+import { describe, expect, it, vi } from "vitest";
+
+import { sha256Hex } from "../../src/p9/crypto.js";
+import { DeviceBindingService } from "../../src/p9/services/device-binding.service.js";
+
+describe("physical device application binding", () => {
+  it("binds only an active hardware row with the authenticated token digest", async () => {
+    const token = "physical-device-credential-012345";
+    const device = {
+      id: "00000000-0000-4000-8000-000000000001",
+      userId: "00000000-0000-4000-8000-000000000010",
+      hardwareId: "joy-001",
+      tokenHash: sha256Hex(token),
+    };
+    const repositories = {
+      device: { findFirst: vi.fn().mockResolvedValue(device) },
+    };
+
+    const result = await new DeviceBindingService(repositories as never).resolve("joy-001", token);
+
+    expect(repositories.device.findFirst).toHaveBeenCalledWith({
+      where: { hardwareId: "joy-001", status: "ACTIVE" },
+      select: { id: true, userId: true, hardwareId: true, tokenHash: true },
+    });
+    expect(result).toEqual({ deviceId: device.id, userId: device.userId, hardwareId: "joy-001" });
+  });
+
+  it("returns no binding for a token mismatch without disclosing the row", async () => {
+    const repositories = {
+      device: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "00000000-0000-4000-8000-000000000001",
+          userId: "00000000-0000-4000-8000-000000000010",
+          hardwareId: "joy-001",
+          tokenHash: sha256Hex("other-device-credential-012345"),
+        }),
+      },
+    };
+
+    await expect(new DeviceBindingService(repositories as never).resolve(
+      "joy-001",
+      "physical-device-credential-012345",
+    )).resolves.toBeNull();
+  });
+
+  it("revalidates the exact cached identity as ACTIVE before owner-specific use", async () => {
+    const repositories = {
+      device: { findFirst: vi.fn().mockResolvedValue({ id: "device-1" }) },
+    };
+    const binding = {
+      deviceId: "00000000-0000-4000-8000-000000000001",
+      userId: "00000000-0000-4000-8000-000000000010",
+      hardwareId: "joy-001",
+    };
+
+    await expect(new DeviceBindingService(repositories as never).isActive(binding)).resolves.toBe(true);
+
+    expect(repositories.device.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: binding.deviceId,
+        userId: binding.userId,
+        hardwareId: binding.hardwareId,
+        status: "ACTIVE",
+      },
+      select: { id: true },
+    });
+  });
+
+  it("rejects a cached identity after its Device is revoked", async () => {
+    const repositories = {
+      device: { findFirst: vi.fn().mockResolvedValue(null) },
+    };
+
+    await expect(new DeviceBindingService(repositories as never).isActive({
+      deviceId: "00000000-0000-4000-8000-000000000001",
+      userId: "00000000-0000-4000-8000-000000000010",
+      hardwareId: "joy-001",
+    })).resolves.toBe(false);
+  });
+});

@@ -1,0 +1,12 @@
+Step 4 exact artifact flash result (sanitized)
+Date: 2026-08-14 (Asia/Jakarta)
+
+Board probe: ESP32-S3 on COM7, exit code 0.
+Command:
+C:\Users\violenic\.espressif\python_env\idf6.0_py3.13_env\Scripts\python.exe -m esptool --chip esp32s3 --port COM7 --before default-reset --after hard-reset write-flash "@flash_args"
+
+Response file: D:\BMO\all_bmo\esp\build\flash_args
+Inputs: bootloader.bin, partition-table.bin, srmodels.bin, all_bmo.bin from the same build folder.
+Exit code: 0
+Write verification: 4/4 Hash of data verified.
+MAC values redacted.

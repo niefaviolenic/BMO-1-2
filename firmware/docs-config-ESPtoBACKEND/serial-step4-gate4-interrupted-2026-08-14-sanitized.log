@@ -1,0 +1,19 @@
+Step 4 physical capture (sanitized, incomplete)
+Capture source: COM7, Step 4 official firmware ELF
+Monitor process status at follow-up: not running
+Last raw capture write: 2026-08-14T16:44:03+07:00
+
+Fresh boot/readiness evidence:
+- WiFi connected and IP acquired (address omitted)
+- SNTP time synchronized and API readiness reached
+- TLS certificate validated
+- WebSocket authenticated successfully; backend state idle
+
+Voice evidence:
+- Wake word detected: Hi Joy
+- Recording started
+
+Capture interruption:
+- Recording-finished event was not captured.
+- WAV metadata, local validation, upload, audio_ready, MP3 download, decode, playback, and playback outcome were not captured.
+- This log must not be used to claim Gate 4 PASS.

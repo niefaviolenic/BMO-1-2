@@ -1,0 +1,17 @@
+Step 4 static review (sanitized)
+Timestamp: 2026-08-14
+Scope: esp/main/api.cpp and esp/main/audio.cpp/audio.h only
+
+PASS:
+- audio_ready keeps request correlation, validates mp3/production URL/positive integer expiry, stores a deadline, and resets expiry on terminal outcome.
+- MP3 GET requires HTTP 200, Content-Type audio/mpeg with optional parameters, and Content-Length > 0.
+- Every HTTP byte is counted, including bytes consumed while skipping an ID3 tag. EOF requires complete-data confirmation and received count equal to Content-Length.
+- HTTP 410 is terminal AUDIO_EXPIRED and is not retried.
+- EOF with residual partial data, decoder errors after playback starts, or invalid frame metadata produce DECODE_FAILED; no false success is possible.
+- I2S/sample-rate/write failures produce PLAYBACK_FAILED; at least one valid frame is required before success.
+- Retry loop allows at most one retry only for DOWNLOAD_FAILED while the URL deadline remains valid. Decode/playback/expired results are not retried.
+- request_failed WebSocket callback only queues state; it does not play a tone or delay. Error UI/tone runs in the state task.
+- audio_playback_done is sent only after successful complete playback; failed outcomes use only DOWNLOAD_FAILED, DECODE_FAILED, or PLAYBACK_FAILED.
+- No full audio, credential, password, or full sensitive URL is logged.
+
+Source review result: PASS

@@ -1,0 +1,133 @@
+# ==============================================================================
+# OS & Editor
+# ==============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# ==============================================================================
+# Secrets & Credentials
+# ==============================================================================
+.env
+.env.*
+.env*.local
+*.env
+*.env.*
+joy-production.env
+!*.env.example
+!**/.env.example
+!**/*.example
+*.pem
+*.key
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+**/bmo_credentials.h
+**/bmo_dev_config.h
+**/joy_credentials.h
+**/joy_dev_config.h
+**/secrets.h
+**/credentials.h
+
+# ==============================================================================
+# Node.js & Tooling
+# ==============================================================================
+node_modules/
+dist/
+build/
+.pnpm-store/
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.tsbuildinfo
+.metro-health-check*
+
+# ==============================================================================
+# Mobile (Expo / React Native)
+# ==============================================================================
+.expo/
+.maestro/
+web-build/
+android/
+ios/
+.kotlin/
+*.orig.*
+*.apk
+*.aab
+*.ipa
+tmp/
+.tmp/
+.screencaps/
+screencap*
+screen*.png
+figma*.png
+figma_node*.png
+export.png
+export.svg
+test-export*
+app_view*.png
+chat_screen*.png
+drawer.png
+expo_home.png
+memory*.png
+settings*.png
+showcase*.png
+splash_test.png
+welcome_screen*.png
+window_dump.xml
+
+# ==============================================================================
+# Firmware (ESP32 ESP-IDF / PlatformIO)
+# ==============================================================================
+.pio/
+.pioenvs/
+.piolibdeps/
+.clangd/
+**/build/
+**/managed_components/
+**/dependencies.lock
+**/sdkconfig.old
+**/sdkconfig.ci
+*.bin
+*.elf
+*.hex
+*.map
+*.o
+*.obj
+*.d
+**/__pycache__/
+**/*.py[cod]
+*$py.class
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.coverage
+**/htmlcov/
+**/venv/
+**/.venv/
+**/env/
+
+# Allow logs and configs in firmware documentation if needed
+!firmware/docs-config-ESPtoBACKEND/**
+
+# ==============================================================================
+# Media & Runtime Artifacts
+# ==============================================================================
+temp-audio/
+audio_wav/
+audio_mp3/
+*.wav
+*.mp3
+*.zip
+*.mp4
