@@ -1,6 +1,10 @@
 #include "display.h"
 #include "audio.h"
 #include "qrcodegen.h"
+#include "joy_identity.h"
+#include "joy_ble_provisioning.h"
+
+#include "esp_timer.h"
 
 #include <math.h>
 #include <stdint.h>
@@ -70,7 +74,7 @@ static bool display_on = false;
 static constexpr int FACE_CX = LCD_H_RES / 2;
 static constexpr int FACE_CY = LCD_V_RES / 2;
 static constexpr int TOUCH_FACE_COUNT =
-    static_cast<int>(FACE_CONFUSED) + 1;
+    static_cast<int>(FACE_DEAD) + 1;
 
 static DisplayMode current_display_mode = DisplayMode::IDLE;
 static Face current_touch_face = FACE_HAPPY;
@@ -93,6 +97,42 @@ static bool shy_animation_active = false;
 static TickType_t shy_animation_deadline = 0;
 static int shy_animation_next_frame = 0;
 
+static constexpr uint64_t UNPAIRED_FACE_REVERT_DELAY_US = 4000000ULL;
+static esp_timer_handle_t unpaired_face_revert_timer = NULL;
+static bool unpaired_revert_active = false;
+static int s_unpaired_cycle_index = 0;
+
+static bool is_unpaired_locked()
+{
+    const joy_runtime_creds_t *runtime = joy_runtime_get();
+    if (runtime == NULL || !runtime->is_provisioned)
+    {
+        return true;
+    }
+    return (joy_ble_get_state() == JoyBleState::UNPAIRED_IDLE);
+}
+
+static void cancel_unpaired_revert_timer_locked()
+{
+    if(unpaired_face_revert_timer != NULL && unpaired_revert_active)
+    {
+        esp_timer_stop(unpaired_face_revert_timer);
+        unpaired_revert_active = false;
+    }
+}
+
+static void schedule_unpaired_revert_timer_locked()
+{
+    if(unpaired_face_revert_timer != NULL)
+    {
+        esp_timer_stop(unpaired_face_revert_timer);
+        unpaired_revert_active = true;
+        esp_timer_start_once(unpaired_face_revert_timer, UNPAIRED_FACE_REVERT_DELAY_US);
+    }
+}
+
+static void unpaired_face_revert_timer_cb(void *arg);
+
 static const char *face_name(Face face)
 {
     switch(face)
@@ -107,6 +147,7 @@ static const char *face_name(Face face)
         case FACE_SURPRISED: return "SURPRISED";
         case FACE_LOVE: return "LOVE";
         case FACE_CONFUSED: return "CONFUSED";
+        case FACE_DEAD: return "DEAD";
         default: return "UNKNOWN";
     }
 }
@@ -756,6 +797,18 @@ static void eye_sleepy(
 
 //--------------------------------------------------
 
+static void eye_x(
+    int x,
+    int y,
+    int size,
+    int thickness)
+{
+    thick_line(x - size, y - size, x + size, y + size, COLOR_BLACK, thickness);
+    thick_line(x - size, y + size, x + size, y - size, COLOR_BLACK, thickness);
+}
+
+//--------------------------------------------------
+
 static void eye_star(
     int x,
     int y)
@@ -1065,6 +1118,17 @@ static void face_confused()
 }
 
 //--------------------------------------------------
+static void face_dead()
+{
+    clear_face_panel();
+
+    eye_x(FACE_CX - 55, FACE_CY - 35, 18, 4);
+    eye_x(FACE_CX + 55, FACE_CY - 35, 18, 4);
+
+    mouth_flat();
+}
+
+//--------------------------------------------------
 
 static void draw_face_locked(
     Face face)
@@ -1114,6 +1178,9 @@ static void draw_face_locked(
             face_confused();
             break;
 
+        case FACE_DEAD:
+            face_dead();
+            break;
         default:
             face_excited();
             break;
@@ -1122,6 +1189,24 @@ static void draw_face_locked(
     flush_framebuffer_locked();
 
     ESP_LOGI(TAG, "Face actually rendered: %s(%d)", face_name(face), (int)face);
+}
+
+static void unpaired_face_revert_timer_cb(void *arg)
+{
+    if(!lock_display(pdMS_TO_TICKS(500)))
+        return;
+
+    unpaired_revert_active = false;
+
+    if(display_ready && current_display_mode == DisplayMode::IDLE &&
+       !pairing_code_active && !qr_code_active && is_unpaired_locked())
+    {
+        current_touch_face = FACE_DEAD;
+        draw_face_locked(FACE_DEAD);
+        ESP_LOGI(TAG, "Unpaired auto-revert: face returned to FACE_DEAD");
+    }
+
+    unlock_display();
 }
 
 static void draw_shy_frame_locked(int frame_index)
@@ -1438,6 +1523,20 @@ void display_init()
         }
     }
 
+    if(unpaired_face_revert_timer == NULL)
+    {
+        esp_timer_create_args_t timer_args = {};
+        timer_args.callback = unpaired_face_revert_timer_cb;
+        timer_args.arg = NULL;
+        timer_args.name = "unpaired_revert";
+        esp_err_t err = esp_timer_create(&timer_args, &unpaired_face_revert_timer);
+        if(err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to create unpaired revert timer: %s", esp_err_to_name(err));
+            unpaired_face_revert_timer = NULL;
+        }
+    }
+
     ESP_LOGI(TAG, "ILI9341 Ready");
 }
 
@@ -1450,6 +1549,7 @@ void display_sleep()
 
     cancel_shy_animation();
     audio_cancelExpressionAudio();
+    cancel_unpaired_revert_timer_locked();
 
     if(!lock_display(pdMS_TO_TICKS(1000)))
         return;
@@ -1516,6 +1616,7 @@ void display_face(
     }
 
     cancel_shy_animation();
+    cancel_unpaired_revert_timer_locked();
 
     if(!lock_display(pdMS_TO_TICKS(1000)))
     {
@@ -1548,6 +1649,7 @@ void display_set_idle_face(Face face)
     }
 
     cancel_shy_animation();
+    cancel_unpaired_revert_timer_locked();
 
     if(!lock_display(pdMS_TO_TICKS(1000)))
     {
@@ -1579,32 +1681,57 @@ Face display_next_touch_face()
         return next_face;
 
     cancel_shy_animation();
+    cancel_unpaired_revert_timer_locked();
 
     const Face previous_face = current_touch_face;
-    const int next_face_index =
-        (static_cast<int>(current_touch_face) + 1) % TOUCH_FACE_COUNT;
-    current_touch_face = static_cast<Face>(next_face_index);
-    next_face = current_touch_face;
 
-    if(display_ready && current_display_mode == DisplayMode::IDLE)
+    if(is_unpaired_locked())
     {
-        if(qr_code_active)
-            draw_qr_overlay_locked();
-        else if(pairing_code_active)
-            draw_pairing_overlay_locked();
-        else
-            draw_face_locked(current_touch_face);
+        const int next_face_index = s_unpaired_cycle_index % static_cast<int>(FACE_DEAD);
+        s_unpaired_cycle_index = (next_face_index + 1) % static_cast<int>(FACE_DEAD);
+        current_touch_face = static_cast<Face>(next_face_index);
+        next_face = current_touch_face;
+
+        if(display_ready && current_display_mode == DisplayMode::IDLE)
+        {
+            if(qr_code_active)
+                draw_qr_overlay_locked();
+            else if(pairing_code_active)
+                draw_pairing_overlay_locked();
+            else
+                draw_face_locked(current_touch_face);
+        }
+
+        schedule_unpaired_revert_timer_locked();
+    }
+    else
+    {
+        const int next_face_index =
+            (static_cast<int>(current_touch_face) + 1) % TOUCH_FACE_COUNT;
+        current_touch_face = static_cast<Face>(next_face_index);
+        next_face = current_touch_face;
+
+        if(display_ready && current_display_mode == DisplayMode::IDLE)
+        {
+            if(qr_code_active)
+                draw_qr_overlay_locked();
+            else if(pairing_code_active)
+                draw_pairing_overlay_locked();
+            else
+                draw_face_locked(current_touch_face);
+        }
     }
 
     ESP_LOGI(
         TAG,
-        "Idle face advance: before=%s(%d) after=%s(%d) render_requested=%d mode=%s",
+        "Idle face advance: before=%s(%d) after=%s(%d) render_requested=%d mode=%s unpaired=%d",
         face_name(previous_face),
         (int)previous_face,
         face_name(current_touch_face),
         (int)current_touch_face,
         display_ready && current_display_mode == DisplayMode::IDLE ? 1 : 0,
-        display_mode_name(current_display_mode));
+        display_mode_name(current_display_mode),
+        is_unpaired_locked() ? 1 : 0);
 
     unlock_display();
     return next_face;
@@ -1637,6 +1764,8 @@ bool display_start_shy()
         unlock_display();
         return false;
     }
+
+    cancel_unpaired_revert_timer_locked();
 
     // Shy is transient. HAPPY remains the persistent idle face that is
     // restored after five seconds or after a higher-priority interaction.
@@ -1671,12 +1800,45 @@ bool display_is_shy_active()
     return active;
 }
 
+bool display_is_unpaired_revert_active()
+{
+    if(!lock_display(pdMS_TO_TICKS(500)))
+        return unpaired_revert_active;
+    bool active = unpaired_revert_active;
+    unlock_display();
+    return active;
+}
+
+void display_cancel_unpaired_revert()
+{
+    if(!lock_display(pdMS_TO_TICKS(500)))
+        return;
+    cancel_unpaired_revert_timer_locked();
+    unlock_display();
+}
+
+void display_trigger_unpaired_revert()
+{
+    if(!lock_display(pdMS_TO_TICKS(500)))
+        return;
+    cancel_unpaired_revert_timer_locked();
+    if(display_ready && current_display_mode == DisplayMode::IDLE &&
+       !pairing_code_active && !qr_code_active && is_unpaired_locked())
+    {
+        current_touch_face = FACE_DEAD;
+        draw_face_locked(FACE_DEAD);
+        ESP_LOGI(TAG, "Unpaired revert triggered: face returned to FACE_DEAD");
+    }
+    unlock_display();
+}
+
 void display_set_mode(DisplayMode mode)
 {
     if(mode != DisplayMode::IDLE)
     {
         cancel_shy_animation();
         audio_cancelExpressionAudio();
+        cancel_unpaired_revert_timer_locked();
     }
 
     if(!lock_display(pdMS_TO_TICKS(1000)))

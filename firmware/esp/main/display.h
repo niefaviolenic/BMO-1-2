@@ -13,7 +13,8 @@ enum Face
     FACE_WINK,
     FACE_SURPRISED,
     FACE_LOVE,
-    FACE_CONFUSED
+    FACE_CONFUSED,
+    FACE_DEAD
 };
 
 enum class DisplayMode
@@ -43,6 +44,11 @@ Face display_get_idle_face();
 bool display_start_shy();
 void display_cancel_shy();
 bool display_is_shy_active();
+
+// Unpaired auto-revert interaction helpers
+bool display_is_unpaired_revert_active();
+void display_cancel_unpaired_revert();
+void display_trigger_unpaired_revert();
 
 void display_set_mode(DisplayMode mode);
 

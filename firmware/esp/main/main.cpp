@@ -48,10 +48,9 @@ extern "C" void app_main()
     network_init();
 
     display_init();
-    ESP_LOGI(TAG, "OUTPUT_DIAG LCD begin: red,yellow,blue,white,happy");
+    ESP_LOGI(TAG, "OUTPUT_DIAG LCD begin: red,yellow,blue,white");
     TickType_t lcd_diag_start = xTaskGetTickCount();
     display_test_pattern();
-    display_face(FACE_HAPPY);
     ESP_LOGI(TAG, "OUTPUT_DIAG LCD end: elapsed_ms=%lu",
              (unsigned long)((xTaskGetTickCount() - lcd_diag_start) * portTICK_PERIOD_MS));
 

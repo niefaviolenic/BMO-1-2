@@ -3,7 +3,8 @@
 #include "joy_identity.h"
 #include "joy_crypto.h"
 #include "wifi.h"
-
+#include "display.h"
+#include "audio.h"
 #include <cstring>
 #include <cstdio>
 #include "esp_log.h"
@@ -47,9 +48,11 @@ esp_err_t joy_ble_provisioning_init(void)
     const joy_runtime_creds_t *runtime = joy_runtime_get();
     if (runtime && runtime->is_provisioned) {
         s_state = JoyBleState::RUNTIME_OPERATIONAL;
+        display_set_idle_face(FACE_HAPPY);
         ESP_LOGI(TAG, "Device already provisioned; BLE provisioning idle");
     } else {
         s_state = JoyBleState::UNPAIRED_IDLE;
+        display_set_idle_face(FACE_DEAD);
         ESP_LOGI(TAG, "Device in unprovisioned state; hold 5s to open pairing window");
     }
     return ESP_OK;
@@ -68,6 +71,7 @@ void joy_ble_start_pairing_window(void)
     ESP_LOGI(TAG, "Started 5-minute BLE pairing window: local_name=%s, setup_nonce=%s",
              ble_name, s_setup_nonce);
 
+    display_set_idle_face(FACE_CUTE);
     joy_ble_nimble_start_advertising();
 }
 
@@ -79,6 +83,10 @@ void joy_ble_stop_provisioning(void)
     memset(s_session_id, 0, sizeof(s_session_id));
     memset(s_challenge, 0, sizeof(s_challenge));
     joy_ble_nimble_stop();
+    const joy_runtime_creds_t *runtime = joy_runtime_get();
+    if (runtime && !runtime->is_provisioned) {
+        display_set_idle_face(FACE_DEAD);
+    }
     ESP_LOGI(TAG, "Stopped BLE provisioning");
 }
 
@@ -140,6 +148,7 @@ esp_err_t joy_ble_arm_physical_confirmation(const char *session_id, const char *
     s_arm_deadline_us = esp_timer_get_time() + PHYSICAL_ARM_WINDOW_US;
     s_state = JoyBleState::PHYSICAL_CONFIRM_PENDING;
 
+    display_set_idle_face(FACE_SURPRISED);
     ESP_LOGI(TAG, "Armed physical confirmation window (60s): session_id=%s", s_session_id);
     return ESP_OK;
 }
@@ -170,6 +179,7 @@ void joy_ble_on_physical_hold_2s(void)
     s_state = JoyBleState::PHYSICAL_CONFIRMED;
     ESP_LOGI(TAG, "Physical presence confirmed! Generated proof for session %s", s_session_id);
 
+    display_set_idle_face(FACE_EXCITED);
     // Send GATT notification to mobile on Char 3
     joy_ble_nimble_notify_proof(s_confirmation_nonce, s_physical_proof);
 }
@@ -335,6 +345,8 @@ esp_err_t joy_ble_finalize_with_backend(void)
         }
         joy_ble_nimble_stop();
         s_state = JoyBleState::RUNTIME_OPERATIONAL;
+        display_set_idle_face(FACE_HAPPY);
+        audio_triggerExpressionAudio((int)FACE_HAPPY);
         return ESP_OK;
     } else {
         ESP_LOGW(TAG, "Finalize HTTP request failed: err=%s, status_code=%d, response=%s",
