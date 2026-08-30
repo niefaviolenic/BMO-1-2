@@ -1,4 +1,8 @@
 #include "joy_ble_provisioning.h"
+#include "joy_ble_nimble.h"
+#include "joy_identity.h"
+#include "joy_crypto.h"
+#include "wifi.h"
 
 #include <cstring>
 #include <cstdio>
@@ -6,12 +10,12 @@
 #include "esp_timer.h"
 #include "esp_random.h"
 #include "esp_http_client.h"
-#include "joy_identity.h"
-#include "joy_crypto.h"
-
+#include "esp_crt_bundle.h"
+#include "cJSON.h"
 static const char *TAG = "JOY_BLE_PROV";
 
 #define PROVISIONING_WINDOW_US 300000000LL // 5 minutes
+#define PHYSICAL_ARM_WINDOW_US 60000000LL  // 60 seconds
 
 static JoyBleState s_state = JoyBleState::UNPAIRED_IDLE;
 static int64_t s_window_deadline_us = 0;
@@ -24,6 +28,10 @@ static char s_confirmation_nonce[64] = {0};
 static char s_physical_proof[128] = {0};
 static int64_t s_arm_deadline_us = 0;
 
+// Commit state
+static char s_commit_nonce[64] = {0};
+static char s_commit_proof[128] = {0};
+
 static void generate_nonce(char *dst, size_t max_len)
 {
     uint8_t rand_bytes[16];
@@ -34,13 +42,15 @@ static void generate_nonce(char *dst, size_t max_len)
 esp_err_t joy_ble_provisioning_init(void)
 {
     joy_identity_init();
+    joy_ble_nimble_init();
+
     const joy_runtime_creds_t *runtime = joy_runtime_get();
     if (runtime && runtime->is_provisioned) {
         s_state = JoyBleState::RUNTIME_OPERATIONAL;
-        ESP_LOGI(TAG, "Device already provisioned; BLE provisioning inactive");
+        ESP_LOGI(TAG, "Device already provisioned; BLE provisioning idle");
     } else {
         s_state = JoyBleState::UNPAIRED_IDLE;
-        ESP_LOGI(TAG, "Device in unpaired idle state; waiting for 5s touch to start pairing window");
+        ESP_LOGI(TAG, "Device in unprovisioned state; hold 5s to open pairing window");
     }
     return ESP_OK;
 }
@@ -57,6 +67,8 @@ void joy_ble_start_pairing_window(void)
 
     ESP_LOGI(TAG, "Started 5-minute BLE pairing window: local_name=%s, setup_nonce=%s",
              ble_name, s_setup_nonce);
+
+    joy_ble_nimble_start_advertising();
 }
 
 void joy_ble_stop_provisioning(void)
@@ -66,6 +78,7 @@ void joy_ble_stop_provisioning(void)
     s_arm_deadline_us = 0;
     memset(s_session_id, 0, sizeof(s_session_id));
     memset(s_challenge, 0, sizeof(s_challenge));
+    joy_ble_nimble_stop();
     ESP_LOGI(TAG, "Stopped BLE provisioning");
 }
 
@@ -77,6 +90,58 @@ bool joy_ble_is_active(void)
 JoyBleState joy_ble_get_state(void)
 {
     return s_state;
+}
+
+void joy_ble_set_state(JoyBleState new_state)
+{
+    s_state = new_state;
+}
+
+const char *joy_ble_get_setup_nonce(void)
+{
+    return s_setup_nonce;
+}
+
+const char *joy_ble_get_session_id(void)
+{
+    return s_session_id;
+}
+
+const char *joy_ble_get_confirm_nonce(void)
+{
+    return s_confirmation_nonce;
+}
+
+const char *joy_ble_get_physical_proof(void)
+{
+    return s_physical_proof;
+}
+
+const char *joy_ble_get_commit_nonce(void)
+{
+    return s_commit_nonce;
+}
+
+const char *joy_ble_get_commit_proof(void)
+{
+    return s_commit_proof;
+}
+
+esp_err_t joy_ble_arm_physical_confirmation(const char *session_id, const char *challenge)
+{
+    if (!session_id || !challenge) return ESP_ERR_INVALID_ARG;
+
+    strncpy(s_session_id, session_id, sizeof(s_session_id) - 1);
+    s_session_id[sizeof(s_session_id) - 1] = '\0';
+
+    strncpy(s_challenge, challenge, sizeof(s_challenge) - 1);
+    s_challenge[sizeof(s_challenge) - 1] = '\0';
+
+    s_arm_deadline_us = esp_timer_get_time() + PHYSICAL_ARM_WINDOW_US;
+    s_state = JoyBleState::PHYSICAL_CONFIRM_PENDING;
+
+    ESP_LOGI(TAG, "Armed physical confirmation window (60s): session_id=%s", s_session_id);
+    return ESP_OK;
 }
 
 void joy_ble_on_physical_hold_2s(void)
@@ -104,6 +169,65 @@ void joy_ble_on_physical_hold_2s(void)
 
     s_state = JoyBleState::PHYSICAL_CONFIRMED;
     ESP_LOGI(TAG, "Physical presence confirmed! Generated proof for session %s", s_session_id);
+
+    // Send GATT notification to mobile on Char 3
+    joy_ble_nimble_notify_proof(s_confirmation_nonce, s_physical_proof);
+}
+
+esp_err_t joy_ble_handle_secure_start_payload(
+    const char *res_id,
+    const char *token,
+    const char *start_proof,
+    const char *ssid,
+    const char *pass)
+{
+    const joy_identity_t *id = joy_identity_get();
+
+    // 1. Verify start_proof HMAC
+    bool valid = joy_crypto_verify_secure_start(
+        id->provisioning_root_secret,
+        id->hardware_id,
+        id->provisioning_ref,
+        s_setup_nonce,
+        id->reset_epoch,
+        s_session_id,
+        res_id,
+        start_proof
+    );
+
+    if (!valid) {
+        ESP_LOGE(TAG, "Invalid secure_start_proof! Rejecting provisioning payload.");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGI(TAG, "secure_start_proof verified successfully!");
+
+    // 2. Generate commit_nonce and commit_proof HMAC
+    generate_nonce(s_commit_nonce, sizeof(s_commit_nonce));
+    joy_crypto_create_commit_proof(
+        id->provisioning_root_secret,
+        id->hardware_id,
+        s_setup_nonce,
+        id->reset_epoch,
+        res_id,
+        s_commit_nonce,
+        s_commit_proof,
+        sizeof(s_commit_proof)
+    );
+
+    s_state = JoyBleState::CLAIM_COMMITTED;
+
+    // 3. Save pending claim to runtime NVS/RAM
+    joy_runtime_save_pending_claim(res_id, token);
+
+    // 4. Send GATT Notification on Char 5 (Commit & Status)
+    joy_ble_nimble_notify_commit(s_commit_nonce, s_commit_proof, "CONNECTING");
+
+    // 5. Connect to Wi-Fi with decrypted credentials
+    ESP_LOGI(TAG, "Initiating Wi-Fi connection to SSID \"%s\"...", ssid);
+    wifi_connect_to_ap(ssid, pass);
+
+    return ESP_OK;
 }
 
 void joy_ble_poll(void)
@@ -165,32 +289,56 @@ esp_err_t joy_ble_finalize_with_backend(void)
     esp_http_client_config_t config = {};
     config.url = "https://api.personalbmo.web.id/api/v1/device-enrollment/finalize";
     config.method = HTTP_METHOD_POST;
-    config.timeout_ms = 10000;
-
+    config.timeout_ms = 15000;
+    config.crt_bundle_attach = esp_crt_bundle_attach;
+    config.skip_cert_common_name_check = false;
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) {
         ESP_LOGE(TAG, "Failed to initialize HTTP client for finalize");
         return ESP_FAIL;
     }
-
     esp_http_client_set_header(client, "Content-Type", "application/json");
     esp_http_client_set_header(client, "X-Hardware-Id", id->hardware_id);
-    esp_http_client_set_post_field(client, json_body, strlen(json_body));
 
     s_state = JoyBleState::FINALIZING_WITH_BACKEND;
     ESP_LOGI(TAG, "Sending finalize request to backend for reservation %s...", runtime->pending_reservation_id);
 
-    esp_err_t err = esp_http_client_perform(client);
-    int status_code = esp_http_client_get_status_code(client);
+    char response_buf[1024] = {0};
+    int status_code = 0;
+    esp_err_t err = esp_http_client_open(client, strlen(json_body));
+    if (err == ESP_OK) {
+        int wlen = esp_http_client_write(client, json_body, strlen(json_body));
+        if (wlen > 0) {
+            esp_http_client_fetch_headers(client);
+            status_code = esp_http_client_get_status_code(client);
+            int rlen = esp_http_client_read_response(client, response_buf, sizeof(response_buf) - 1);
+            if (rlen > 0) response_buf[rlen] = '\0';
+        }
+    }
     esp_http_client_cleanup(client);
 
-    if (err == ESP_OK && status_code == 200) {
-        ESP_LOGI(TAG, "Finalize successful! Provisioning completed.");
-        joy_runtime_save_token("joy_tok_finalized");
+    if (status_code == 200) {
+        ESP_LOGI(TAG, "Finalize successful! Parsing runtime tokens from backend...");
+        cJSON *res_root = cJSON_Parse(response_buf);
+        if (res_root) {
+            cJSON *runtime_node = cJSON_GetObjectItem(res_root, "runtime");
+            if (runtime_node) {
+                cJSON *tok_node = cJSON_GetObjectItem(runtime_node, "device_token");
+                if (tok_node && cJSON_IsString(tok_node)) {
+                    joy_runtime_save_token(tok_node->valuestring);
+                    ESP_LOGI(TAG, "Saved runtime device token: %s", tok_node->valuestring);
+                }
+            }
+            cJSON_Delete(res_root);
+        } else {
+            joy_runtime_save_token("joy_tok_finalized");
+        }
+        joy_ble_nimble_stop();
         s_state = JoyBleState::RUNTIME_OPERATIONAL;
         return ESP_OK;
     } else {
-        ESP_LOGW(TAG, "Finalize HTTP request failed: err=%s, status_code=%d", esp_err_to_name(err), status_code);
+        ESP_LOGW(TAG, "Finalize HTTP request failed: err=%s, status_code=%d, response=%s",
+                 esp_err_to_name(err), status_code, response_buf);
         return ESP_FAIL;
     }
 }

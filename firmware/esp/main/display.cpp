@@ -667,58 +667,7 @@ static void draw_pairing_digit(
 
 static void draw_pairing_overlay_locked()
 {
-    display_wake();
-    draw_screen_base();
-
-    for(int index = 0; index < 6; ++index)
-    {
-        const int x =
-            PAIRING_START_X + index * (PAIRING_DIGIT_WIDTH + PAIRING_DIGIT_GAP);
-        draw_pairing_digit(
-            x,
-            PAIRING_START_Y,
-            static_cast<uint8_t>(pairing_code[index] - '0'));
-    }
-
-    if(pairing_expires_at_epoch > 0 && pairing_total_duration_sec > 0)
-    {
-        pairing_fill_x_mirrored_rect(
-            PAIRING_START_X,
-            PAIRING_BAR_Y,
-            PAIRING_TOTAL_WIDTH,
-            PAIRING_BAR_HEIGHT,
-            COLOR_BLACK);
-
-        const int inner_max_width = PAIRING_TOTAL_WIDTH - 2;
-        const int inner_height = PAIRING_BAR_HEIGHT - 2;
-        pairing_fill_x_mirrored_rect(
-            PAIRING_START_X + 1,
-            PAIRING_BAR_Y + 1,
-            inner_max_width,
-            inner_height,
-            COLOR_WHITE);
-
-        const time_t now_epoch = time(NULL);
-        const int remaining_sec =
-            (pairing_expires_at_epoch > now_epoch) ?
-                static_cast<int>(pairing_expires_at_epoch - now_epoch) : 0;
-
-        int fill_width = (remaining_sec * inner_max_width) / pairing_total_duration_sec;
-        fill_width = clamp_value(fill_width, 0, inner_max_width);
-        last_rendered_fill_width = fill_width;
-
-        if(fill_width > 0)
-        {
-            pairing_fill_x_mirrored_rect(
-                PAIRING_START_X + 1,
-                PAIRING_BAR_Y + 1,
-                fill_width,
-                inner_height,
-                COLOR_BLACK);
-        }
-    }
-
-    flush_framebuffer_locked();
+    // Legacy 6-digit code overlay disabled: pairing is managed via BLE Scheme 2
 }
 
 static void draw_qr_overlay_locked()
@@ -1790,65 +1739,13 @@ bool display_set_pairing_code(
     const char code[7],
     time_t expires_at_epoch)
 {
-    if(!is_six_digit_pairing_code(code))
-        return false;
-
-    cancel_shy_animation();
-    audio_cancelExpressionAudio();
-
-    if(!lock_display(pdMS_TO_TICKS(1000)))
-        return false;
-
-    if(pairing_code_active && memcmp(pairing_code, code, sizeof(pairing_code)) == 0 &&
-       pairing_expires_at_epoch == expires_at_epoch)
-    {
-        unlock_display();
-        return true;
-    }
-
-    secure_clear_pairing_code_locked();
-    memcpy(pairing_code, code, 6);
-    pairing_code[6] = '\0';
-    pairing_expires_at_epoch = expires_at_epoch;
-    if(expires_at_epoch > 0)
-    {
-        const time_t now_epoch = time(NULL);
-        if(expires_at_epoch > now_epoch)
-            pairing_total_duration_sec = static_cast<int>(expires_at_epoch - now_epoch);
-        else
-            pairing_total_duration_sec = 0;
-    }
-    pairing_code_active = true;
-
-    if(display_ready && current_display_mode == DisplayMode::IDLE && !qr_code_active)
-        draw_pairing_overlay_locked();
-    unlock_display();
+    // Legacy pairing code overlay disabled: pairing is managed via BLE Scheme 2
     return true;
 }
 
 void display_update_pairing_countdown()
 {
-    if(!lock_display(pdMS_TO_TICKS(100)))
-        return;
-
-    if(display_ready && display_on && pairing_code_active && !qr_code_active && current_display_mode == DisplayMode::IDLE &&
-       pairing_expires_at_epoch > 0 && pairing_total_duration_sec > 0)
-    {
-        const time_t now_epoch = time(NULL);
-        const int remaining_sec =
-            (pairing_expires_at_epoch > now_epoch) ?
-                static_cast<int>(pairing_expires_at_epoch - now_epoch) : 0;
-        const int inner_max_width = PAIRING_TOTAL_WIDTH - 2;
-        int fill_width = (remaining_sec * inner_max_width) / pairing_total_duration_sec;
-        fill_width = clamp_value(fill_width, 0, inner_max_width);
-
-        if(fill_width != last_rendered_fill_width)
-        {
-            draw_pairing_overlay_locked();
-        }
-    }
-
-    unlock_display();
+    // Legacy countdown overlay disabled
 }
 
 void display_clear_pairing_code()
@@ -1881,17 +1778,7 @@ void display_clear_pairing_code()
 
 bool display_pairing_code_is_visible()
 {
-    if(!lock_display(pdMS_TO_TICKS(100)))
-        return false;
-
-    const bool visible =
-        display_ready &&
-        display_on &&
-        pairing_code_active &&
-        !qr_code_active &&
-        current_display_mode == DisplayMode::IDLE;
-    unlock_display();
-    return visible;
+    return false;
 }
 
 bool display_set_qr_code(

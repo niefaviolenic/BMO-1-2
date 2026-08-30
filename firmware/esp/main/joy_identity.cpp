@@ -5,31 +5,50 @@
 #include "nvs.h"
 #include "esp_log.h"
 #include "esp_random.h"
-
+#include "esp_mac.h"
+#include "mbedtls/md.h"
 static const char *TAG = "JOY_IDENTITY";
 
 static joy_identity_t s_identity = {};
 static joy_runtime_creds_t s_runtime = {};
 static bool s_initialized = false;
 
+static void derive_dev_secrets(const char *hardware_id, const char *provisioning_ref,
+                               uint8_t *out_root_secret, uint8_t *out_mfg_secret)
+{
+    char msg[256];
+    snprintf(msg, sizeof(msg), "joy-dev-v1\n%s\n%s", hardware_id, provisioning_ref);
+
+    const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+
+    const char root_key[] = "joy-dev-root-secret-v1";
+    mbedtls_md_hmac(md_info, (const unsigned char *)root_key, strlen(root_key),
+                    (const unsigned char *)msg, strlen(msg), out_root_secret);
+
+    const char mfg_key[] = "joy-dev-mfg-secret-v1";
+    mbedtls_md_hmac(md_info, (const unsigned char *)mfg_key, strlen(mfg_key),
+                    (const unsigned char *)msg, strlen(msg), out_mfg_secret);
+}
+
 static void generate_default_identity(void)
 {
-    // Generate deterministic/unique default for uninitialized units
-    snprintf(s_identity.hardware_id, sizeof(s_identity.hardware_id), "joy_%08lx-%04lx-%04lx-%04lx-%012llx",
-             (unsigned long)esp_random(),
-             (unsigned long)(esp_random() & 0xFFFF),
-             (unsigned long)((esp_random() & 0x0FFF) | 0x4000),
-             (unsigned long)((esp_random() & 0x3FFF) | 0x8000),
-             (unsigned long long)(((uint64_t)esp_random() << 32) | esp_random()) & 0xFFFFFFFFFFFFULL);
+    uint8_t mac[6] = {0};
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    snprintf(s_identity.hardware_id, sizeof(s_identity.hardware_id),
+             "joy_%02x%02x%02x%02x-%02x%02x-4000-8000-%02x%02x%02x%02x%02x%02x",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
     const char base32_chars[] = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     for (int i = 0; i < 8; i++) {
-        s_identity.provisioning_ref[i] = base32_chars[esp_random() % (sizeof(base32_chars) - 1)];
+        s_identity.provisioning_ref[i] = base32_chars[(mac[i % 6] + (uint8_t)(i * 7)) % (sizeof(base32_chars) - 1)];
     }
     s_identity.provisioning_ref[8] = '\0';
 
-    esp_fill_random(s_identity.manufacturing_secret, sizeof(s_identity.manufacturing_secret));
-    esp_fill_random(s_identity.provisioning_root_secret, sizeof(s_identity.provisioning_root_secret));
+    derive_dev_secrets(s_identity.hardware_id, s_identity.provisioning_ref,
+                       s_identity.provisioning_root_secret,
+                       s_identity.manufacturing_secret);
+
     strncpy(s_identity.hardware_revision, "revA", sizeof(s_identity.hardware_revision));
     s_identity.reset_epoch = 0;
 }
@@ -38,12 +57,25 @@ esp_err_t joy_identity_init(void)
 {
     if (s_initialized) return ESP_OK;
 
+    esp_err_t nvs_ret = nvs_flash_init();
+    if (nvs_ret == ESP_ERR_NVS_NO_FREE_PAGES || nvs_ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        nvs_flash_erase();
+        nvs_ret = nvs_flash_init();
+    }
+
     nvs_handle_t factory_handle;
     esp_err_t err = nvs_open("joy_factory", NVS_READWRITE, &factory_handle);
     if (err == ESP_OK) {
+        joy_identity_t det_id = {};
+        generate_default_identity();
+        memcpy(&det_id, &s_identity, sizeof(joy_identity_t));
+
         size_t str_len = sizeof(s_identity.hardware_id);
-        if (nvs_get_str(factory_handle, "hw_id", s_identity.hardware_id, &str_len) != ESP_OK) {
-            generate_default_identity();
+        bool needs_update = (nvs_get_str(factory_handle, "hw_id", s_identity.hardware_id, &str_len) != ESP_OK ||
+                             strcmp(s_identity.hardware_id, det_id.hardware_id) != 0);
+
+        if (needs_update) {
+            memcpy(&s_identity, &det_id, sizeof(joy_identity_t));
             nvs_set_str(factory_handle, "hw_id", s_identity.hardware_id);
             nvs_set_str(factory_handle, "prov_ref", s_identity.provisioning_ref);
             nvs_set_blob(factory_handle, "mfg_sec", s_identity.manufacturing_secret, sizeof(s_identity.manufacturing_secret));
@@ -51,7 +83,7 @@ esp_err_t joy_identity_init(void)
             nvs_set_str(factory_handle, "hw_rev", s_identity.hardware_revision);
             nvs_set_u32(factory_handle, "reset_epoch", s_identity.reset_epoch);
             nvs_commit(factory_handle);
-            ESP_LOGI(TAG, "Initialized new factory identity: hw_id=%s, ref=%s", s_identity.hardware_id, s_identity.provisioning_ref);
+            ESP_LOGI(TAG, "Initialized deterministic MAC factory identity: hw_id=%s, ref=%s", s_identity.hardware_id, s_identity.provisioning_ref);
         } else {
             str_len = sizeof(s_identity.provisioning_ref);
             nvs_get_str(factory_handle, "prov_ref", s_identity.provisioning_ref, &str_len);
@@ -70,6 +102,7 @@ esp_err_t joy_identity_init(void)
         generate_default_identity();
         ESP_LOGW(TAG, "Failed to open joy_factory NVS namespace, using in-memory identity");
     }
+    s_initialized = true;
 
     nvs_handle_t runtime_handle;
     err = nvs_open("joy_runtime", NVS_READWRITE, &runtime_handle);

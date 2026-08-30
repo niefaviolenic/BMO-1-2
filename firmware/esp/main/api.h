@@ -13,5 +13,7 @@ void api_upload_audio_and_process();
 bool api_ws_is_connected();
 bool api_ws_is_authenticated();
 bool api_ws_authentication_is_blocked();
+bool api_ws_send_wifi_config_received(const char *config_id);
+bool api_ws_send_wifi_config_result(const char *config_id, const char *status, int rssi, const char *reason);
 
 #endif

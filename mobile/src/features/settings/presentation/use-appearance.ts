@@ -12,23 +12,16 @@ import {
 } from '../domain/theme/types';
 
 export function useAppearance() {
-  let appearance: AppearanceMode = 'system';
-  let resolvedColorScheme: 'light' | 'dark' = 'light';
-  try {
-    appearance = useSyncExternalStore(
-      subscribeAppearance,
-      getAppearancePreference,
-      () => 'system' as AppearanceMode,
-    );
-    resolvedColorScheme = useSyncExternalStore(
-      subscribeAppearance,
-      getResolvedColorScheme,
-      () => 'light' as const,
-    );
-  } catch {
-    appearance = getAppearancePreference();
-    resolvedColorScheme = getResolvedColorScheme();
-  }
+  const appearance = useSyncExternalStore(
+    subscribeAppearance,
+    getAppearancePreference,
+    () => 'system' as AppearanceMode,
+  );
+  const resolvedColorScheme = useSyncExternalStore(
+    subscribeAppearance,
+    getResolvedColorScheme,
+    () => 'light' as const,
+  );
 
   const appearanceLabel = formatAppearanceLabel(appearance);
 

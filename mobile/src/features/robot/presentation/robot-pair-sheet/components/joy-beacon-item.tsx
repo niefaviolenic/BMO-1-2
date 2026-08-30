@@ -68,7 +68,7 @@ export function JoyBeaconItem({
           <View
             style={[
               styles.refBadge,
-              { backgroundColor: theme.surfaceSubtle ?? `${theme.text}0C` },
+              { backgroundColor: theme.cardBackgroundSubtle },
             ]}
           >
             <Text style={[styles.refText, { color: theme.textSecondary }]}>

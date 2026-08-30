@@ -280,7 +280,7 @@ describe("ProvisioningService Unit Tests", () => {
 
     expect(resetRes.event).toBe("device_reset_ack");
     expect(resetRes.reset_epoch).toBe(1);
-    expect(mobileEventsMock.send).toHaveBeenCalledWith(
+    expect(mobileEventsMock.sendToUser).toHaveBeenCalledWith(
       userId,
       expect.objectContaining({
         event: "device_binding_revoked",
@@ -288,5 +288,57 @@ describe("ProvisioningService Unit Tests", () => {
         reason: "PHYSICAL_RESET",
       }),
     );
+  });
+
+  it("rejects unknown hardware with 404 when allowDevAutoEnroll is false", async () => {
+    await expect(
+      service.prepare(userId, {
+        protocol_version: 1,
+        hardware_id: "joy_unknown_hardware_id",
+        provisioning_ref: "UNKNOWN1",
+        setup_nonce: "NONCE123",
+        reset_epoch: 0,
+      }),
+    ).rejects.toMatchObject({
+      status: 404,
+      code: "HARDWARE_NOT_FOUND",
+    });
+  });
+
+  it("strictly rejects random/non-matching non-empty proof with 401", async () => {
+    await service.registerHardwareIdentity({
+      hardwareId,
+      provisioningRef,
+      manufacturingSecret: mfgSecret,
+      provisioningRootSecret: rootSecret,
+      hardwareRevision: "revA",
+      resetEpoch: 0,
+    });
+
+    const prep = await service.prepare(userId, {
+      protocol_version: 1,
+      hardware_id: hardwareId,
+      provisioning_ref: provisioningRef,
+      setup_nonce: "NONCE12345",
+      reset_epoch: 0,
+    });
+
+    await expect(
+      service.confirm(userId, {
+        session_id: prep.session_id,
+        confirmation: {
+          hardware_id: hardwareId,
+          provisioning_ref: provisioningRef,
+          setup_nonce: "NONCE12345",
+          reset_epoch: 0,
+          challenge: prep.challenge,
+          confirmation_nonce: "CONFIRMNONCE",
+          proof: "fake_non_empty_random_proof_that_should_fail_hmac",
+        },
+      }),
+    ).rejects.toMatchObject({
+      status: 401,
+      code: "PHYSICAL_CONFIRM_INVALID",
+    });
   });
 });

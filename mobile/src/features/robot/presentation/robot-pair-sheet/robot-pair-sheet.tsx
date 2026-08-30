@@ -27,6 +27,7 @@ import {
   type DiscoveredJoy,
   type ProvisioningSessionState,
 } from '@/features/robot/data/provisioning-flow';
+import { hydrateDevices } from '@/features/robot/data/robot-connection-store';
 import {
   PairStepIndicator,
   BluetoothStatusBanner,
@@ -65,10 +66,10 @@ export function RobotPairSheet({
     provisioningManager.getState(),
   );
   const [currentStep, setCurrentStep] = useState<RobotPairStep>('scan');
+  const [wifiSsid, setWifiSsid] = useState('');
   const [wifiPassword, setWifiPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
   useEffect(() => {
     return provisioningManager.subscribe((next) => {
       setSession(next);
@@ -84,25 +85,28 @@ export function RobotPairSheet({
     });
   }, []);
 
-  useEffect(() => {
-    if (isVisible) {
-      provisioningManager.reset();
-      setWifiPassword('');
-      setShowPassword(false);
-      setCurrentStep('scan');
-      void provisioningManager.startScanning({ autoDemoFallback: false });
-    } else {
-      provisioningManager.reset();
-    }
-  }, [isVisible]);
-
-  const { activeStep, contentTranslateX } = useStepSlideTransition({
+  const { activeStep, contentTranslateX, reset: resetSlide } = useStepSlideTransition({
     currentStep,
     getDirection: getStepDirection,
     width: windowWidth,
     duration: Tokens.slide.duration,
   });
 
+  useEffect(() => {
+    if (isVisible) {
+      provisioningManager.reset();
+      setWifiSsid('');
+      setWifiPassword('');
+      setShowPassword(false);
+      setCurrentStep('scan');
+      resetSlide?.('scan');
+      void provisioningManager.startScanning();
+    } else {
+      provisioningManager.reset();
+      setCurrentStep('scan');
+      resetSlide?.('scan');
+    }
+  }, [isVisible]);
   const handleSelectJoy = async (joy: DiscoveredJoy) => {
     try {
       await provisioningManager.selectJoy(joy);
@@ -111,34 +115,24 @@ export function RobotPairSheet({
     }
   };
 
-  const handleConfirmHold = async () => {
+
+
+  const handleSubmitWifi = async (manualSsid?: string) => {
+    const targetSsid = manualSsid || session.selectedNetwork?.ssid || wifiSsid.trim();
+    if (!targetSsid) return;
     setIsSubmitting(true);
     try {
-      await provisioningManager.triggerDemoPhysicalConfirmation();
+      await provisioningManager.submitWifiCredentials(wifiPassword, targetSsid);
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  const handleSubmitWifi = async () => {
-    setIsSubmitting(true);
-    try {
-      await provisioningManager.submitWifiCredentials(wifiPassword);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const handleRescan = () => {
-    void provisioningManager.restartScanning({ autoDemoFallback: false });
-  };
-
-  const handleSimulateDemo = () => {
-    provisioningManager.discoverDemoJoy();
+    void provisioningManager.restartScanning();
   };
 
   const handleRefreshWifi = () => {
-    void provisioningManager.requestDeviceWifiScan({ autoPopulateDemo: true });
+    provisioningManager.requestDeviceWifiScan();
   };
 
   const handleClearError = () => {
@@ -216,7 +210,10 @@ export function RobotPairSheet({
                 { backgroundColor: theme.buttonPrimaryBackground },
                 pressed && styles.doneButtonPressed,
               ]}
-              onPress={onClose}
+              onPress={() => {
+                void hydrateDevices();
+                onClose();
+              }}
               accessibilityRole="button"
               accessibilityLabel="Done"
               testID={`${testID}-done-button`}
@@ -309,7 +306,6 @@ export function RobotPairSheet({
 
                 <JoyTroubleshootingCard
                   onRescan={handleRescan}
-                  onSimulateDemo={handleSimulateDemo}
                   isScanning={session.isScanning}
                   testID={`${testID}-troubleshooting-card`}
                 />
@@ -320,54 +316,132 @@ export function RobotPairSheet({
               <View style={styles.stepStack} testID={`${testID}-confirm-step`}>
                 <CameraScanHero
                   title="Hold Touch to Confirm"
-                  subtitle="Hold your Joy's touch sensor for 2 seconds to prove physical presence."
+                  subtitle="Touch and hold your Joy's top capacitive sensor for 2 seconds to prove physical presence."
                   style={styles.fullWidth}
                 />
 
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.confirmButton,
-                    { backgroundColor: theme.buttonPrimaryBackground },
-                    pressed && { opacity: 0.8 },
+                <View
+                  style={[
+                    styles.emptyCard,
+                    {
+                      borderColor: theme.border,
+                      backgroundColor: theme.cardBackgroundSubtle ?? theme.cardBackground,
+                      paddingVertical: 24,
+                      gap: 12,
+                    },
                   ]}
-                  onPress={handleConfirmHold}
-                  disabled={isSubmitting}
-                  accessibilityRole="button"
-                  testID={`${testID}-confirm-hold-btn`}
+                  testID={`${testID}-waiting-touch-indicator`}
                 >
-                  {isSubmitting ? (
-                    <ActivityIndicator size="small" color={theme.buttonPrimaryText} />
-                  ) : (
-                    <Text style={[styles.confirmButtonText, { color: theme.buttonPrimaryText }]}>
-                      Simulate 2s Touch Hold
-                    </Text>
-                  )}
-                </Pressable>
+                  <ActivityIndicator size="small" color={theme.linkPrimary} />
+                  <Text style={[styles.emptyText, { color: theme.text, fontWeight: '600' }]}>
+                    Waiting for 2s touch on Joy Robot...
+                  </Text>
+                  <Text style={[styles.emptyText, { color: theme.textSecondary, textAlign: 'center', paddingHorizontal: 20 }]}>
+                    The physical robot will automatically verify and advance setup once touched.
+                  </Text>
+                </View>
               </View>
             ) : null}
 
             {activeStep === 'wifi' ? (
               <View style={styles.stepStack} testID={`${testID}-wifi-step`}>
                 <CameraScanHero
-                  title="Select Wi-Fi Network"
-                  subtitle="Choose your 2.4 GHz Wi-Fi network detected by Joy."
+                  title="Connect to Wi-Fi"
+                  subtitle="Enter your 2.4 GHz Wi-Fi network credentials for Joy."
                   style={styles.fullWidth}
                 />
 
                 {session.discoveredNetworks.length === 0 ? (
-                  <View
-                    style={[
-                      styles.emptyCard,
-                      {
-                        borderColor: theme.border,
-                        backgroundColor: theme.cardBackgroundSubtle ?? theme.cardBackground,
-                      },
-                    ]}
-                  >
-                    <ActivityIndicator size="small" color={theme.linkPrimary} />
-                    <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                      Joy is scanning for Wi-Fi networks...
-                    </Text>
+                  <View style={styles.wifiContainer}>
+                    <View
+                      style={[
+                        styles.passwordBox,
+                        {
+                          borderColor: theme.border,
+                          backgroundColor: theme.cardBackground,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.inputLabel, { color: theme.text }]}>
+                        Wi-Fi Network Credentials
+                      </Text>
+                      <TextInput
+                        style={[
+                          styles.textInput,
+                          {
+                            color: theme.text,
+                            borderColor: theme.border,
+                            backgroundColor: theme.cardBackgroundSubtle ?? theme.cardBackground,
+                            marginBottom: 12,
+                          },
+                        ]}
+                        placeholder="Wi-Fi Network Name (SSID)"
+                        placeholderTextColor={theme.textMuted}
+                        value={wifiSsid}
+                        onChangeText={setWifiSsid}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        testID={`${testID}-wifi-ssid-input`}
+                      />
+                      <View style={styles.inputWrapper}>
+                        <TextInput
+                          style={[
+                            styles.textInput,
+                            {
+                              color: theme.text,
+                              borderColor: theme.border,
+                              backgroundColor: theme.cardBackgroundSubtle ?? theme.cardBackground,
+                            },
+                          ]}
+                          placeholder="Wi-Fi Password"
+                          placeholderTextColor={theme.textMuted}
+                          secureTextEntry={!showPassword}
+                          value={wifiPassword}
+                          onChangeText={setWifiPassword}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          testID={`${testID}-wifi-manual-password-input`}
+                        />
+                        <Pressable
+                          style={styles.eyeButton}
+                          onPress={() => setShowPassword((prev) => !prev)}
+                          accessibilityRole="button"
+                          accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                          testID={`${testID}-toggle-manual-password-visibility`}
+                        >
+                          {showPassword ? (
+                            <EyeOff size={18} color={theme.textSecondary} />
+                          ) : (
+                            <Eye size={18} color={theme.textSecondary} />
+                          )}
+                        </Pressable>
+                      </View>
+
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.connectButton,
+                          {
+                            backgroundColor:
+                              wifiSsid.trim().length > 0
+                                ? theme.buttonPrimaryBackground
+                                : theme.border,
+                          },
+                          pressed && { opacity: 0.8 },
+                        ]}
+                        onPress={() => handleSubmitWifi(wifiSsid.trim())}
+                        disabled={isSubmitting || wifiSsid.trim().length === 0}
+                        accessibilityRole="button"
+                        testID={`${testID}-wifi-manual-connect-btn`}
+                      >
+                        {isSubmitting ? (
+                          <ActivityIndicator size="small" color={theme.buttonPrimaryText} />
+                        ) : (
+                          <Text style={[styles.connectButtonText, { color: theme.buttonPrimaryText }]}>
+                            Connect Joy
+                          </Text>
+                        )}
+                      </Pressable>
+                    </View>
                   </View>
                 ) : (
                   <View style={styles.wifiContainer}>
@@ -451,7 +525,7 @@ export function RobotPairSheet({
                             { backgroundColor: theme.buttonPrimaryBackground },
                             pressed && { opacity: 0.8 },
                           ]}
-                          onPress={handleSubmitWifi}
+                          onPress={() => handleSubmitWifi()}
                           disabled={isSubmitting}
                           accessibilityRole="button"
                           testID={`${testID}-wifi-connect-btn`}

@@ -2,6 +2,7 @@
 #include "network.h"
 #include "joy_identity.h"
 #include "joy_ble_provisioning.h"
+#include "api.h"
 
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -9,6 +10,7 @@
 #include "esp_netif_sntp.h"
 #include "nvs_flash.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <time.h>
@@ -17,6 +19,16 @@
 static const char *WIFI_TAG = "WIFI";
 
 static TaskHandle_t time_sync_task_handle = NULL;
+
+// Wi-Fi Remote Switch & Auto-Rollback Engine State
+static esp_timer_handle_t s_wifi_switch_timer = NULL;
+static char s_backup_ssid[33] = {0};
+static char s_backup_pass[65] = {0};
+static char s_target_ssid[33] = {0};
+static char s_target_pass[65] = {0};
+static char s_pending_config_id[64] = {0};
+static bool s_is_switching_wifi = false;
+static bool s_pending_rollback_report = false;
 
 static bool system_time_is_valid()
 {
@@ -37,6 +49,7 @@ static void sntp_time_sync_callback(struct timeval *tv)
     }
 }
 
+#if defined(NETIF_SNTP_EVENT) && defined(NETIF_SNTP_TIME_SYNC)
 static void sntp_event_handler(
     void *arg,
     esp_event_base_t event_base,
@@ -56,6 +69,7 @@ static void sntp_event_handler(
         }
     }
 }
+#endif
 
 static void time_sync_task(void *param)
 {
@@ -138,8 +152,6 @@ static void start_time_sync_after_ip()
     }
 }
 
-// Wi-Fi credentials loaded dynamically from NVS joy_runtime
-
 static const char *wifi_disconnect_reason_to_string(uint8_t reason)
 {
     switch (reason)
@@ -165,6 +177,35 @@ static const char *wifi_disconnect_reason_to_string(uint8_t reason)
         default:
             return "UNKNOWN";
     }
+}
+
+// Watchdog Timeout Callback (Connection to new SSID failed after 15 seconds)
+static void wifi_mgr_on_switch_timeout(void *arg)
+{
+    if (!s_is_switching_wifi) return;
+
+    ESP_LOGW(WIFI_TAG, "Connection to new Wi-Fi (\"%s\") timed out! Executing rollback to: \"%s\"",
+             s_target_ssid, s_backup_ssid);
+
+    s_is_switching_wifi = false;
+    s_pending_rollback_report = true;
+
+    // Revert config to backup
+    wifi_config_t revert_conf = {};
+    strncpy((char *)revert_conf.sta.ssid, s_backup_ssid, sizeof(revert_conf.sta.ssid) - 1);
+    strncpy((char *)revert_conf.sta.password, s_backup_pass, sizeof(revert_conf.sta.password) - 1);
+    revert_conf.sta.threshold.authmode = (strlen(s_backup_pass) > 0) ? WIFI_AUTH_WPA2_PSK : WIFI_AUTH_OPEN;
+
+    esp_wifi_disconnect();
+    esp_wifi_set_config(WIFI_IF_STA, &revert_conf);
+    esp_wifi_connect();
+}
+static void finalize_worker_task(void *param)
+{
+    ESP_LOGI(WIFI_TAG, "Finalize worker task started (stack: 8192 bytes)");
+    vTaskDelay(pdMS_TO_TICKS(500));
+    joy_ble_finalize_with_backend();
+    vTaskDelete(NULL);
 }
 
 static void event_handler(
@@ -194,7 +235,7 @@ static void event_handler(
     {
         network_set_wifi_connected(true);
         const joy_runtime_creds_t *rt = joy_runtime_get();
-        const char *ssid = (rt && rt->wifi_ssid[0]) ? rt->wifi_ssid : "(unknown)";
+        const char *ssid = s_is_switching_wifi ? s_target_ssid : ((rt && rt->wifi_ssid[0]) ? rt->wifi_ssid : "(unknown)");
         ESP_LOGI(WIFI_TAG, "Connected to AP \"%s\", waiting for IP...", ssid);
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
@@ -210,8 +251,7 @@ static void event_handler(
 
         if (reason == WIFI_REASON_NO_AP_FOUND)
         {
-            const joy_runtime_creds_t *rt = joy_runtime_get();
-            const char *ssid = (rt && rt->wifi_ssid[0]) ? rt->wifi_ssid : "(unknown)";
+            const char *ssid = s_is_switching_wifi ? s_target_ssid : "(current)";
             ESP_LOGW(WIFI_TAG, "No AP found for SSID \"%s\". Check SSID, 2.4 GHz visibility, range, or hidden AP settings.", ssid);
         }
 
@@ -229,11 +269,35 @@ static void event_handler(
         start_time_sync_after_ip();
         ESP_LOGI(WIFI_TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
 
+        // Get current RSSI
+        wifi_ap_record_t ap_info = {};
+        int rssi = -50;
+        if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
+            rssi = ap_info.rssi;
+        }
+
+        if (s_is_switching_wifi) {
+            if (s_wifi_switch_timer) {
+                esp_timer_stop(s_wifi_switch_timer);
+            }
+            s_is_switching_wifi = false;
+
+            ESP_LOGI(WIFI_TAG, "Successfully switched to new Wi-Fi (\"%s\")! Persisting to NVS...", s_target_ssid);
+            joy_runtime_save_wifi(s_target_ssid, s_target_pass);
+
+            // Report Success over WebSocket
+            api_ws_send_wifi_config_result(s_pending_config_id, "CONNECTED", rssi, NULL);
+        }
+        else if (s_pending_rollback_report) {
+            s_pending_rollback_report = false;
+            ESP_LOGI(WIFI_TAG, "Reconnected to previous Wi-Fi (\"%s\") after rollback. Sending ROLLED_BACK report...", s_backup_ssid);
+            api_ws_send_wifi_config_result(s_pending_config_id, "ROLLED_BACK", rssi, "CONNECT_TIMEOUT");
+        }
         const joy_runtime_creds_t *rt = joy_runtime_get();
         if (rt && rt->pending_finalize)
         {
-            ESP_LOGI(WIFI_TAG, "Triggering backend enrollment finalize after IP acquisition...");
-            joy_ble_finalize_with_backend();
+            ESP_LOGI(WIFI_TAG, "Spawning finalize background task after IP acquisition...");
+            xTaskCreate(finalize_worker_task, "ble_finalize", 8192, NULL, 5, NULL);
         }
     }
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_LOST_IP)
@@ -243,8 +307,7 @@ static void event_handler(
         ESP_LOGW(WIFI_TAG, "Lost IP address");
     }
 }
-
-void wifi_init()
+void wifi_init(void)
 {
     network_init();
 
@@ -273,7 +336,9 @@ void wifi_init()
 
     esp_event_handler_instance_t instance_any_id;
     esp_event_handler_instance_t instance_got_ip;
+#if defined(NETIF_SNTP_EVENT) && defined(NETIF_SNTP_TIME_SYNC)
     esp_event_handler_instance_t instance_sntp_sync;
+#endif
     ESP_ERROR_CHECK(
         esp_event_handler_instance_register(
             WIFI_EVENT,
@@ -288,6 +353,7 @@ void wifi_init()
             &event_handler,
             NULL,
             &instance_got_ip));
+#if defined(NETIF_SNTP_EVENT) && defined(NETIF_SNTP_TIME_SYNC)
     esp_err_t sntp_event_register_err = esp_event_handler_instance_register(
         NETIF_SNTP_EVENT,
         NETIF_SNTP_TIME_SYNC,
@@ -296,16 +362,25 @@ void wifi_init()
         &instance_sntp_sync);
     ESP_LOGI(WIFI_TAG, "SNTP event handler register return_code=%s(%d)",
              esp_err_to_name(sntp_event_register_err), (int)sntp_event_register_err);
+#endif
+
+    // Create 15s Wi-Fi switch rollback timer
+    esp_timer_create_args_t timer_args = {};
+    timer_args.callback = wifi_mgr_on_switch_timeout;
+    timer_args.name = "wifi_switch_tmr";
+    esp_timer_create(&timer_args, &s_wifi_switch_timer);
 
     joy_identity_init();
     const joy_runtime_creds_t *runtime = joy_runtime_get();
 
     wifi_config_t wifi_config = {};
+    wifi_config.sta.threshold.authmode = WIFI_AUTH_OPEN;
+    wifi_config.sta.pmf_cfg.capable = true;
+    wifi_config.sta.pmf_cfg.required = false;
     if (runtime && strlen(runtime->wifi_ssid) > 0)
     {
-        strncpy((char*)wifi_config.sta.ssid, runtime->wifi_ssid, sizeof(wifi_config.sta.ssid));
-        strncpy((char*)wifi_config.sta.password, runtime->wifi_password, sizeof(wifi_config.sta.password));
-        wifi_config.sta.threshold.authmode = (strlen(runtime->wifi_password) > 0) ? WIFI_AUTH_WPA2_PSK : WIFI_AUTH_OPEN;
+        strncpy((char*)wifi_config.sta.ssid, runtime->wifi_ssid, sizeof(wifi_config.sta.ssid) - 1);
+        strncpy((char*)wifi_config.sta.password, runtime->wifi_password, sizeof(wifi_config.sta.password) - 1);
         ESP_LOGI(WIFI_TAG, "WiFi config loaded from NVS: ssid=\"%s\"", (const char*)wifi_config.sta.ssid);
     }
     else
@@ -320,4 +395,90 @@ void wifi_init()
     ESP_ERROR_CHECK(esp_wifi_start());
 
     ESP_LOGI(WIFI_TAG, "WiFi initialization complete. Waiting for STA_START event...");
+}
+
+void wifi_connect_to_ap(const char *ssid, const char *password)
+{
+    if (!ssid || strlen(ssid) == 0) return;
+
+    ESP_LOGI(WIFI_TAG, "Configuring WiFi STA for SSID \"%s\"...", ssid);
+
+    joy_runtime_save_wifi(ssid, password ? password : "");
+
+    wifi_config_t conf = {};
+    strncpy((char *)conf.sta.ssid, ssid, sizeof(conf.sta.ssid) - 1);
+    if (password && strlen(password) > 0) {
+        strncpy((char *)conf.sta.password, password, sizeof(conf.sta.password) - 1);
+    }
+    conf.sta.threshold.authmode = WIFI_AUTH_OPEN;
+    conf.sta.pmf_cfg.capable = true;
+    conf.sta.pmf_cfg.required = false;
+
+    esp_wifi_disconnect();
+    esp_wifi_set_config(WIFI_IF_STA, &conf);
+    esp_wifi_connect();
+}
+
+void wifi_mgr_handle_remote_config(const char *config_id, const char *ssid, const char *password)
+{
+    if (!config_id || !ssid) return;
+
+    ESP_LOGI(WIFI_TAG, "Received remote Wi-Fi change request: config_id=%s, new_ssid=%s", config_id, ssid);
+
+    strncpy(s_pending_config_id, config_id, sizeof(s_pending_config_id) - 1);
+    s_pending_config_id[sizeof(s_pending_config_id) - 1] = '\0';
+
+    strncpy(s_target_ssid, ssid, sizeof(s_target_ssid) - 1);
+    s_target_ssid[sizeof(s_target_ssid) - 1] = '\0';
+
+    if (password) {
+        strncpy(s_target_pass, password, sizeof(s_target_pass) - 1);
+        s_target_pass[sizeof(s_target_pass) - 1] = '\0';
+    } else {
+        s_target_pass[0] = '\0';
+    }
+
+    // 1. Send immediate ACK over WebSocket
+    api_ws_send_wifi_config_received(config_id);
+
+    // 2. Backup current operational credentials
+    wifi_config_t current_conf = {};
+    if (esp_wifi_get_config(WIFI_IF_STA, &current_conf) == ESP_OK) {
+        strncpy(s_backup_ssid, (char *)current_conf.sta.ssid, sizeof(s_backup_ssid) - 1);
+        strncpy(s_backup_pass, (char *)current_conf.sta.password, sizeof(s_backup_pass) - 1);
+    } else {
+        const joy_runtime_creds_t *rt = joy_runtime_get();
+        if (rt) {
+            strncpy(s_backup_ssid, rt->wifi_ssid, sizeof(s_backup_ssid) - 1);
+            strncpy(s_backup_pass, rt->wifi_password, sizeof(s_backup_pass) - 1);
+        }
+    }
+
+    s_is_switching_wifi = true;
+    s_pending_rollback_report = false;
+
+    // 3. Disconnect & Attempt connection to new SSID
+    esp_wifi_disconnect();
+
+    wifi_config_t new_conf = {};
+    strncpy((char *)new_conf.sta.ssid, s_target_ssid, sizeof(new_conf.sta.ssid) - 1);
+    if (strlen(s_target_pass) > 0) {
+        strncpy((char *)new_conf.sta.password, s_target_pass, sizeof(new_conf.sta.password) - 1);
+    }
+    new_conf.sta.threshold.authmode = WIFI_AUTH_OPEN;
+    new_conf.sta.pmf_cfg.capable = true;
+    new_conf.sta.pmf_cfg.required = false;
+    esp_wifi_set_config(WIFI_IF_STA, &new_conf);
+    esp_wifi_connect();
+
+    // 4. Start 15-second connection watchdog timer
+    if (s_wifi_switch_timer) {
+        esp_timer_stop(s_wifi_switch_timer);
+        esp_timer_start_once(s_wifi_switch_timer, 15000000); // 15 seconds in microseconds
+    }
+}
+
+bool wifi_mgr_is_switching(void)
+{
+    return s_is_switching_wifi;
 }

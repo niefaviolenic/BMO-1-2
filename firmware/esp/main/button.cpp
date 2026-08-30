@@ -7,7 +7,18 @@
 #include "joy_identity.h"
 #include "state.h"
 #include "driver/gpio.h"
+#if __has_include("driver/touch_sensor_legacy.h")
 #include "driver/touch_sensor_legacy.h"
+#define JOY_HAS_TOUCH_PAD 1
+#elif __has_include("driver/touch_pad.h")
+#include "driver/touch_pad.h"
+#define JOY_HAS_TOUCH_PAD 1
+#elif __has_include("driver/touch_sensor.h")
+#include "driver/touch_sensor.h"
+#define JOY_HAS_TOUCH_PAD 1
+#else
+#define JOY_HAS_TOUCH_PAD 0
+#endif
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -18,11 +29,11 @@
 // Touch + volume input pins.
 //--------------------------------------------------
 
+#define BTN_BOOT       GPIO_NUM_0
 #define TOUCH_PIN      GPIO_NUM_14
 #define BTN_VOL_UP    GPIO_NUM_15
 #define BTN_VOL_DOWN  GPIO_NUM_16
 #define BTN_EXPRESSION GPIO_NUM_17
-
 #define VOLUME_STEP 5
 #define BUTTON_DEBOUNCE_US 30000LL
 #define TOUCH_DEBOUNCE_US 30000LL
@@ -61,7 +72,9 @@ static bool touch_factory_reset_triggered = false;
 // GPIO14 is an ESP32-S3 native touch channel. The previous implementation
 // treated it only as a digital input, which cannot detect a bare capacitive
 // pad. Keep the digital fallback if native touch setup is unavailable.
+#if JOY_HAS_TOUCH_PAD
 static constexpr touch_pad_t TOUCH_CHANNEL = TOUCH_PAD_NUM14;
+#endif
 static bool native_touch_enabled = false;
 static bool native_touch_level = false;
 static bool native_touch_baseline_ready = false;
@@ -73,98 +86,89 @@ static int native_touch_calibration_samples = 0;
 
 static bool native_touch_init()
 {
+#if JOY_HAS_TOUCH_PAD
     if(touch_pad_init() != ESP_OK)
         return false;
 
-    if(touch_pad_set_fsm_mode(TOUCH_FSM_MODE_SW) != ESP_OK ||
-       touch_pad_set_voltage(
-           TOUCH_HVOLT_2V7,
-           TOUCH_LVOLT_0V5,
-           TOUCH_HVOLT_ATTEN_0V5) != ESP_OK ||
-       touch_pad_set_idle_channel_connect(TOUCH_PAD_CONN_HIGHZ) != ESP_OK ||
-       touch_pad_set_charge_discharge_times(500) != ESP_OK ||
-       touch_pad_set_measurement_interval(0x0f) != ESP_OK ||
-       touch_pad_set_cnt_mode(
-           TOUCH_CHANNEL,
-           TOUCH_PAD_SLOPE_7,
-           TOUCH_PAD_TIE_OPT_FLOAT) != ESP_OK ||
-       touch_pad_config(TOUCH_CHANNEL) != ESP_OK ||
-       touch_pad_set_channel_mask(1U << TOUCH_CHANNEL) != ESP_OK)
+    if(touch_pad_config(TOUCH_CHANNEL) != ESP_OK ||
+       touch_pad_set_voltage(TOUCH_PAD_HIGH_VOLTAGE_THRESHOLD, TOUCH_PAD_LOW_VOLTAGE_THRESHOLD, TOUCH_PAD_ATTEN_VOLTAGE_THRESHOLD) != ESP_OK ||
+       touch_pad_set_cnt_mode(TOUCH_CHANNEL, TOUCH_PAD_SLOPE_7, TOUCH_PAD_TIE_OPT_LOW) != ESP_OK ||
+       touch_pad_set_fsm_mode(TOUCH_FSM_MODE_TIMER) != ESP_OK ||
+       touch_pad_fsm_start() != ESP_OK)
     {
         (void)touch_pad_deinit();
         return false;
     }
-
     native_touch_enabled = true;
     native_touch_level = false;
     native_touch_baseline_ready = false;
     native_touch_raw = 0;
     native_touch_baseline = 0;
-    native_touch_threshold = 0;
+    native_touch_threshold = 2500;
     native_touch_calibration_sum = 0;
     native_touch_calibration_samples = 0;
-
-    return touch_pad_sw_start() == ESP_OK;
+    ESP_LOGI(TAG, "Native touch sensor initialized in timer FSM mode with filter on GPIO14 (T%d)", TOUCH_CHANNEL);
+    return true;
+#else
+    return false;
+#endif
 }
 
 static bool native_touch_update()
 {
-    if(!native_touch_enabled || !touch_pad_meas_is_done())
-        return native_touch_level;
+#if JOY_HAS_TOUCH_PAD
+    if(!native_touch_enabled)
+        return false;
 
-    uint32_t raw = 0;
-    if(touch_pad_read_raw_data(TOUCH_CHANNEL, &raw) != ESP_OK)
-        return native_touch_level;
+    uint32_t val = 0;
+    if(touch_pad_filter_read_smooth(TOUCH_CHANNEL, &val) != ESP_OK)
+    {
+        if(touch_pad_read_raw_data(TOUCH_CHANNEL, &val) != ESP_OK)
+            return false;
+    }
 
-    native_touch_raw = raw;
-
+    native_touch_raw = val;
     if(!native_touch_baseline_ready)
     {
-        native_touch_calibration_sum += raw;
+        native_touch_calibration_sum += val;
         native_touch_calibration_samples++;
-
-        if(native_touch_calibration_samples >= 16)
+        if(native_touch_calibration_samples >= 32)
         {
-            native_touch_baseline = static_cast<uint32_t>(
-                native_touch_calibration_sum /
-                static_cast<uint64_t>(native_touch_calibration_samples));
-            native_touch_threshold = native_touch_baseline / 20U;
-            if(native_touch_threshold < 100U)
-                native_touch_threshold = 100U;
+            native_touch_baseline = (uint32_t)(native_touch_calibration_sum / 32ULL);
+            native_touch_threshold = 2500U;
             native_touch_baseline_ready = true;
-
-            ESP_LOGI(
-                TAG,
-                "Native touch calibrated: baseline=%lu threshold=%lu",
-                (unsigned long)native_touch_baseline,
-                (unsigned long)native_touch_threshold);
+            ESP_LOGI(TAG, "Native touch calibrated: baseline=%lu delta_thresh=%lu",
+                     (unsigned long)native_touch_baseline,
+                     (unsigned long)native_touch_threshold);
         }
+        return false;
+    }
+
+    uint32_t delta = (val > native_touch_baseline) ? (val - native_touch_baseline) : (native_touch_baseline - val);
+
+    if (delta >= native_touch_threshold)
+    {
+        native_touch_level = true;
+        // Never adjust baseline while pressed
     }
     else
     {
-        const uint32_t delta = raw >= native_touch_baseline ?
-            raw - native_touch_baseline :
-            native_touch_baseline - raw;
-        native_touch_level = delta >= native_touch_threshold;
-
-        // Track slow environmental drift only while the pad is released.
-        if(!native_touch_level)
-        {
-            native_touch_baseline =
-                (native_touch_baseline * 99U + raw) / 100U;
-        }
+        native_touch_level = false;
+        // Very slow baseline tracking when untouched (over 256 samples)
+        native_touch_baseline = (native_touch_baseline * 255U + val) / 256U;
     }
 
-    (void)touch_pad_sw_start();
     return native_touch_level;
+#else
+    return false;
+#endif
 }
-
 static bool read_touch_level()
 {
-    if(native_touch_enabled)
+    if(native_touch_enabled) {
         return native_touch_update();
-
-    return gpio_get_level(TOUCH_PIN) == 1;
+    }
+    return (gpio_get_level(TOUCH_PIN) == 1);
 }
 
 static bool update_debounced_button(
@@ -238,10 +242,10 @@ void button_init()
     gpio_config_t button_config = {};
 
     button_config.pin_bit_mask =
+        (1ULL << BTN_BOOT) |
         (1ULL << BTN_VOL_UP) |
         (1ULL << BTN_VOL_DOWN) |
         (1ULL << BTN_EXPRESSION);
-
     button_config.mode = GPIO_MODE_INPUT;
     button_config.pull_up_en = GPIO_PULLUP_ENABLE;
     button_config.pull_down_en = GPIO_PULLDOWN_DISABLE;
@@ -307,87 +311,141 @@ void button_update()
 {
     int64_t now = esp_timer_get_time();
 
-    if(update_debounced_button(BTN_VOL_UP, volume_up_state, now))
-    {
-        audio_adjustVolume(VOLUME_STEP);
-
-        ESP_LOGI(
-            TAG,
-            "Volume up: %d",
-            audio_getVolume());
+    // Diagnostic live log every 1s showing exact GPIO readings
+    static int64_t last_pin_diag_us = 0;
+    if (now - last_pin_diag_us >= 1000000LL) {
+        last_pin_diag_us = now;
+        ESP_LOGI(TAG, "Pins: expr(17)=%d boot(0)=%d vol_up(15)=%d vol_dn(16)=%d touch_raw=%lu",
+                 gpio_get_level(BTN_EXPRESSION),
+                 gpio_get_level(BTN_BOOT),
+                 gpio_get_level(BTN_VOL_UP),
+                 gpio_get_level(BTN_VOL_DOWN),
+                 (unsigned long)native_touch_raw);
     }
 
-    if(update_debounced_button(BTN_VOL_DOWN, volume_down_state, now))
-    {
-        audio_adjustVolume(-VOLUME_STEP);
+    enum class BtnKind { NONE, EXPR, BOOT, VOL_UP, VOL_DOWN };
+    static BtnKind s_debounced_btn = BtnKind::NONE;
+    static BtnKind s_cand_btn = BtnKind::NONE;
+    static int64_t s_cand_since_us = 0;
+    static BtnKind s_held_btn = BtnKind::NONE;
+    static int64_t s_press_start_us = 0;
+    static bool s_hold_2s_triggered = false;
+    static bool s_hold_5s_triggered = false;
+    static int64_t s_last_hold_log_us = 0;
 
-        ESP_LOGI(
-            TAG,
-            "Volume down: %d",
-            audio_getVolume());
+    const bool expr_down = (gpio_get_level(BTN_EXPRESSION) == 0);
+    const bool boot_down = (gpio_get_level(BTN_BOOT) == 0);
+    const bool vol_up_down = (gpio_get_level(BTN_VOL_UP) == 0);
+    const bool vol_dn_down = (gpio_get_level(BTN_VOL_DOWN) == 0);
+
+    BtnKind active_raw = BtnKind::NONE;
+    if (expr_down) active_raw = BtnKind::EXPR;
+    else if (boot_down) active_raw = BtnKind::BOOT;
+    else if (vol_dn_down) active_raw = BtnKind::VOL_DOWN;
+    else if (vol_up_down) active_raw = BtnKind::VOL_UP;
+
+    if (active_raw != s_cand_btn) {
+        s_cand_btn = active_raw;
+        s_cand_since_us = now;
     }
 
-    const bool expression_button_pressed =
-        gpio_get_level(BTN_EXPRESSION) == 0;
+    // Debounce: 20ms for press, 150ms for release to filter microswitch chatter
+    int64_t debounce_limit_us = (s_cand_btn == BtnKind::NONE) ? 150000LL : 20000LL;
 
-    if(expression_button_pressed != expression_button_candidate_pressed)
-    {
-        expression_button_candidate_pressed = expression_button_pressed;
-        expression_button_candidate_since_us = now;
-    }
+    if (s_cand_btn != s_debounced_btn && (now - s_cand_since_us >= debounce_limit_us)) {
+        s_debounced_btn = s_cand_btn;
 
-    if(expression_button_candidate_pressed != expression_button_stable_pressed &&
-       now - expression_button_candidate_since_us >= BUTTON_DEBOUNCE_US)
-    {
-        expression_button_stable_pressed = expression_button_candidate_pressed;
+        if (s_debounced_btn != BtnKind::NONE) {
+            // Button just pressed DOWN
+            s_held_btn = s_debounced_btn;
+            s_press_start_us = now;
+            s_hold_2s_triggered = false;
+            s_hold_5s_triggered = false;
+            s_last_hold_log_us = now;
 
-        if(expression_button_stable_pressed)
-        {
-            if(getState() == JoyState::IDLE)
-            {
-                if(display_pairing_code_is_visible() ||
-                   display_qr_code_is_visible() ||
-                   pairing_get_snapshot().phase != PairingPhase::NONE)
-                {
-                    ESP_LOGW(
-                        TAG,
-                        "Expression button rejected: pairing or QR display active");
+            const char *btn_name = (s_held_btn == BtnKind::EXPR) ? "EXPRESSION" :
+                                   (s_held_btn == BtnKind::BOOT) ? "BOOT" :
+                                   (s_held_btn == BtnKind::VOL_DOWN) ? "VOL_DOWN" : "VOL_UP";
+            ESP_LOGI(TAG, "Button pressed: %s (hold 2s for verify, hold 5s for pairing)", btn_name);
+        } else {
+            // Button RELEASED
+            const int64_t duration_us = (s_press_start_us > 0) ? (now - s_press_start_us) : 0;
+            BtnKind released_btn = s_held_btn;
+            s_held_btn = BtnKind::NONE;
+            s_press_start_us = 0;
+
+            if (s_hold_5s_triggered || s_hold_2s_triggered) {
+                ESP_LOGI(TAG, "Button released after hold action completed");
+            } else if (duration_us < 2000000LL) {
+                // Short click:
+                if (released_btn == BtnKind::EXPR || released_btn == BtnKind::BOOT) {
+                    if (getState() == JoyState::IDLE) {
+                        const Face next_face = display_next_touch_face();
+                        ESP_LOGI(TAG, "Expression button click -> switched to face=%d", (int)next_face);
+                        audio_triggerExpressionAudio((int)next_face);
+                    } else {
+                        ESP_LOGW(TAG, "Expression button ignored: state=%s (not IDLE)", joy_state_name(getState()));
+                    }
+                } else if (released_btn == BtnKind::VOL_UP) {
+                    audio_adjustVolume(VOLUME_STEP);
+                    ESP_LOGI(TAG, "Volume up: %d", audio_getVolume());
+                } else if (released_btn == BtnKind::VOL_DOWN) {
+                    audio_adjustVolume(-VOLUME_STEP);
+                    ESP_LOGI(TAG, "Volume down: %d", audio_getVolume());
                 }
-                else
-                {
-                    const Face next_face = display_next_touch_face();
-                    ESP_LOGI(
-                        TAG,
-                        "Expression button: selected face=%d; playing local expression audio",
-                        (int)next_face);
-                    audio_triggerExpressionAudio((int)next_face);
-                }
-            }
-            else
-            {
-                ESP_LOGW(
-                    TAG,
-                    "Expression button rejected: state=%s (not IDLE)",
-                    joy_state_name(getState()));
             }
         }
     }
+    // While ANY button is being held:
+    if (s_debounced_btn != BtnKind::NONE && s_press_start_us > 0) {
+        const int64_t hold_us = now - s_press_start_us;
 
+        if (now - s_last_hold_log_us >= 500000LL) {
+            s_last_hold_log_us = now;
+            ESP_LOGI(TAG, "Button holding: %lld ms / 2000 ms (BLE state: %s)",
+                     (long long)(hold_us / 1000LL),
+                     (joy_ble_get_state() == JoyBleState::PHYSICAL_CONFIRM_PENDING) ? "PHYSICAL_CONFIRM_PENDING" :
+                     joy_ble_is_active() ? "BLE_ACTIVE" : "IDLE");
+        }
+
+        // 2-second hold for physical confirmation (Step 2 of pairing):
+        if (joy_ble_get_state() == JoyBleState::PHYSICAL_CONFIRM_PENDING &&
+            hold_us >= 2000000LL && !s_hold_2s_triggered) {
+            s_hold_2s_triggered = true;
+            joy_ble_on_physical_hold_2s();
+            display_set_idle_face(FACE_HAPPY);
+            ESP_LOGI(TAG, "=======================================================");
+            ESP_LOGI(TAG, ">>> PHYSICAL PROOF 2S HOLD CONFIRMED & SENT VIA BLE! <<<");
+            ESP_LOGI(TAG, "=======================================================");
+        }
+
+        // 5-second hold for BLE pairing window reset:
+        if (hold_us >= 5000000LL && !s_hold_5s_triggered) {
+            s_hold_5s_triggered = true;
+            ESP_LOGI(TAG, ">>> 5-SECOND HOLD DETECTED! Opening BLE Pairing Window! <<<");
+            joy_identity_increment_reset_epoch(nullptr);
+            joy_runtime_clear_provisioning();
+            joy_ble_start_pairing_window();
+        }
+    }
     const bool touch_level = read_touch_level();
 
     if(now - last_touch_diag_us >= 2000000LL)
     {
         last_touch_diag_us = now;
+        long delta = (long)((native_touch_raw > native_touch_baseline) ? (native_touch_raw - native_touch_baseline) : (native_touch_baseline - native_touch_raw));
         ESP_LOGI(
             TAG,
-            "Touch sample: raw=%d candidate=%d stable=%d lifecycle=%s state=%s",
+            "Touch sample: val=%lu base=%lu delta=%ld thresh=%lu level=%d cand=%d stable=%d state=%s",
+            (unsigned long)native_touch_raw,
+            (unsigned long)native_touch_baseline,
+            delta,
+            (unsigned long)native_touch_threshold,
             touch_level ? 1 : 0,
             touch_candidate_level ? 1 : 0,
             touch_stable_level ? 1 : 0,
-            touch_lifecycle_name(touch_state),
             joy_state_name(getState()));
     }
-
     if(touch_level != touch_candidate_level)
     {
         const bool previous_level = touch_candidate_level;
@@ -433,47 +491,21 @@ void button_update()
             {
                 if(getState() == JoyState::IDLE)
                 {
-                    display_set_idle_face(FACE_HAPPY);
-                    audio_triggerReadyAudio();
-                    ESP_LOGI(TAG, "Short touch accepted: idle HAPPY face rendered with local ready audio");
+                    const Face next_face = display_next_touch_face();
+                    ESP_LOGI(TAG, "Touch interaction -> switched to face=%d", (int)next_face);
+                    audio_triggerExpressionAudio((int)next_face);
                 }
                 else
                 {
                     ESP_LOGW(TAG, "Short touch rejected: state=%s (not IDLE)", joy_state_name(getState()));
                 }
             }
-            else if (duration_us >= 5000000LL && duration_us < 30000000LL)
+            else
             {
-                ESP_LOGI(TAG, "PAIRING_RESET triggered by 5s hold release! Opening 5-min BLE window");
-                joy_identity_increment_reset_epoch(nullptr);
-                joy_runtime_clear_provisioning();
-                joy_ble_start_pairing_window();
+                ESP_LOGI(TAG, "Touch released after %lld ms", (long long)(duration_us / 1000LL));
             }
             touch_press_start_us = 0;
         }
     }
 
-    // While held down, check for physical confirmation (>=2s) or factory reset (>=30s)
-    if (touch_stable_level && touch_press_start_us > 0)
-    {
-        const int64_t hold_duration_us = now - touch_press_start_us;
-
-        if (joy_ble_get_state() == JoyBleState::PHYSICAL_CONFIRM_PENDING &&
-            hold_duration_us >= 2000000LL && !touch_physical_confirm_triggered)
-        {
-            touch_physical_confirm_triggered = true;
-            joy_ble_on_physical_hold_2s();
-            display_set_idle_face(FACE_HAPPY);
-            ESP_LOGI(TAG, "2-second hold triggered physical confirmation!");
-        }
-
-        if (hold_duration_us >= 30000000LL && !touch_factory_reset_triggered)
-        {
-            touch_factory_reset_triggered = true;
-            joy_identity_increment_reset_epoch(nullptr);
-            joy_runtime_clear_provisioning();
-            joy_ble_start_pairing_window();
-            ESP_LOGI(TAG, "FACTORY_RESET triggered by continuous 30-second touch hold!");
-        }
-    }
 }

@@ -847,10 +847,11 @@ void wakeword_init()
 
     ESP_LOGI(
         TAG,
-        "WakeNet model: %s",
-        model_name);
-
-    if(wake_words != NULL)
+        "WakeNet model: %s (Free Internal Heap: %lu bytes, Free SPIRAM: %lu bytes)",
+        model_name,
+        (unsigned long)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+        (unsigned long)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+    if (wake_words != NULL)
     {
         ESP_LOGI(
             TAG,
@@ -860,7 +861,6 @@ void wakeword_init()
         free(
             wake_words);
     }
-
     wakenet =
         esp_wn_handle_from_name(
             model_name);
@@ -871,6 +871,12 @@ void wakeword_init()
             TAG,
             "WakeNet handle failed");
 
+        return;
+    }
+    size_t free_spiram = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    if (free_spiram < 200000) {
+        ESP_LOGE(TAG, "Insufficient SPIRAM for WakeNet (%lu bytes available, >=200KB required). Wakeword disabled safely to prevent crash.",
+                 (unsigned long)free_spiram);
         return;
     }
 

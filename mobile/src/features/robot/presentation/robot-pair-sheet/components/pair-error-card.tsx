@@ -28,14 +28,15 @@ export function PairErrorCard({
   testID = 'pair-error-card',
 }: PairErrorCardProps) {
   const theme = useTheme();
+  const errorColor = theme.badgeBackground || '#FF3B30';
 
   return (
     <View
       style={[
         styles.card,
         {
-          backgroundColor: `${theme.statusError ?? '#FF3B30'}12`,
-          borderColor: `${theme.statusError ?? '#FF3B30'}30`,
+          backgroundColor: `${errorColor}12`,
+          borderColor: `${errorColor}30`,
         },
         style,
       ]}
@@ -43,10 +44,10 @@ export function PairErrorCard({
       accessibilityRole="alert"
     >
       <View style={styles.contentRow}>
-        <AlertCircle size={18} color={theme.statusError ?? '#FF3B30'} />
+        <AlertCircle size={18} color={errorColor} />
         <View style={styles.textContainer}>
           <Text
-            style={[styles.errorText, { color: theme.statusError ?? '#FF3B30' }]}
+            style={[styles.errorText, { color: errorColor }]}
             testID={`${testID}-message`}
           >
             {message}
@@ -60,7 +61,7 @@ export function PairErrorCard({
             accessibilityLabel="Dismiss error notification"
             testID={`${testID}-dismiss-btn`}
           >
-            <X size={16} color={theme.statusError ?? '#FF3B30'} />
+            <X size={16} color={errorColor} />
           </Pressable>
         ) : null}
       </View>
@@ -70,8 +71,8 @@ export function PairErrorCard({
           style={({ pressed }) => [
             styles.retryButton,
             {
-              backgroundColor: `${theme.statusError ?? '#FF3B30'}20`,
-              borderColor: `${theme.statusError ?? '#FF3B30'}40`,
+              backgroundColor: `${errorColor}20`,
+              borderColor: `${errorColor}40`,
             },
             pressed && { opacity: 0.7 },
           ]}
@@ -80,9 +81,9 @@ export function PairErrorCard({
           accessibilityLabel="Try again"
           testID={`${testID}-retry-btn`}
         >
-          <RefreshCw size={12} color={theme.statusError ?? '#FF3B30'} />
+          <RefreshCw size={12} color={errorColor} />
           <Text
-            style={[styles.retryText, { color: theme.statusError ?? '#FF3B30' }]}
+            style={[styles.retryText, { color: errorColor }]}
           >
             Try Again
           </Text>

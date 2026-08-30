@@ -22,6 +22,61 @@ void joy_crypto_base64url_encode(const uint8_t *src, size_t src_len, char *dst, 
     }
 }
 
+void joy_crypto_raw_hmac(
+    const uint8_t *key,
+    size_t key_len,
+    const char **fields,
+    size_t field_count,
+    uint8_t *out_bytes,
+    size_t out_len)
+{
+    const mbedtls_md_info_t *info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    if (!info || out_bytes == nullptr || out_len == 0) return;
+
+    uint8_t k_pad[64] = {0};
+    if (key_len > 64) {
+        mbedtls_md(info, key, key_len, k_pad);
+    } else {
+        memcpy(k_pad, key, key_len);
+    }
+
+    uint8_t k_ipad[64];
+    uint8_t k_opad[64];
+    for (int i = 0; i < 64; i++) {
+        k_ipad[i] = k_pad[i] ^ 0x36;
+        k_opad[i] = k_pad[i] ^ 0x5c;
+    }
+
+    uint8_t inner_hash[32] = {0};
+    mbedtls_md_context_t ctx;
+    mbedtls_md_init(&ctx);
+    mbedtls_md_setup(&ctx, info, 0);
+    mbedtls_md_starts(&ctx);
+    mbedtls_md_update(&ctx, k_ipad, 64);
+    for (size_t i = 0; i < field_count; i++) {
+        if (i > 0) {
+            mbedtls_md_update(&ctx, reinterpret_cast<const unsigned char *>("\n"), 1);
+        }
+        if (fields[i] != nullptr) {
+            mbedtls_md_update(&ctx, reinterpret_cast<const unsigned char *>(fields[i]), strlen(fields[i]));
+        }
+    }
+    mbedtls_md_finish(&ctx, inner_hash);
+    mbedtls_md_free(&ctx);
+
+    uint8_t hmac_res[32] = {0};
+    mbedtls_md_init(&ctx);
+    mbedtls_md_setup(&ctx, info, 0);
+    mbedtls_md_starts(&ctx);
+    mbedtls_md_update(&ctx, k_opad, 64);
+    mbedtls_md_update(&ctx, inner_hash, 32);
+    mbedtls_md_finish(&ctx, hmac_res);
+    mbedtls_md_free(&ctx);
+
+    size_t copy_len = out_len < 32 ? out_len : 32;
+    memcpy(out_bytes, hmac_res, copy_len);
+}
+
 void joy_crypto_canonical_hmac(
     const uint8_t *key,
     size_t key_len,

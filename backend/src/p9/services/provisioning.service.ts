@@ -19,14 +19,29 @@ import {
 } from "../crypto/provisioning-crypto.js";
 import type { MobileEventPublisher } from "./chat.service.js";
 
+export function deriveDevHardwareSecrets(hardwareId: string, provisioningRef: string): {
+  rootSecret: Buffer;
+  mfgSecret: Buffer;
+} {
+  const rootSecret = crypto
+    .createHmac("sha256", "joy-dev-root-secret-v1")
+    .update(["joy-dev-v1", hardwareId, provisioningRef.toUpperCase()].join("\n"), "utf8")
+    .digest();
+  const mfgSecret = crypto
+    .createHmac("sha256", "joy-dev-mfg-secret-v1")
+    .update(["joy-dev-v1", hardwareId, provisioningRef.toUpperCase()].join("\n"), "utf8")
+    .digest();
+  return { rootSecret, mfgSecret };
+}
+
 const PREPARE_TTL_MS = 60_000; // 60 seconds
 const RESERVATION_TTL_MS = 300_000; // 5 minutes
 const FINALIZE_TTL_MS = 86_400_000; // 24 hours
-
 export interface ProvisioningServiceOptions {
   client: PrismaClient;
   masterKey: Buffer;
   mobileEvents?: MobileEventPublisher | undefined;
+  allowDevAutoEnroll?: boolean;
 }
 
 export class ProvisioningService {
@@ -34,13 +49,14 @@ export class ProvisioningService {
   private readonly repositories: P9Repositories;
   private readonly masterKey: Buffer;
   private readonly mobileEvents: MobileEventPublisher | undefined;
+  private readonly allowDevAutoEnroll: boolean;
   constructor(options: ProvisioningServiceOptions) {
     this.client = options.client;
     this.repositories = new P9Repositories(options.client);
     this.masterKey = options.masterKey;
     this.mobileEvents = options.mobileEvents;
+    this.allowDevAutoEnroll = options.allowDevAutoEnroll ?? false;
   }
-
   async registerHardwareIdentity(input: {
     hardwareId: string;
     provisioningRef: string;
@@ -106,14 +122,27 @@ export class ProvisioningService {
       reset_epoch: number;
     },
   ): Promise<{ session_id: string; challenge: string; expires_at: string }> {
-    const hardware = await this.repositories.hardwareIdentity.findUnique({
+    let hardware = await this.repositories.hardwareIdentity.findUnique({
       where: { hardwareId: input.hardware_id },
     });
+
+    if (!hardware && this.allowDevAutoEnroll) {
+      const devSecrets = deriveDevHardwareSecrets(input.hardware_id, input.provisioning_ref);
+      await this.registerHardwareIdentity({
+        hardwareId: input.hardware_id,
+        provisioningRef: input.provisioning_ref.toUpperCase(),
+        manufacturingSecret: devSecrets.mfgSecret,
+        provisioningRootSecret: devSecrets.rootSecret,
+        resetEpoch: input.reset_epoch,
+      });
+      hardware = await this.repositories.hardwareIdentity.findUnique({
+        where: { hardwareId: input.hardware_id },
+      });
+    }
 
     if (!hardware || hardware.provisioningRef !== input.provisioning_ref.toUpperCase()) {
       throw new P9Error("HARDWARE_NOT_FOUND", 404, "Device hardware identity not found");
     }
-
     if (input.reset_epoch < hardware.resetEpoch) {
       throw new P9Error("RESET_EPOCH_STALE", 409, "Device reset epoch is stale");
     }
@@ -221,8 +250,8 @@ export class ProvisioningService {
         this.masterKey,
         `joy_hardware_identity:provisioning_root:${hardware.hardwareId}`,
       );
-
       // Verify physical confirmation proof
+      // Strictly verify physical confirmation proof against registered root secret
       const validProof = verifyPhysicalConfirmProof(rootSecret, {
         hardwareId: hardware.hardwareId,
         provisioningRef: hardware.provisioningRef,
@@ -237,12 +266,10 @@ export class ProvisioningService {
       if (!validProof) {
         throw new P9Error("PHYSICAL_CONFIRM_INVALID", 401, "Invalid physical confirmation proof");
       }
-
       // Reconcile epoch
       if (input.confirmation.reset_epoch < hardware.resetEpoch) {
         throw new P9Error("RESET_EPOCH_STALE", 409, "Reset epoch is stale");
       }
-
       if (input.confirmation.reset_epoch > hardware.resetEpoch) {
         // Newer epoch observed -> update hardware epoch and revoke old active binding
         await repos.hardwareIdentity.update({
@@ -314,7 +341,6 @@ export class ProvisioningService {
         sessionId: session.id,
         reservationId,
       });
-
       await repos.deviceProvisioningSession.update({
         where: { id: session.id },
         data: {

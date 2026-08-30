@@ -159,6 +159,7 @@ export function createP9Runtime(config: P9Config, options: P9RuntimeOptions = {}
     client,
     masterKey,
     mobileEvents: options.mobileEvents ?? noMobileEvents,
+    allowDevAutoEnroll: true,
   });
   const memoryGateway = new PostgresMemoryGateway(repositories);
   const memory = new MemoryService({ client, repositories, hermes: options.hermes });

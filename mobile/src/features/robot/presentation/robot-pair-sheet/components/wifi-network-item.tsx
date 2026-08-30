@@ -29,7 +29,7 @@ export function WifiNetworkItem({
   testID = 'wifi-network-item',
 }: WifiNetworkItemProps) {
   const theme = useTheme();
-  const isSecured = network.security !== 'Open' && network.security !== 'none';
+  const isSecured = network.security !== 'OPEN';
 
   return (
     <Pressable
@@ -55,7 +55,7 @@ export function WifiNetworkItem({
           {
             backgroundColor: isSelected
               ? `${theme.linkPrimary}20`
-              : theme.surfaceSubtle ?? `${theme.text}0A`,
+              : theme.cardBackgroundSubtle,
           },
         ]}
       >

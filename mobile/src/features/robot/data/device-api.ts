@@ -115,6 +115,20 @@ export async function getDeviceWifi(deviceId: string): Promise<DeviceWifi | null
   const payload = await apiRequest<{ wifi: unknown }>(`/devices/${deviceId}/wifi`);
   return asWifi(payload.wifi);
 }
+export async function updateDeviceWifi(
+  deviceId: string,
+  input: { ssid: string; password?: string }
+): Promise<{ wifi: DeviceWifi }> {
+  const payload = await apiRequest<{ wifi: unknown }>(`/devices/${deviceId}/wifi`, {
+    method: 'PUT',
+    body: input,
+  });
+  const wifi = asWifi(payload.wifi);
+  if (!wifi) {
+    throw new Error('Malformed wifi response from server');
+  }
+  return { wifi };
+}
 
 export type ProvisioningPrepareInput = {
   protocol_version?: number;

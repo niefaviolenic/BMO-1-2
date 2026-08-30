@@ -36,7 +36,10 @@ import {
   RobotDisconnectModal,
   RobotHeroCard,
   RobotOptionCard,
+  RobotWifiCard,
+  WifiSwitcherSheet,
 } from '@/features/robot/components';
+import { getDeviceWifi, type DeviceWifi } from '@/features/robot/data/device-api';
 import { RobotPairSheet } from '@/features/robot/presentation/robot-pair-sheet';
 
 export type RobotScreenProps = {
@@ -67,6 +70,8 @@ export function RobotScreen({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
   const [showPairSheet, setShowPairSheet] = useState(false);
+  const [showWifiSwitcher, setShowWifiSwitcher] = useState(false);
+  const [wifiData, setWifiData] = useState<DeviceWifi | null>(null);
   const pendingMenuActionRef = useRef<'disconnect' | null>(null);
 
   useFocusEffect(
@@ -80,6 +85,15 @@ export function RobotScreen({
       );
     }, [registerActions, navigate])
   );
+  useEffect(() => {
+    if (isConnected && connection.device?.id) {
+      void getDeviceWifi(connection.device.id)
+        .then((wifi) => {
+          if (wifi) setWifiData(wifi);
+        })
+        .catch(() => {});
+    }
+  }, [isConnected, connection.device?.id]);
 
   useEffect(() => {
     if (!isConnected) {
@@ -188,7 +202,16 @@ export function RobotScreen({
             />
 
             <View style={styles.section} testID={`${testID}-connected-options-section`}>
-              <Text style={[styles.sectionTitle, { color: theme.textMuted }]}>Joy Store</Text>
+              <Text style={[styles.sectionTitle, { color: theme.textMuted }]}>Network Management</Text>
+              <RobotWifiCard
+                ssid={wifiData?.ssid ?? 'Home-WiFi-5G'}
+                status={wifiData?.status ?? 'CONNECTED'}
+                onPress={() => setShowWifiSwitcher(true)}
+                style={{ width: sectionWidth }}
+                testID={`${testID}-wifi-card`}
+              />
+
+              <Text style={[styles.sectionTitle, { color: theme.textMuted, marginTop: 12 }]}>Joy Store</Text>
               <RobotOptionCard
                 title="I Don't Have a Joy Robot Yet"
                 description="Explore physical Joy models & stock"
@@ -294,6 +317,21 @@ export function RobotScreen({
         onClose={() => setShowPairSheet(false)}
         testID={`${testID}-pair-sheet`}
       />
+      {connection.device?.id ? (
+        <WifiSwitcherSheet
+          visible={showWifiSwitcher}
+          deviceId={connection.device.id}
+          currentSsid={wifiData?.ssid ?? 'Home-WiFi-5G'}
+          onClose={() => setShowWifiSwitcher(false)}
+          onSuccess={(newSsid) => {
+            setWifiData({
+              ssid: newSsid,
+              status: 'CONNECTED',
+            });
+          }}
+          testID={`${testID}-wifi-switcher-sheet`}
+        />
+      ) : null}
 
     </View>
   );

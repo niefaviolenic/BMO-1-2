@@ -79,6 +79,57 @@ export function deriveSecurity2Pop(
     setupNonce,
   ]);
 }
+export function deriveSessionKey(popBase64url: string, setupNonce: string): Buffer {
+  return Buffer.from(
+    crypto.hkdfSync(
+      "sha256",
+      Buffer.from(popBase64url, "utf8"),
+      Buffer.from(setupNonce, "utf8"),
+      Buffer.from("joy-sec2-session-v1", "utf8"),
+      32,
+    ),
+  );
+}
+
+export function encryptSessionEnvelope(
+  popBase64url: string,
+  setupNonce: string,
+  aadString: string,
+  payload: { res_id: string; token: string; start_proof: string; ssid: string; pass: string },
+  explicitIv?: Buffer,
+): { iv: string; ciphertext: string; tag: string } {
+  const sessionKey = deriveSessionKey(popBase64url, setupNonce);
+  const iv = explicitIv ?? crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", sessionKey, iv);
+  cipher.setAAD(Buffer.from(aadString, "utf8"));
+  const ciphertext = Buffer.concat([
+    cipher.update(Buffer.from(JSON.stringify(payload), "utf8")),
+    cipher.final(),
+  ]);
+  const tag = cipher.getAuthTag();
+  return {
+    iv: iv.toString("base64url"),
+    ciphertext: ciphertext.toString("base64url"),
+    tag: tag.toString("base64url"),
+  };
+}
+
+export function decryptSessionEnvelope(
+  popBase64url: string,
+  setupNonce: string,
+  aadString: string,
+  envelope: { iv: string; ciphertext: string; tag: string },
+): { res_id: string; token: string; start_proof: string; ssid: string; pass: string } {
+  const sessionKey = deriveSessionKey(popBase64url, setupNonce);
+  const iv = Buffer.from(envelope.iv, "base64url");
+  const ciphertext = Buffer.from(envelope.ciphertext, "base64url");
+  const tag = Buffer.from(envelope.tag, "base64url");
+  const decipher = crypto.createDecipheriv("aes-256-gcm", sessionKey, iv);
+  decipher.setAAD(Buffer.from(aadString, "utf8"));
+  decipher.setAuthTag(tag);
+  const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  return JSON.parse(decrypted.toString("utf8"));
+}
 
 export function deriveSecureStartProof(
   provisioningRootSecret: Buffer,

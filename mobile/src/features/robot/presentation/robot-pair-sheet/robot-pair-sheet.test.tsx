@@ -19,27 +19,17 @@ vi.mock('react', async () => {
   const actual = await vi.importActual<typeof ReactType>('react');
   return {
     ...actual,
-    useState: vi.fn((initial: unknown) => [
+    useState: (initial: unknown) => [
       typeof initial === 'function' ? (initial as () => unknown)() : initial,
       vi.fn(),
-    ]),
-    useEffect: vi.fn((effect: () => void | (() => void)) => {
-      effect();
-    }),
+    ],
+    useEffect: (fn: () => void) => fn(),
+    useCallback: (fn: unknown) => fn,
+    useMemo: (fn: () => unknown) => fn(),
   };
 });
 
 vi.mock('react-native', () => ({
-  Platform: {
-    OS: 'ios',
-    select: (obj: Record<string, unknown>) => obj.ios ?? obj.default,
-  },
-  StyleSheet: {
-    create: <T extends Record<string, unknown>>(styles: T) => styles,
-  },
-  Linking: {
-    openSettings: vi.fn().mockResolvedValue(true),
-  },
   View: (props: unknown) => ({ type: 'View', props }),
   Text: (props: unknown) => ({ type: 'Text', props }),
   Pressable: (props: unknown) => ({ type: 'Pressable', props }),
@@ -48,15 +38,15 @@ vi.mock('react-native', () => ({
   ActivityIndicator: (props: unknown) => ({ type: 'ActivityIndicator', props }),
   Animated: {
     View: (props: unknown) => ({ type: 'Animated.View', props }),
-    Value: vi.fn(() => ({
-      interpolate: vi.fn(),
-      setValue: vi.fn(),
-    })),
-    timing: vi.fn(() => ({
-      start: vi.fn((cb?: () => void) => cb?.()),
-    })),
   },
-  useWindowDimensions: () => ({ width: 390, height: 844 }),
+  useWindowDimensions: () => ({ width: 393, height: 852 }),
+  StyleSheet: {
+    create: (styles: Record<string, unknown>) => styles,
+  },
+  Platform: {
+    select: (options: { ios?: unknown; android?: unknown; default?: unknown }) =>
+      options.ios ?? options.default,
+  },
 }));
 
 vi.mock('react-native-safe-area-context', () => ({
@@ -64,36 +54,35 @@ vi.mock('react-native-safe-area-context', () => ({
 }));
 
 vi.mock('lucide-react-native', () => ({
-  Bluetooth: (props: unknown) => ({ type: 'Bluetooth', props }),
-  Wifi: (props: unknown) => ({ type: 'Wifi', props }),
-  ChevronRight: (props: unknown) => ({ type: 'ChevronRight', props }),
-  Eye: (props: unknown) => ({ type: 'Eye', props }),
-  EyeOff: (props: unknown) => ({ type: 'EyeOff', props }),
-  RefreshCw: (props: unknown) => ({ type: 'RefreshCw', props }),
-  Check: (props: unknown) => ({ type: 'Check', props }),
-  Lock: (props: unknown) => ({ type: 'Lock', props }),
-  Signal: (props: unknown) => ({ type: 'Signal', props }),
-  AlertCircle: (props: unknown) => ({ type: 'AlertCircle', props }),
-  ExternalLink: (props: unknown) => ({ type: 'ExternalLink', props }),
-  HelpCircle: (props: unknown) => ({ type: 'HelpCircle', props }),
-  Sparkles: (props: unknown) => ({ type: 'Sparkles', props }),
-  X: (props: unknown) => ({ type: 'X', props }),
+  Bluetooth: () => ({ type: 'Bluetooth' }),
+  BluetoothOff: () => ({ type: 'BluetoothOff' }),
+  Wifi: () => ({ type: 'Wifi' }),
+  Lock: () => ({ type: 'Lock' }),
+  Check: () => ({ type: 'Check' }),
+  CheckCircle2: () => ({ type: 'CheckCircle2' }),
+  AlertCircle: () => ({ type: 'AlertCircle' }),
+  HelpCircle: () => ({ type: 'HelpCircle' }),
+  RefreshCw: () => ({ type: 'RefreshCw' }),
+  Eye: () => ({ type: 'Eye' }),
+  EyeOff: () => ({ type: 'EyeOff' }),
+  Signal: () => ({ type: 'Signal' }),
+  ChevronRight: () => ({ type: 'ChevronRight' }),
+  X: () => ({ type: 'X' }),
+  ExternalLink: () => ({ type: 'ExternalLink' }),
 }));
 
 vi.mock('@/hooks/use-theme', () => ({
   useTheme: () => ({
-    text: '#000000',
+    text: '#0D0D0D',
     textSecondary: '#666666',
     textMuted: '#999999',
-    border: '#CCCCCC',
     cardBackground: '#FFFFFF',
     cardBackgroundSubtle: '#F7F7F8',
-    modalBackground: '#FFFFFF',
-    buttonPrimaryBackground: '#000000',
+    border: '#E5E5EA',
+    linkPrimary: '#007AFF',
+    buttonPrimaryBackground: '#007AFF',
     buttonPrimaryText: '#FFFFFF',
-    linkPrimary: '#0066CC',
-    statusError: '#FF3B30',
-    surfaceSubtle: '#F0F0F0',
+    badgeBackground: '#EF4444',
   }),
 }));
 
@@ -101,45 +90,38 @@ vi.mock('@/hooks/use-step-slide-transition', () => ({
   useStepSlideTransition: () => ({
     activeStep: 'scan',
     contentTranslateX: 0,
+    reset: vi.fn(),
   }),
 }));
+vi.mock('@/features/robot/data/robot-connection-store', () => ({
+  hydrateDevices: vi.fn().mockResolvedValue(undefined),
+}));
+
 
 vi.mock('@/components/ui/modal-bottom-sheet', () => ({
-  ModalBottomSheet: ({
-    children,
-    header,
-    testID,
-    ...props
-  }: {
-    children: React.ReactNode;
-    header: React.ReactNode;
+  ModalBottomSheet: (props: {
+    children: unknown;
+    header?: unknown;
     testID?: string;
-    [key: string]: unknown;
   }) => ({
     type: 'ModalBottomSheet',
-    props: { testID, header, children, ...props },
+    props: {
+      ...props,
+      header: props.header,
+    },
   }),
 }));
 
 vi.mock('@/components/ui/liquid-glass-back-button', () => ({
-  LiquidGlassBackButton: (props: unknown) => ({
-    type: 'LiquidGlassBackButton',
-    props,
-  }),
+  LiquidGlassBackButton: () => ({ type: 'LiquidGlassBackButton' }),
 }));
 
 vi.mock('@/features/robot/presentation/camera-scan-screen/components/camera-scan-hero', () => ({
-  CameraScanHero: (props: unknown) => ({
-    type: 'CameraScanHero',
-    props,
-  }),
+  CameraScanHero: (props: unknown) => ({ type: 'CameraScanHero', props }),
 }));
 
 vi.mock('@/features/robot/presentation/connected-success-screen/components/connected-success-hero', () => ({
-  ConnectedSuccessHero: (props: unknown) => ({
-    type: 'ConnectedSuccessHero',
-    props,
-  }),
+  ConnectedSuccessHero: (props: unknown) => ({ type: 'ConnectedSuccessHero', props }),
 }));
 
 vi.mock('@/features/robot/data/provisioning-flow', () => ({
@@ -160,12 +142,10 @@ vi.mock('@/features/robot/data/provisioning-flow', () => ({
     startScanning: () => Promise.resolve(),
     restartScanning: () => Promise.resolve(),
     selectJoy: () => Promise.resolve(),
-    triggerDemoPhysicalConfirmation: () => Promise.resolve(),
-    requestDeviceWifiScan: () => Promise.resolve(),
+    requestDeviceWifiScan: () => {},
     selectWifiNetwork: () => {},
     submitWifiCredentials: () => Promise.resolve(),
     clearError: () => {},
-    discoverDemoJoy: () => {},
   },
 }));
 
@@ -217,12 +197,10 @@ describe('RobotPairSheet', () => {
     expect(banner.props.testID).toBe('banner-test');
   });
 
-  it('renders JoyTroubleshootingCard with rescan and demo callbacks', () => {
+  it('renders JoyTroubleshootingCard with rescan callback', () => {
     const onRescan = vi.fn();
-    const onDemo = vi.fn();
     const card = JoyTroubleshootingCard({
       onRescan,
-      onSimulateDemo: onDemo,
       isScanning: false,
       testID: 'troubleshoot-test',
     }) as unknown as MockElement;

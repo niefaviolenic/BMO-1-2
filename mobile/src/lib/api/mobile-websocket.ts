@@ -144,6 +144,11 @@ export function isDeviceBindingRevokedEvent(
 ): event is DeviceBindingRevokedEvent {
   return event.event === 'device_binding_revoked';
 }
+export function isWifiConfigurationStatusEvent(
+  event: MobileInboundEvent
+): event is WifiConfigurationStatusEvent {
+  return event.event === 'wifi_configuration_status';
+}
 
 
 type Listener = (event: MobileInboundEvent) => void;
