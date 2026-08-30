@@ -23,3 +23,8 @@ vi.mock('expo-secure-store', () => ({
   deleteItemAsync: vi.fn(async () => {}),
 }));
 
+vi.mock('expo', () => ({
+  requireOptionalNativeModule: vi.fn(() => null),
+  requireNativeModule: vi.fn(() => null),
+}));
+

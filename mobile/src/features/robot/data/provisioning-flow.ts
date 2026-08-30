@@ -2,11 +2,10 @@ import {
   prepareProvisioning,
   confirmProvisioning,
   commitClaim,
-  getProvisioningStatus,
   type ProvisioningPrepareResponse,
   type ProvisioningConfirmResponse,
 } from './device-api';
-import { addProvisionedDevice, hydrateDevices } from './robot-connection-store';
+import { hydrateDevices } from './robot-connection-store';
 
 export type DiscoveredJoy = {
   id: string;
@@ -38,6 +37,9 @@ export type ProvisioningStep =
 
 export interface ProvisioningSessionState {
   step: ProvisioningStep;
+  isScanning: boolean;
+  scanTimeoutReached: boolean;
+  isWifiScanning: boolean;
   discoveredJoys: DiscoveredJoy[];
   selectedJoy: DiscoveredJoy | null;
   prepareData: ProvisioningPrepareResponse | null;
@@ -47,8 +49,27 @@ export interface ProvisioningSessionState {
   error: string | null;
 }
 
+export const DEMO_JOY_DEVICE: DiscoveredJoy = {
+  id: 'joy-nearby-demo',
+  name: 'Joy Robot (Demo)',
+  provisioningRef: 'JOY-78B2',
+  hardwareId: 'joy_demo_hw_001122334455',
+  setupNonce: 'dGVzdF9zZXR1cF9ub25jZQ==',
+  resetEpoch: 0,
+  rssi: -48,
+};
+
+export const DEMO_WIFI_NETWORKS: DiscoveredWifiNetwork[] = [
+  { ssid: 'Home-WiFi-5G', rssi: -42, security: 'WPA2' },
+  { ssid: 'Joy-Studio-Guest', rssi: -58, security: 'WPA3' },
+  { ssid: 'LivingRoom_2.4G', rssi: -65, security: 'WPA2' },
+];
+
 export const INITIAL_PROVISIONING_SESSION: ProvisioningSessionState = {
   step: 'idle',
+  isScanning: false,
+  scanTimeoutReached: false,
+  isWifiScanning: false,
   discoveredJoys: [],
   selectedJoy: null,
   prepareData: null,
@@ -77,29 +98,88 @@ export class JoyProvisioningManager {
     this.listeners.forEach((l) => l(this.state));
   }
 
+  private scanTimer: ReturnType<typeof setTimeout> | number | null = null;
+  private demoTimer: ReturnType<typeof setTimeout> | number | null = null;
+
   reset() {
+    this.clearTimers();
     this.updateState({ ...INITIAL_PROVISIONING_SESSION });
   }
 
-  async startScanning(): Promise<void> {
-    this.updateState({ step: 'scanning', error: null, discoveredJoys: [] });
+  private clearTimers() {
+    if (this.scanTimer) {
+      clearTimeout(this.scanTimer);
+      this.scanTimer = null;
+    }
+    if (this.demoTimer) {
+      clearTimeout(this.demoTimer);
+      this.demoTimer = null;
+    }
+  }
 
-    // Simulated/Real BLE scanner discovering nearby advertising Joy units
-    // In emulator / development, discovers available Joy beacon
-    setTimeout(() => {
-      const mockJoy: DiscoveredJoy = {
-        id: 'joy_11111111-2222-4333-8444-555555555555',
-        name: 'Joy A7F2',
-        provisioningRef: 'A7F2K9M3',
-        hardwareId: 'joy_11111111-2222-4333-8444-555555555555',
-        setupNonce: 'Q2W8N4P7RX',
-        resetEpoch: 0,
-        rssi: -58,
-      };
+  clearError() {
+    this.updateState({ error: null });
+  }
+
+  setScanTimeoutReached(reached: boolean) {
+    this.updateState({ scanTimeoutReached: reached });
+  }
+
+  async startScanning(options?: {
+    autoDemoFallback?: boolean;
+    timeoutMs?: number;
+    demoDelayMs?: number;
+  }): Promise<void> {
+    this.clearTimers();
+    this.updateState({
+      step: 'scanning',
+      isScanning: true,
+      scanTimeoutReached: false,
+      error: null,
+      discoveredJoys: [],
+    });
+
+    const timeoutMs = options?.timeoutMs ?? 5000;
+    this.scanTimer = setTimeout(() => {
+      if (this.state.step === 'scanning' && this.state.discoveredJoys.length === 0) {
+        this.updateState({ scanTimeoutReached: true });
+      }
+    }, timeoutMs);
+
+    if (options?.autoDemoFallback) {
+      const demoDelay = options.demoDelayMs ?? 1500;
+      this.demoTimer = setTimeout(() => {
+        if (this.state.step === 'scanning') {
+          this.addDiscoveredJoy(DEMO_JOY_DEVICE);
+        }
+      }, demoDelay);
+    }
+  }
+
+  async restartScanning(options?: {
+    autoDemoFallback?: boolean;
+    timeoutMs?: number;
+    demoDelayMs?: number;
+  }): Promise<void> {
+    return this.startScanning(options);
+  }
+
+  stopScanning(): void {
+    this.clearTimers();
+    this.updateState({ isScanning: false });
+  }
+
+  discoverDemoJoy(): void {
+    this.addDiscoveredJoy(DEMO_JOY_DEVICE);
+  }
+
+  addDiscoveredJoy(joy: DiscoveredJoy): void {
+    const exists = this.state.discoveredJoys.some((j) => j.hardwareId === joy.hardwareId);
+    if (!exists) {
       this.updateState({
-        discoveredJoys: [mockJoy],
+        discoveredJoys: [...this.state.discoveredJoys, joy],
       });
-    }, 600);
+    }
   }
 
   async selectJoy(joy: DiscoveredJoy): Promise<void> {
@@ -120,6 +200,18 @@ export class JoyProvisioningManager {
         step: 'waiting_physical_confirm',
       });
     } catch (err: unknown) {
+      if (joy.id === 'joy-nearby-demo') {
+        this.updateState({
+          prepareData: {
+            session_id: 'demo-session-123',
+            challenge: 'demo-challenge-xyz',
+            expires_at: new Date(Date.now() + 300000).toISOString(),
+          },
+          step: 'waiting_physical_confirm',
+          error: null,
+        });
+        return;
+      }
       const msg = err instanceof Error ? err.message : 'Failed to prepare provisioning';
       this.updateState({ error: msg, step: 'error' });
       throw err;
@@ -135,18 +227,35 @@ export class JoyProvisioningManager {
     }
 
     try {
-      const confirmRes = await confirmProvisioning({
-        session_id: this.state.prepareData.session_id,
-        confirmation: {
-          hardware_id: this.state.selectedJoy.hardwareId,
-          provisioning_ref: this.state.selectedJoy.provisioningRef,
-          setup_nonce: this.state.selectedJoy.setupNonce,
-          reset_epoch: this.state.selectedJoy.resetEpoch,
-          challenge: this.state.prepareData.challenge,
-          confirmation_nonce: confirmation.confirmation_nonce,
-          proof: confirmation.proof,
-        },
-      });
+      const isDemoSession = this.state.prepareData.session_id === 'demo-session-123';
+      let confirmRes: ProvisioningConfirmResponse;
+
+      if (isDemoSession) {
+        confirmRes = {
+          reservation_id: 'demo-reservation-123',
+          claim_token: 'demo-claim-token-123',
+          secure_start_proof: 'demo-proof-123',
+          security: {
+            scheme: 2,
+            username: 'joy:JOY-78B2',
+            proof_of_possession: 'demo-pop',
+          },
+          expires_at: new Date(Date.now() + 300000).toISOString(),
+        };
+      } else {
+        confirmRes = await confirmProvisioning({
+          session_id: this.state.prepareData.session_id,
+          confirmation: {
+            hardware_id: this.state.selectedJoy.hardwareId,
+            provisioning_ref: this.state.selectedJoy.provisioningRef,
+            setup_nonce: this.state.selectedJoy.setupNonce,
+            reset_epoch: this.state.selectedJoy.resetEpoch,
+            challenge: this.state.prepareData.challenge,
+            confirmation_nonce: confirmation.confirmation_nonce,
+            proof: confirmation.proof,
+          },
+        });
+      }
 
       this.updateState({
         confirmData: confirmRes,
@@ -172,22 +281,29 @@ export class JoyProvisioningManager {
     });
   }
 
-  async requestDeviceWifiScan(): Promise<void> {
-    this.updateState({ step: 'scanning_wifi', error: null });
+  async requestDeviceWifiScan(options?: { autoPopulateDemo?: boolean }): Promise<void> {
+    this.updateState({
+      step: 'scanning_wifi',
+      isWifiScanning: true,
+      error: null,
+      discoveredNetworks: [],
+    });
 
-    // Request Joy device to scan 2.4GHz Wi-Fi networks
-    setTimeout(() => {
-      const sampleNetworks: DiscoveredWifiNetwork[] = [
-        { ssid: 'Home-WiFi-5G', rssi: -45, security: 'WPA2' },
-        { ssid: 'BinerLabs_Office', rssi: -52, security: 'WPA2' },
-        { ssid: 'Joy-IoT-Network', rssi: -60, security: 'WPA2' },
-        { ssid: 'Guest_Network', rssi: -78, security: 'OPEN' },
-      ];
-      this.updateState({
-        discoveredNetworks: sampleNetworks,
-        step: 'entering_wifi_password',
-      });
-    }, 800);
+    if (options?.autoPopulateDemo ?? true) {
+      setTimeout(() => {
+        if (this.state.step === 'scanning_wifi') {
+          this.setDiscoveredWifiNetworks(DEMO_WIFI_NETWORKS);
+        }
+      }, 800);
+    }
+  }
+
+  setDiscoveredWifiNetworks(networks: DiscoveredWifiNetwork[]): void {
+    this.updateState({
+      discoveredNetworks: networks,
+      isWifiScanning: false,
+      step: 'entering_wifi_password',
+    });
   }
 
   selectWifiNetwork(network: DiscoveredWifiNetwork) {
@@ -202,14 +318,15 @@ export class JoyProvisioningManager {
     this.updateState({ step: 'connecting', error: null });
 
     try {
-      // 1. Commit Claim with Backend
-      await commitClaim(this.state.confirmData.reservation_id, {
-        commit_nonce: 'ICEiIyQlJicoKSorLC0uLw',
-        commit_proof: 'EdJA1I8-SE9OJnB29egnVyAAVr1PfLvcaVzmzEpewbA',
-      });
+      const isDemoSession = this.state.confirmData.reservation_id === 'demo-reservation-123';
 
-      // 2. Transmit Wi-Fi Credentials via Encrypted BLE Security 2 channel to Joy
-      // Joy connects to Wi-Fi and calls finalize with backend.
+      if (!isDemoSession) {
+        // 1. Commit Claim with Backend
+        await commitClaim(this.state.confirmData.reservation_id, {
+          commit_nonce: 'ICEiIyQlJicoKSorLC0uLw',
+          commit_proof: 'EdJA1I8-SE9OJnB29egnVyAAVr1PfLvcaVzmzEpewbA',
+        });
+      }
 
       // Poll session status or hydrate devices
       setTimeout(async () => {

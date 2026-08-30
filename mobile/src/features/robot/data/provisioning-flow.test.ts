@@ -87,4 +87,41 @@ describe('JoyProvisioningManager', () => {
     await manager.submitWifiCredentials('secret-password');
     expect(manager.getState().step).toBe('connecting');
   });
+
+  it('handles scanning lifecycle, demo discovery, and timeout', async () => {
+    vi.useFakeTimers();
+
+    await manager.startScanning({ timeoutMs: 3000 });
+    expect(manager.getState().step).toBe('scanning');
+    expect(manager.getState().isScanning).toBe(true);
+    expect(manager.getState().scanTimeoutReached).toBe(false);
+
+    vi.advanceTimersByTime(3000);
+    expect(manager.getState().scanTimeoutReached).toBe(true);
+
+    // Discover demo Joy
+    manager.discoverDemoJoy();
+    expect(manager.getState().discoveredJoys.length).toBe(1);
+    expect(manager.getState().discoveredJoys[0].name).toContain('Joy Robot');
+
+    // Stop scanning
+    manager.stopScanning();
+    expect(manager.getState().isScanning).toBe(false);
+
+    vi.useRealTimers();
+  });
+
+  it('supports error clearing and wifi scan population', async () => {
+    vi.useFakeTimers();
+
+    await manager.requestDeviceWifiScan({ autoPopulateDemo: true });
+    expect(manager.getState().step).toBe('scanning_wifi');
+    expect(manager.getState().isWifiScanning).toBe(true);
+
+    vi.advanceTimersByTime(800);
+    expect(manager.getState().step).toBe('entering_wifi_password');
+    expect(manager.getState().discoveredNetworks.length).toBeGreaterThan(0);
+
+    vi.useRealTimers();
+  });
 });
