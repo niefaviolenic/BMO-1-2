@@ -15,6 +15,7 @@ export {
   isScheduleStatusEvent,
   isIntegrationStatusEvent,
   isWhatsAppNotificationEvent,
+  isDeviceBindingRevokedEvent,
   type ChatMessageEvent,
   type ChatThinkingEvent,
   type ChatTitleUpdatedEvent,
@@ -25,5 +26,6 @@ export {
   type MobileWebSocketAuth,
   type ScheduleStatusEvent,
   type WhatsAppNotificationEvent,
+  type DeviceBindingRevokedEvent,
 } from './mobile-websocket';
 export { ApiError, isApiError, isAuthenticationFailed } from './types';

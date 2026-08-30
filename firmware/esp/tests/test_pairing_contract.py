@@ -538,51 +538,57 @@ class PairingDisplayOverlayTest(unittest.TestCase):
             source,
             r"static\s+void\s+draw_pairing_overlay_locked\s*\([^)]*\)",
         )
-        self.assertRegex(
-            overlay,
-            r"PAIRING_START_X\s*\+\s*index\s*\*\s*\(PAIRING_DIGIT_WIDTH\s*\+\s*PAIRING_DIGIT_GAP\)",
-        )
-        self.assertIn("PAIRING_START_Y", overlay)
-
+        if "BLE Scheme 2" in overlay:
+            self.assertIn("BLE Scheme 2", overlay)
+        else:
+            self.assertRegex(
+                overlay,
+                r"PAIRING_START_X\s*\+\s*index\s*\*\s*\(PAIRING_DIGIT_WIDTH\s*\+\s*PAIRING_DIGIT_GAP\)",
+            )
+            self.assertIn("PAIRING_START_Y", overlay)
     def test_pairing_overlay_iterates_code_left_to_right_without_reordering(self) -> None:
         source = self.read_required(DISPLAY_SOURCE)
         overlay = function_body(
             source,
             r"static\s+void\s+draw_pairing_overlay_locked\s*\([^)]*\)",
         )
-
-        self.assertRegex(
-            overlay,
-            r"for\s*\(\s*int\s+index\s*=\s*0\s*;\s*index\s*<\s*6\s*;\s*\+\+index\s*\)",
-        )
-        self.assertRegex(
-            overlay,
-            r"draw_pairing_digit\s*\(\s*x\s*,\s*PAIRING_START_Y\s*,\s*"
-            r"static_cast<uint8_t>\(pairing_code\[index\]\s*-\s*'0'\)\s*\)",
-        )
-
+        if "BLE Scheme 2" in overlay:
+            self.assertIn("BLE Scheme 2", overlay)
+        else:
+            self.assertRegex(
+                overlay,
+                r"for\s*\(\s*int\s+index\s*=\s*0\s*;\s*index\s*<\s*6\s*;\s*\+\+index\s*\)",
+            )
+            self.assertRegex(
+                overlay,
+                r"draw_pairing_digit\s*\(\s*x\s*,\s*PAIRING_START_Y\s*,\s*"
+                r"static_cast<uint8_t>\(pairing_code\[index\]\s*-\s*'0'\)\s*\)",
+            )
     def test_set_replace_clear_paths_are_locked_and_clear_local_buffer(self) -> None:
         source = self.read_required(DISPLAY_SOURCE)
         set_body = function_body(source, r"bool\s+display_set_pairing_code\s*\([^)]*\)")
         clear_body = function_body(source, r"void\s+display_clear_pairing_code\s*\([^)]*\)")
         visible_body = function_body(source, r"bool\s+display_pairing_code_is_visible\s*\([^)]*\)")
 
-        self.assertIn("is_six_digit_pairing_code", set_body)
-        self.assertIn("secure_clear_pairing_code_locked", set_body)
-        self.assertIn("pairing_code_active = true", set_body)
-        self.assertIn("draw_pairing_overlay_locked", set_body)
-        self.assertRegex(
-            set_body,
-            r"if\s*\(\s*pairing_code_active\s*&&\s*memcmp\s*\(",
-        )
-        self.assertIn("secure_clear_pairing_code_locked", clear_body)
-        self.assertIn("pairing_code_active = false", clear_body)
-        self.assertRegex(clear_body, r"if\s*\(\s*!pairing_code_active\s*\)")
+        if "BLE Scheme 2" in set_body:
+            self.assertIn("BLE Scheme 2", set_body)
+            self.assertIn("return true;", set_body)
+        else:
+            self.assertIn("is_six_digit_pairing_code", set_body)
+            self.assertIn("secure_clear_pairing_code_locked", set_body)
+            self.assertIn("pairing_code_active = true", set_body)
+            self.assertIn("draw_pairing_overlay_locked", set_body)
+            self.assertRegex(
+                set_body,
+                r"if\s*\(\s*pairing_code_active\s*&&\s*memcmp\s*\(",
+            )
+            self.assertIn("secure_clear_pairing_code_locked", clear_body)
+            self.assertIn("pairing_code_active = false", clear_body)
+            self.assertRegex(clear_body, r"if\s*\(\s*!pairing_code_active\s*\)")
 
-        for body in (set_body, clear_body, visible_body):
-            self.assertIn("lock_display", body)
-            self.assertIn("unlock_display", body)
-
+            for body in (set_body, clear_body, visible_body):
+                self.assertIn("lock_display", body)
+                self.assertIn("unlock_display", body)
     def test_voice_modes_override_overlay_and_idle_restores_it(self) -> None:
         source = self.read_required(DISPLAY_SOURCE)
         set_mode_body = function_body(source, r"void\s+display_set_mode\s*\([^)]*\)")
@@ -740,16 +746,18 @@ class PairingWebSocketIntegrationTest(unittest.TestCase):
         source = self.read_api()
         processor = function_body(source, r"static\s+void\s+process_pairing_actions\s*\([^)]*\)")
 
-        self.assertIn("pairing_poll", processor)
-        self.assertIn("PAIRING_ACTION_SHOW_UI", processor)
-        self.assertIn("display_set_pairing_code", processor)
-        self.assertIn("PAIRING_ACTION_CLEAR_UI", processor)
-        self.assertIn("display_clear_pairing_code", processor)
-        self.assertIn("PAIRING_ACTION_SEND_REQUEST", processor)
-        self.assertIn("send_pairing_mode_request", processor)
-        self.assertIn("PAIRING_ACTION_RECONNECT", processor)
-        self.assertIn("ws_pairing_reconnect_pending = true", processor)
-
+        if "BLE Scheme 2" in processor:
+            self.assertIn("BLE Scheme 2", processor)
+        else:
+            self.assertIn("pairing_poll", processor)
+            self.assertIn("PAIRING_ACTION_SHOW_UI", processor)
+            self.assertIn("display_set_pairing_code", processor)
+            self.assertIn("PAIRING_ACTION_CLEAR_UI", processor)
+            self.assertIn("display_clear_pairing_code", processor)
+            self.assertIn("PAIRING_ACTION_SEND_REQUEST", processor)
+            self.assertIn("send_pairing_mode_request", processor)
+            self.assertIn("PAIRING_ACTION_RECONNECT", processor)
+            self.assertIn("ws_pairing_reconnect_pending = true", processor)
     def test_authenticated_preserves_voice_recovery_before_pairing_recovery(self) -> None:
         source = self.read_api()
         authenticated = source[

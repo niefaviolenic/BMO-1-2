@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "network.cpp" "state.cpp" "api.cpp" "playback.cpp" "playback_watchdog.cpp" "voice_capture_reservation.cpp" "wifi.cpp" "button.cpp" "wakeword.cpp" "audio.cpp" "display.cpp" "pairing.cpp" "qrcodegen.c" "main.cpp"
+    SRCS "network.cpp" "state.cpp" "api.cpp" "playback.cpp" "playback_watchdog.cpp" "voice_capture_reservation.cpp" "wifi.cpp" "button.cpp" "wakeword.cpp" "audio.cpp" "display.cpp" "pairing.cpp" "qrcodegen.c" "joy_identity.cpp" "joy_crypto.cpp" "joy_crypto_envelope.cpp" "joy_ble_provisioning.cpp" "joy_ble_nimble.cpp" "main.cpp"
     INCLUDE_DIRS "."
     EMBED_FILES
         "audio_wav/01.wav"
@@ -19,6 +19,8 @@ idf_component_register(
         "audio_wav/thinking_03.wav"
         "audio_wav/thinking_04.wav"
         "audio_wav/thinking_05.wav"
+        "audio_wav/ble_activated.wav"
+        "audio_wav/unpaired_sad.wav"
     PRIV_INCLUDE_DIRS "${JOY_CREDENTIAL_INCLUDE_DIR}"
     REQUIRES
         driver
@@ -36,4 +38,5 @@ idf_component_register(
         esp_http_client
         esp_websocket_client
         mbedtls
+        bt
 )

@@ -6,10 +6,13 @@
 #include "state.h"
 #include "api.h"
 #include "network.h"
+#include "joy_identity.h"
+#include "joy_ble_provisioning.h"
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_heap_caps.h"
 
 static const char *TAG = "MAIN";
 
@@ -46,10 +49,9 @@ extern "C" void app_main()
     network_init();
 
     display_init();
-    ESP_LOGI(TAG, "OUTPUT_DIAG LCD begin: red,yellow,blue,white,happy");
+    ESP_LOGI(TAG, "OUTPUT_DIAG LCD begin: red,yellow,blue,white");
     TickType_t lcd_diag_start = xTaskGetTickCount();
     display_test_pattern();
-    display_face(FACE_HAPPY);
     ESP_LOGI(TAG, "OUTPUT_DIAG LCD end: elapsed_ms=%lu",
              (unsigned long)((xTaskGetTickCount() - lcd_diag_start) * portTICK_PERIOD_MS));
 
@@ -60,28 +62,35 @@ extern "C" void app_main()
     audio_playHello();
     ESP_LOGI(TAG, "OUTPUT_DIAG speaker end: elapsed_ms=%lu",
              (unsigned long)((xTaskGetTickCount() - speaker_diag_start) * portTICK_PERIOD_MS));
+    wakeword_init();
+
 
     button_init();
+    joy_identity_init();
+    joy_ble_provisioning_init();
+
     
     // Inisialisasi koneksi WiFi
     wifi_init();
 
-    xTaskCreate(
+    xTaskCreateWithCaps(
         api_init_when_network_ready_task,
         "api_init_network",
         4096,
         NULL,
         3,
-        NULL);
+        NULL,
+        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 
     // Jalankan background task state machine orchestrator
     joy_state_machine_init();
 
-    wakeword_init();
 
     while (true)
     {
         button_update();
+        joy_ble_poll();
+        wifi_poll();
         vTaskDelay(pdMS_TO_TICKS(20));
     }
 }

@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { ChevronRight, Keyboard } from 'lucide-react-native';
+import { ChevronRight, Bluetooth } from 'lucide-react-native';
 import React from 'react';
 import {
   Pressable,
@@ -16,7 +16,7 @@ import { RobotTokens } from '@/constants/theme';
 export type RobotOptionCardProps = {
   /** Primary title text. Defaults to "I Already Have a Joy Robot". */
   title?: string;
-  /** Secondary description text. Defaults to "Pair with 6-digit code". */
+  /** Secondary description text. Defaults to "Pair via Bluetooth BLE". */
   description?: string;
   /** Custom left icon URI or source. Defaults to keyboard icon. */
   iconSource?: string;
@@ -34,7 +34,7 @@ export type RobotOptionCardProps = {
 
 export function RobotOptionCard({
   title = 'I Already Have a Joy Robot',
-  description = 'Pair with 6-digit code',
+  description = 'Pair via Bluetooth BLE',
   iconSource,
   leftIcon,
   trailingIcon,
@@ -54,10 +54,10 @@ export function RobotOptionCard({
         contentFit="contain"
       />
     ) : (
-      <Keyboard
-        size={RobotTokens.optionCard.leftIconSize}
+      <Bluetooth
+        size={20}
         color={theme.icon}
-        strokeWidth={1.5}
+        strokeWidth={1.75}
       />
     ));
 

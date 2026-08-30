@@ -2451,6 +2451,48 @@ export const RobotScreenTokens = {
   },
 } as const;
 
+export const RobotPairSheetTokens = {
+  stepIndicator: {
+    height: 4,
+    activeWidth: 24,
+    inactiveWidth: 8,
+    borderRadius: 2,
+    gap: 6,
+  },
+  banner: {
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    iconSize: 18,
+    gap: 10,
+  },
+  troubleshooting: {
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+    badgeSize: 22,
+    badgeRadius: 11,
+  },
+  beaconCard: {
+    borderRadius: 16,
+    padding: 14,
+    iconBoxSize: 40,
+    iconBoxRadius: 12,
+    gap: 12,
+  },
+  wifiCard: {
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  errorCard: {
+    borderRadius: 14,
+    padding: 14,
+    gap: 10,
+  },
+} as const;
+
 export const RobotDisconnectModalTokens = {
   width: 260,
   minHeight: 140,

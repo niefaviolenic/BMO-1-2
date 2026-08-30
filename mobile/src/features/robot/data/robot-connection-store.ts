@@ -1,8 +1,9 @@
 import {
+  isDeviceStatusEvent,
+  isDeviceBindingRevokedEvent,
   subscribeMobileWebSocket,
   type MobileInboundEvent,
 } from '@/lib/api';
-
 import {
   INITIAL_ROBOT_CONNECTION,
   isActiveDevice,
@@ -67,38 +68,44 @@ async function enrichDevice(device: SafeDevice): Promise<RobotDeviceInfo> {
   });
 }
 
-function isDeviceStatusEvent(event: MobileInboundEvent): event is MobileInboundEvent & {
-  event: 'device_status';
-  deviceId: string;
-  online: boolean;
-  wifi?: { connected?: boolean };
-  battery?: { percent?: number | null };
-} {
-  return event.event === 'device_status';
-}
-
 function handleRealtimeEvent(event: MobileInboundEvent): void {
+  if (isDeviceBindingRevokedEvent(event)) {
+    const remaining = connectionState.devices.filter((d) => d.id !== event.deviceId);
+    const nextDevice = remaining.length > 0 ? (remaining.find((d) => d.id === connectionState.activeDeviceId) ?? remaining[0] ?? null) : null;
+    setState({
+      status: nextDevice ? 'connected' : 'disconnected',
+      device: nextDevice,
+      devices: remaining,
+      activeDeviceId: nextDevice?.id ?? null,
+    });
+    return;
+  }
+
   if (!isDeviceStatusEvent(event)) {
     return;
   }
 
+  const updatedDevices = connectionState.devices.map((dev) => {
+    if (dev.id !== event.deviceId) return dev;
+    return toRobotDeviceInfo(dev, {
+      online: event.online,
+      batteryPercent: typeof event.battery?.percent === 'number' ? event.battery.percent : dev.batteryPercent,
+      wifiConnected: typeof event.wifi?.connected === 'boolean' ? event.wifi.connected : dev.wifiConnected,
+    });
+  });
+
   const current = connectionState.device;
-  if (!current || current.id !== event.deviceId) {
-    return;
-  }
+  const updatedCurrent = current?.id === event.deviceId
+    ? toRobotDeviceInfo(current, {
+        online: event.online,
+        batteryPercent: typeof event.battery?.percent === 'number' ? event.battery.percent : current.batteryPercent,
+        wifiConnected: typeof event.wifi?.connected === 'boolean' ? event.wifi.connected : current.wifiConnected,
+      })
+    : current;
 
   setState({
-    device: toRobotDeviceInfo(current, {
-      online: event.online,
-      batteryPercent:
-        typeof event.battery?.percent === 'number'
-          ? event.battery.percent
-          : current.batteryPercent,
-      wifiConnected:
-        typeof event.wifi?.connected === 'boolean'
-          ? event.wifi.connected
-          : current.wifiConnected,
-    }),
+    device: updatedCurrent,
+    devices: updatedDevices,
   });
 }
 
@@ -134,17 +141,20 @@ export async function hydrateDevices(): Promise<void> {
   bindWebSocket();
   setState({ isHydrating: true, error: null });
   try {
-    const devices = await listDevices();
-    const active = devices.find(isActiveDevice) ?? null;
-    if (!active) {
+    const allDevices = await listDevices();
+    const activeList = allDevices.filter(isActiveDevice);
+    if (activeList.length === 0) {
       setState({ ...INITIAL_ROBOT_CONNECTION });
       return;
     }
 
-    const device = await enrichDevice(active);
+    const enriched = await Promise.all(activeList.map(enrichDevice));
+    const primary = enriched[0] ?? null;
     setState({
       status: 'connected',
-      device,
+      device: primary,
+      devices: enriched,
+      activeDeviceId: primary?.id ?? null,
       isHydrating: false,
       isPairing: false,
       isUnpairing: false,
@@ -156,6 +166,30 @@ export async function hydrateDevices(): Promise<void> {
       error: mapDeviceApiError(error),
     });
   }
+}
+
+export function setActiveDevice(deviceId: string): void {
+  const found = connectionState.devices.find((d) => d.id === deviceId);
+  if (found) {
+    setState({
+      device: found,
+      activeDeviceId: found.id,
+    });
+  }
+}
+
+export async function addProvisionedDevice(device: SafeDevice): Promise<void> {
+  const enriched = await enrichDevice(device);
+  const existing = connectionState.devices.filter((d) => d.id !== device.id);
+  const nextDevices = [...existing, enriched];
+  setState({
+    status: 'connected',
+    device: enriched,
+    devices: nextDevices,
+    activeDeviceId: enriched.id,
+    isPairing: false,
+    error: null,
+  });
 }
 
 export async function claimWithCode(code: string): Promise<void> {

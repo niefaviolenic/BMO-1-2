@@ -12,6 +12,7 @@
 #include "esp_log.h"
 #include "esp_random.h"
 #include "esp_timer.h"
+#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -113,6 +114,10 @@ extern const uint8_t _binary_thinking_04_wav_start[];
 extern const uint8_t _binary_thinking_04_wav_end[];
 extern const uint8_t _binary_thinking_05_wav_start[];
 extern const uint8_t _binary_thinking_05_wav_end[];
+extern const uint8_t _binary_ble_activated_wav_start[];
+extern const uint8_t _binary_ble_activated_wav_end[];
+extern const uint8_t _binary_unpaired_sad_wav_start[];
+extern const uint8_t _binary_unpaired_sad_wav_end[];
 }
 
 struct EmbeddedWavClip
@@ -178,7 +183,8 @@ static bool local_expression_is_allowed()
     return getState() == JoyState::IDLE &&
            pairing_get_snapshot().phase == PairingPhase::NONE &&
            !display_pairing_code_is_visible() &&
-           !display_qr_code_is_visible();
+           !display_qr_code_is_visible() &&
+           !display_ble_pairing_is_visible();
 }
 
 static uint16_t read_wav_le16(const uint8_t *data)
@@ -433,7 +439,7 @@ void audio_init()
 
     i2s_chan_config_t channel_config =
         I2S_CHANNEL_DEFAULT_CONFIG(
-            I2S_NUM_AUTO,
+            I2S_NUM_0,
             I2S_ROLE_MASTER);
     channel_config.auto_clear_after_cb = true;
     channel_config.auto_clear_before_cb = true;
@@ -532,14 +538,15 @@ void audio_init()
         volume);
     if(wake_ack_worker_task_handle == NULL)
     {
-        BaseType_t ret = xTaskCreatePinnedToCore(
+        BaseType_t ret = xTaskCreatePinnedToCoreWithCaps(
             wake_ack_worker_task,
             "wake_ack_worker",
             4096,
             NULL,
             5,
             &wake_ack_worker_task_handle,
-            0);
+            0,
+            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if(ret != pdPASS)
         {
             ESP_LOGE(TAG, "Failed to create wake_ack_worker task");
@@ -548,14 +555,15 @@ void audio_init()
     }
     if(thinking_filler_task_handle == NULL)
     {
-        BaseType_t ret = xTaskCreatePinnedToCore(
+        BaseType_t ret = xTaskCreatePinnedToCoreWithCaps(
             thinking_filler_worker_task,
             "thinking_filler",
             4096,
             NULL,
             4,
             &thinking_filler_task_handle,
-            0);
+            0,
+            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if(ret != pdPASS)
         {
             ESP_LOGE(TAG, "Failed to create thinking_filler task");
@@ -564,14 +572,15 @@ void audio_init()
     }
     if(expression_audio_task_handle == NULL)
     {
-        BaseType_t ret = xTaskCreatePinnedToCore(
+        BaseType_t ret = xTaskCreatePinnedToCoreWithCaps(
             expression_audio_worker_task,
             "expression_audio",
             4096,
             NULL,
             5,
             &expression_audio_task_handle,
-            0);
+            0,
+            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if(ret != pdPASS)
         {
             ESP_LOGE(TAG, "Failed to create expression_audio task");
@@ -580,14 +589,15 @@ void audio_init()
     }
     if(ready_audio_worker_task_handle == NULL)
     {
-        BaseType_t ret = xTaskCreatePinnedToCore(
+        BaseType_t ret = xTaskCreatePinnedToCoreWithCaps(
             ready_audio_worker_task,
             "ready_audio",
             4096,
             NULL,
             5,
             &ready_audio_worker_task_handle,
-            0);
+            0,
+            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if(ret != pdPASS)
         {
             ESP_LOGE(TAG, "Failed to create ready_audio task");
@@ -924,6 +934,40 @@ void audio_cancelReadyAudio()
     ready_audio_stop_requested = true;
     if(ready_audio_worker_task_handle != NULL)
         xTaskNotifyGive(ready_audio_worker_task_handle);
+}
+
+void audio_playBleActivated()
+{
+    ESP_LOGI(TAG, "Play local BLE activated phrase");
+    (void)audio_set_sample_rate(SPEAKER_SAMPLE_RATE);
+
+    if(audio_play_embedded_wav_clip(
+           _binary_ble_activated_wav_start,
+           _binary_ble_activated_wav_end,
+           "ble_activated"))
+    {
+        return;
+    }
+
+    ESP_LOGW(TAG, "BLE activated WAV unavailable; using fallback tone");
+    audio_playHello();
+}
+
+void audio_playUnpairedSad()
+{
+    ESP_LOGI(TAG, "Play local unpaired sad phrase");
+    (void)audio_set_sample_rate(SPEAKER_SAMPLE_RATE);
+
+    if(audio_play_embedded_wav_clip(
+           _binary_unpaired_sad_wav_start,
+           _binary_unpaired_sad_wav_end,
+           "unpaired_sad"))
+    {
+        return;
+    }
+
+    ESP_LOGW(TAG, "Unpaired sad WAV unavailable; using fallback error tone");
+    audio_play_error();
 }
 
 //--------------------------------------------------

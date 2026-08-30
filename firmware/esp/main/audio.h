@@ -36,6 +36,12 @@ void audio_playReady();
 void audio_triggerReadyAudio();
 void audio_cancelReadyAudio();
 
+// Play the local spoken "Bluetooth activated! Pair with me on the Joy app." phrase.
+void audio_playBleActivated();
+
+// Play the local spoken sad unpair phrase ("Oh no, we are unpaired! I will miss you...").
+void audio_playUnpairedSad();
+
 // Play a dynamic thinking filler phrase (0..4) or random thinking filler
 // when voice capture finishes and backend processing begins.
 void audio_playThinkingFiller(int index);

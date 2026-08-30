@@ -16,16 +16,11 @@ export type ThemePalette = typeof Colors.light;
 export function useTheme(): ThemePalette {
   const scheme = useColorScheme();
   const theme = scheme === 'dark' ? 'dark' : 'light';
-  let accent: AccentColorMode = 'default';
-  try {
-    accent = useSyncExternalStore(
-      subscribeAccent,
-      getAccentPreference,
-      () => 'default' as AccentColorMode,
-    );
-  } catch {
-    accent = getAccentPreference();
-  }
+  const accent = useSyncExternalStore(
+    subscribeAccent,
+    getAccentPreference,
+    () => 'default' as AccentColorMode,
+  );
 
   const option = getAccentOption(accent);
   const basePalette = Colors?.[theme] ?? (Colors?.light ?? {});

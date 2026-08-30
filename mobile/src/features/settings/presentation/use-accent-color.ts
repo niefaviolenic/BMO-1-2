@@ -14,16 +14,11 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export function useAccentColor() {
   const colorScheme = useColorScheme();
-  let accent: AccentColorMode = 'default';
-  try {
-    accent = useSyncExternalStore(
-      subscribeAccent,
-      getAccentPreference,
-      () => 'default' as AccentColorMode,
-    );
-  } catch {
-    accent = getAccentPreference();
-  }
+  const accent = useSyncExternalStore(
+    subscribeAccent,
+    getAccentPreference,
+    () => 'default' as AccentColorMode,
+  );
 
   const accentLabel = formatAccentColorLabel(accent);
   const accentOption = getAccentOption(accent);

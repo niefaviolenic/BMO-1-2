@@ -13,7 +13,8 @@ enum Face
     FACE_WINK,
     FACE_SURPRISED,
     FACE_LOVE,
-    FACE_CONFUSED
+    FACE_CONFUSED,
+    FACE_DEAD
 };
 
 enum class DisplayMode
@@ -44,6 +45,11 @@ bool display_start_shy();
 void display_cancel_shy();
 bool display_is_shy_active();
 
+// Unpaired auto-revert interaction helpers
+bool display_is_unpaired_revert_active();
+void display_cancel_unpaired_revert();
+void display_trigger_unpaired_revert();
+
 void display_set_mode(DisplayMode mode);
 
 bool display_set_pairing_code(const char code[7], time_t expires_at_epoch);
@@ -61,6 +67,12 @@ void display_update_qr_countdown();
 void display_clear_qr_code();
 
 bool display_qr_code_is_visible();
+
+// BLE Pairing UI with Bluetooth logo and countdown timer (seconds remaining)
+bool display_show_ble_pairing(int remaining_seconds);
+void display_update_ble_countdown(int remaining_seconds);
+void display_hide_ble_pairing();
+bool display_ble_pairing_is_visible();
 
 void display_test_pattern();
 

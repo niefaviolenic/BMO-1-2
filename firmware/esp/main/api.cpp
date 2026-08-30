@@ -8,7 +8,9 @@
 #include "pairing.h"
 #include "wakeword.h"
 #include "network.h"
-
+#include "wifi.h"
+#include "joy_identity.h"
+#include "joy_ble_provisioning.h"
 #include "esp_http_client.h"
 #include "esp_websocket_client.h"
 #include "esp_crt_bundle.h"
@@ -621,21 +623,69 @@ static bool send_playback_failed(const char *req_id, const char *reason) {
     free(json_str);
     return sent;
 }
+bool api_ws_send_wifi_config_received(const char *config_id) {
+    if (config_id == NULL) return false;
+
+    cJSON *root = cJSON_CreateObject();
+    if (root == NULL) return false;
+
+    cJSON_AddStringToObject(root, "event", "wifi_configuration_received");
+    cJSON_AddStringToObject(root, "configuration_id", config_id);
+
+    char *json_str = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (json_str == NULL) return false;
+
+    ESP_LOGI(TAG, "Sending wifi_configuration_received for %s", config_id);
+    bool sent = ws_send_text(json_str, true);
+    free(json_str);
+    return sent;
+}
+
+bool api_ws_send_wifi_config_result(const char *config_id, const char *status, int rssi, const char *reason) {
+    if (config_id == NULL || status == NULL) return false;
+
+    cJSON *root = cJSON_CreateObject();
+    if (root == NULL) return false;
+
+    cJSON_AddStringToObject(root, "event", "wifi_configuration_result");
+    cJSON_AddStringToObject(root, "configuration_id", config_id);
+    cJSON_AddStringToObject(root, "status", status);
+    cJSON_AddNumberToObject(root, "rssi", rssi);
+    if (reason != NULL) {
+        cJSON_AddStringToObject(root, "reason", reason);
+    }
+
+    char *json_str = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (json_str == NULL) return false;
+
+    ESP_LOGI(TAG, "Sending wifi_configuration_result: id=%s status=%s rssi=%d", config_id, status, rssi);
+    bool sent = ws_send_text(json_str, true);
+    free(json_str);
+    return sent;
+}
 
 // WebSocket Send Authenticate
 static bool send_authenticate() {
     cJSON *root = cJSON_CreateObject();
     if (root == NULL)
         return false;
+
+    const joy_runtime_creds_t *rt = joy_runtime_get();
+    const char *tok = (rt && strlen(rt->runtime_device_token) > 0) ? rt->runtime_device_token : JOY_DEVICE_TOKEN;
+    const joy_identity_t *id = joy_identity_get();
+    const char *dev_id = (id && strlen(id->hardware_id) > 0) ? id->hardware_id : JOY_DEVICE_ID;
+
     cJSON_AddStringToObject(root, "event", "authenticate");
-    cJSON_AddStringToObject(root, "device_id", JOY_DEVICE_ID);
-    cJSON_AddStringToObject(root, "device_token", JOY_DEVICE_TOKEN);
+    cJSON_AddStringToObject(root, "device_id", dev_id);
+    cJSON_AddStringToObject(root, "device_token", tok);
     char *json_str = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
-
     if (json_str == NULL)
         return false;
-
     ESP_LOGI(TAG, "Sending authenticate to WS...");
     bool sent = ws_send_text(json_str, false);
     free(json_str);
@@ -880,6 +930,15 @@ static void handle_ws_message(const char *payload, int len) {
     else if (!ws_authenticated) {
         ESP_LOGW(TAG, "Ignoring WS event before valid authentication");
     }
+    else if (strcmp(event, "device_unpaired") == 0 ||
+             strcmp(event, "device_binding_revoked") == 0 ||
+             strcmp(event, "unpaired") == 0) {
+        ESP_LOGI(TAG, "Received unpair event from backend/app: transitioning to FACE_DEAD and UNPAIRED_IDLE");
+        joy_ble_unpair();
+        mark_ws_down("device_unpaired");
+        if (ws_client != NULL)
+            esp_websocket_client_close(ws_client, portMAX_DELAY);
+    }
     else if (strcmp(event, "pairing_code") == 0) {
         cJSON *code_node = cJSON_GetObjectItem(root, "code");
         cJSON *expires_node = cJSON_GetObjectItem(root, "expires_at");
@@ -889,8 +948,14 @@ static void handle_ws_message(const char *payload, int len) {
                 sizeof(PAIRING_CODE_FIELDS) / sizeof(PAIRING_CODE_FIELDS[0])) &&
             code_node != NULL && cJSON_IsString(code_node) &&
             expires_node != NULL && cJSON_IsString(expires_node);
-        if (valid_pairing_code)
+        if (valid_pairing_code) {
+            const joy_runtime_creds_t *runtime = joy_runtime_get();
+            if (runtime && runtime->is_provisioned) {
+                ESP_LOGI(TAG, "Received pairing_code while provisioned (app unpair): unpairing to FACE_DEAD");
+                joy_ble_unpair();
+            }
             (void)pairing_on_code(code_node->valuestring, expires_node->valuestring, time(NULL));
+        }
     }
     else if (strcmp(event, "pairing_completed") == 0) {
         cJSON *status_node = cJSON_GetObjectItem(root, "status");
@@ -922,6 +987,21 @@ static void handle_ws_message(const char *payload, int len) {
     else if (strcmp(event, "clear_qr") == 0) {
         ESP_LOGI(TAG, "Received clear_qr event");
         display_clear_qr_code();
+    }
+    else if (strcmp(event, "wifi_configuration") == 0) {
+        cJSON *config_id_node = cJSON_GetObjectItem(root, "configuration_id");
+        cJSON *ssid_node = cJSON_GetObjectItem(root, "ssid");
+        cJSON *password_node = cJSON_GetObjectItem(root, "password");
+
+        if (config_id_node != NULL && cJSON_IsString(config_id_node) &&
+            ssid_node != NULL && cJSON_IsString(ssid_node)) {
+            const char *password = (password_node != NULL && cJSON_IsString(password_node)) ? password_node->valuestring : NULL;
+            ESP_LOGI(TAG, "Received wifi_configuration event: config_id=%s, ssid=%s",
+                     config_id_node->valuestring, ssid_node->valuestring);
+            wifi_mgr_handle_remote_config(config_id_node->valuestring, ssid_node->valuestring, password);
+        } else {
+            ESP_LOGW(TAG, "Malformed wifi_configuration event");
+        }
     }
     else if (strcmp(event, "display_status") == 0) {
         cJSON *req_id_node = cJSON_GetObjectItem(root, "request_id");
@@ -1239,27 +1319,7 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
 }
 
 static void process_pairing_actions() {
-    const uint8_t actions = pairing_poll(time(NULL), esp_timer_get_time() / 1000);
-    if (actions == PAIRING_ACTION_NONE)
-        return;
-
-    if ((actions & PAIRING_ACTION_SHOW_UI) != 0) {
-#if !JOY_DEV_SUPPRESS_PAIRING_UI
-        const PairingSnapshot snapshot = pairing_get_snapshot();
-        if (!display_set_pairing_code(snapshot.code, snapshot.expires_at_epoch))
-            ESP_LOGW(TAG, "Pairing display update failed");
-#endif
-    }
-    if ((actions & PAIRING_ACTION_CLEAR_UI) != 0) {
-        display_clear_pairing_code();
-    }
-    if ((actions & PAIRING_ACTION_SEND_REQUEST) != 0) {
-        if (!send_pairing_mode_request())
-            ESP_LOGW(TAG, "Pairing mode request send failed");
-    }
-    if ((actions & PAIRING_ACTION_RECONNECT) != 0) {
-        ws_pairing_reconnect_pending = true;
-    }
+    // Legacy pairing code UI polling disabled: pairing is managed via BLE Scheme 2
 }
 
 // Background WS Monitor/Reconnect task

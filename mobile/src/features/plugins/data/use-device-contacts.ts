@@ -1,11 +1,51 @@
-import * as Contacts from 'expo-contacts/legacy';
+import type * as ContactsType from 'expo-contacts/legacy';
+import { requireOptionalNativeModule } from 'expo';
 import { useCallback, useState } from 'react';
 import { Linking, Platform } from 'react-native';
-
 import {
   createDeviceContact,
   type DeviceContact,
 } from '../domain/device-contacts';
+
+export function isNativeModuleAvailable(moduleName: string): boolean {
+  if (Platform.OS === 'web') {
+    return false;
+  }
+  try {
+    return requireOptionalNativeModule(moduleName) !== null;
+  } catch {
+    return false;
+  }
+}
+
+let cachedExpoContacts: typeof ContactsType | null | undefined = undefined;
+
+export function _resetExpoContactsCache(): void {
+  cachedExpoContacts = undefined;
+}
+
+export function _setExpoContactsForTesting(
+  module: typeof ContactsType | null | undefined,
+): void {
+  cachedExpoContacts = module;
+}
+
+export function getExpoContacts(): typeof ContactsType | null {
+  if (cachedExpoContacts !== undefined) {
+    return cachedExpoContacts;
+  }
+  if (!isNativeModuleAvailable('ExpoContacts')) {
+    cachedExpoContacts = null;
+    return null;
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    cachedExpoContacts = require('expo-contacts/legacy') as typeof ContactsType;
+  } catch {
+    cachedExpoContacts = null;
+  }
+  return cachedExpoContacts;
+}
 
 export type DeviceContactsStatus =
   | 'idle'
@@ -31,6 +71,12 @@ export function useDeviceContacts(): UseDeviceContactsResult {
   const [error, setError] = useState<string | null>(null);
 
   const fetchContactsData = useCallback(async () => {
+    const Contacts = getExpoContacts();
+    if (!Contacts) {
+      setStatus('denied');
+      setError('Contacts are unavailable in this environment.');
+      return;
+    }
     setStatus('loading');
     setError(null);
     try {
@@ -74,6 +120,12 @@ export function useDeviceContacts(): UseDeviceContactsResult {
   }, []);
 
   const requestPermission = useCallback(async (): Promise<boolean> => {
+    const Contacts = getExpoContacts();
+    if (!Contacts) {
+      setStatus('denied');
+      setError('Contacts are unavailable in this environment.');
+      return false;
+    }
     try {
       const permission = await Contacts.requestPermissionsAsync();
       if (permission.status === 'granted') {
@@ -91,6 +143,11 @@ export function useDeviceContacts(): UseDeviceContactsResult {
   }, [fetchContactsData]);
 
   const loadContacts = useCallback(async () => {
+    const Contacts = getExpoContacts();
+    if (!Contacts) {
+      setStatus('denied');
+      return;
+    }
     try {
       const permission = await Contacts.getPermissionsAsync();
       if (permission.status === 'granted') {

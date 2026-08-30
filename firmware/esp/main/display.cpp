@@ -1,6 +1,10 @@
 #include "display.h"
 #include "audio.h"
 #include "qrcodegen.h"
+#include "joy_identity.h"
+#include "joy_ble_provisioning.h"
+
+#include "esp_timer.h"
 
 #include <math.h>
 #include <stdint.h>
@@ -70,7 +74,7 @@ static bool display_on = false;
 static constexpr int FACE_CX = LCD_H_RES / 2;
 static constexpr int FACE_CY = LCD_V_RES / 2;
 static constexpr int TOUCH_FACE_COUNT =
-    static_cast<int>(FACE_CONFUSED) + 1;
+    static_cast<int>(FACE_DEAD) + 1;
 
 static DisplayMode current_display_mode = DisplayMode::IDLE;
 static Face current_touch_face = FACE_HAPPY;
@@ -85,6 +89,8 @@ static bool qr_code_active = false;
 static uint8_t qr_matrix[QR_BUFFER_LEN] = {};
 static time_t qr_expires_at_epoch = 0;
 static int qr_total_duration_sec = 0;
+static bool ble_pairing_active = false;
+static int ble_pairing_remaining_sec = 0;
 static constexpr uint32_t SHY_DURATION_MS = 5000;
 static constexpr uint32_t SHY_FRAME_MS = 250;
 static TaskHandle_t shy_animation_task_handle = NULL;
@@ -92,6 +98,42 @@ static portMUX_TYPE shy_animation_mux = portMUX_INITIALIZER_UNLOCKED;
 static bool shy_animation_active = false;
 static TickType_t shy_animation_deadline = 0;
 static int shy_animation_next_frame = 0;
+
+static constexpr uint64_t UNPAIRED_FACE_REVERT_DELAY_US = 4000000ULL;
+static esp_timer_handle_t unpaired_face_revert_timer = NULL;
+static bool unpaired_revert_active = false;
+static int s_unpaired_cycle_index = 0;
+
+static bool is_unpaired_locked()
+{
+    const joy_runtime_creds_t *runtime = joy_runtime_get();
+    if (runtime == NULL || !runtime->is_provisioned)
+    {
+        return true;
+    }
+    return (joy_ble_get_state() == JoyBleState::UNPAIRED_IDLE);
+}
+
+static void cancel_unpaired_revert_timer_locked()
+{
+    if(unpaired_face_revert_timer != NULL && unpaired_revert_active)
+    {
+        esp_timer_stop(unpaired_face_revert_timer);
+        unpaired_revert_active = false;
+    }
+}
+
+static void schedule_unpaired_revert_timer_locked()
+{
+    if(unpaired_face_revert_timer != NULL)
+    {
+        esp_timer_stop(unpaired_face_revert_timer);
+        unpaired_revert_active = true;
+        esp_timer_start_once(unpaired_face_revert_timer, UNPAIRED_FACE_REVERT_DELAY_US);
+    }
+}
+
+static void unpaired_face_revert_timer_cb(void *arg);
 
 static const char *face_name(Face face)
 {
@@ -107,6 +149,7 @@ static const char *face_name(Face face)
         case FACE_SURPRISED: return "SURPRISED";
         case FACE_LOVE: return "LOVE";
         case FACE_CONFUSED: return "CONFUSED";
+        case FACE_DEAD: return "DEAD";
         default: return "UNKNOWN";
     }
 }
@@ -176,7 +219,7 @@ static constexpr uint16_t COLOR_BLACK  = 0x0000;
 static constexpr uint16_t COLOR_WHITE  = 0xFFFF;
 static constexpr uint16_t COLOR_PINK   = 0xF81F;
 static constexpr uint16_t COLOR_RED    = 0xF800;
-static constexpr uint16_t COLOR_BLUE   = 0x001F;
+static constexpr uint16_t COLOR_BLUE   = 0x00FC; // True Bluetooth Blue (R=0, G=129, B=255) on BGR panel
 static constexpr uint16_t COLOR_YELLOW = 0xFFE0;
 static constexpr uint16_t COLOR_ORANGE = 0xFD20;
 static constexpr uint16_t COLOR_PURPLE = rgb565(130, 70, 180);
@@ -601,6 +644,11 @@ static void draw_screen_base()
     fill_circle(278, 220, 4, COLOR_BLACK);
 }
 
+static void clear_face_panel()
+{
+    fill_round_rect(32, 32, 256, 176, 18, COLOR_FACE);
+}
+
 //--------------------------------------------------
 
 // Five-by-seven sans-serif-style bitmap glyphs. Each row uses its low five
@@ -638,7 +686,46 @@ static void pairing_fill_x_mirrored_rect(
         color);
 }
 
-static void draw_pairing_digit(
+static inline int user_x_to_fb(int user_x)
+{
+    return LCD_H_RES - 1 - user_x;
+}
+
+static void draw_user_thick_line(int ux1, int uy1, int ux2, int uy2, uint16_t color, int thickness)
+{
+    thick_line(user_x_to_fb(ux1), uy1, user_x_to_fb(ux2), uy2, color, thickness);
+}
+
+static void draw_pairing_digit_scaled(
+    int x,
+    int y,
+    uint8_t digit,
+    int scale_x,
+    int scale_y)
+{
+    if(digit > 9)
+        return;
+
+    for(int row = 0; row < PAIRING_GLYPH_ROWS; ++row)
+    {
+        const uint8_t bits = PAIRING_NUMERIC_GLYPHS[digit][row];
+
+        for(int column = 0; column < PAIRING_GLYPH_COLUMNS; ++column)
+        {
+            if((bits & (1U << (PAIRING_GLYPH_COLUMNS - 1 - column))) != 0)
+            {
+                pairing_fill_x_mirrored_rect(
+                    x + column * scale_x,
+                    y + row * scale_y,
+                    scale_x,
+                    scale_y,
+                    COLOR_BLACK);
+            }
+        }
+    }
+}
+
+[[maybe_unused]] static void draw_pairing_digit(
     int x,
     int y,
     uint8_t digit)
@@ -665,62 +752,75 @@ static void draw_pairing_digit(
     }
 }
 
-static void draw_pairing_overlay_locked()
+static void draw_bluetooth_icon(int ucx, int ucy, int size)
+{
+    fill_circle(user_x_to_fb(ucx), ucy, size + 8, COLOR_BLUE);
+
+    const int spine_h = size;
+    const int wing_w = size * 3 / 5;
+    const int thick = 3;
+
+    // Vertical spine
+    draw_user_thick_line(ucx, ucy - spine_h, ucx, ucy + spine_h, COLOR_WHITE, thick);
+
+    // Top diagonal stroke
+    draw_user_thick_line(ucx - wing_w, ucy + spine_h / 2, ucx + wing_w, ucy - spine_h / 2, COLOR_WHITE, thick);
+    draw_user_thick_line(ucx + wing_w, ucy - spine_h / 2, ucx, ucy - spine_h, COLOR_WHITE, thick);
+
+    // Bottom diagonal stroke
+    draw_user_thick_line(ucx - wing_w, ucy - spine_h / 2, ucx + wing_w, ucy + spine_h / 2, COLOR_WHITE, thick);
+    draw_user_thick_line(ucx + wing_w, ucy + spine_h / 2, ucx, ucy + spine_h, COLOR_WHITE, thick);
+}
+
+static void draw_ble_pairing_overlay_locked()
 {
     display_wake();
     draw_screen_base();
+    clear_face_panel();
 
-    for(int index = 0; index < 6; ++index)
-    {
-        const int x =
-            PAIRING_START_X + index * (PAIRING_DIGIT_WIDTH + PAIRING_DIGIT_GAP);
-        draw_pairing_digit(
-            x,
-            PAIRING_START_Y,
-            static_cast<uint8_t>(pairing_code[index] - '0'));
-    }
+    // 1. Bluetooth Logo centered at (160, 86)
+    draw_bluetooth_icon(160, 86, 20);
 
-    if(pairing_expires_at_epoch > 0 && pairing_total_duration_sec > 0)
-    {
-        pairing_fill_x_mirrored_rect(
-            PAIRING_START_X,
-            PAIRING_BAR_Y,
-            PAIRING_TOTAL_WIDTH,
-            PAIRING_BAR_HEIGHT,
-            COLOR_BLACK);
+    // 2. Countdown Timer MM:SS at Y=144
+    int rem_sec = ble_pairing_remaining_sec;
+    if(rem_sec < 0)
+        rem_sec = 0;
+    const int minutes = rem_sec / 60;
+    const int seconds = rem_sec % 60;
 
-        const int inner_max_width = PAIRING_TOTAL_WIDTH - 2;
-        const int inner_height = PAIRING_BAR_HEIGHT - 2;
-        pairing_fill_x_mirrored_rect(
-            PAIRING_START_X + 1,
-            PAIRING_BAR_Y + 1,
-            inner_max_width,
-            inner_height,
-            COLOR_WHITE);
+    const int start_x = 105;
+    const int start_y = 144;
+    const int scale_x = 4;
+    const int scale_y = 6;
+    const int d_w = 5 * scale_x; // 20
+    const int d_gap = 4;
+    const int colon_w = 6;
+    const int colon_gap = 8;
 
-        const time_t now_epoch = time(NULL);
-        const int remaining_sec =
-            (pairing_expires_at_epoch > now_epoch) ?
-                static_cast<int>(pairing_expires_at_epoch - now_epoch) : 0;
+    int cur_x = start_x;
+    draw_pairing_digit_scaled(cur_x, start_y, minutes / 10, scale_x, scale_y);
+    cur_x += d_w + d_gap;
+    draw_pairing_digit_scaled(cur_x, start_y, minutes % 10, scale_x, scale_y);
+    cur_x += d_w + colon_gap;
 
-        int fill_width = (remaining_sec * inner_max_width) / pairing_total_duration_sec;
-        fill_width = clamp_value(fill_width, 0, inner_max_width);
-        last_rendered_fill_width = fill_width;
+    // Colon ':'
+    pairing_fill_x_mirrored_rect(cur_x, start_y + 10, 4, 5, COLOR_BLACK);
+    pairing_fill_x_mirrored_rect(cur_x, start_y + 26, 4, 5, COLOR_BLACK);
+    cur_x += colon_w + colon_gap;
 
-        if(fill_width > 0)
-        {
-            pairing_fill_x_mirrored_rect(
-                PAIRING_START_X + 1,
-                PAIRING_BAR_Y + 1,
-                fill_width,
-                inner_height,
-                COLOR_BLACK);
-        }
-    }
+    draw_pairing_digit_scaled(cur_x, start_y, seconds / 10, scale_x, scale_y);
+    cur_x += d_w + d_gap;
+    draw_pairing_digit_scaled(cur_x, start_y, seconds % 10, scale_x, scale_y);
 
     flush_framebuffer_locked();
+    ESP_LOGI(TAG, "BLE pairing overlay rendered: remaining_sec=%d (%02d:%02d)",
+             ble_pairing_remaining_sec, minutes, seconds);
 }
 
+static void draw_pairing_overlay_locked()
+{
+    // Legacy 6-digit code overlay disabled: pairing is managed via BLE Scheme 2
+}
 static void draw_qr_overlay_locked()
 {
     display_wake();
@@ -768,14 +868,8 @@ static void draw_qr_overlay_locked()
 
     flush_framebuffer_locked();
 }
-//--------------------------------------------------
 
-static void clear_face_panel()
-{
-    fill_round_rect(32, 32, 256, 176, 18, COLOR_FACE);
-}
 
-//--------------------------------------------------
 
 static void eye_round(
     int x,
@@ -803,6 +897,18 @@ static void eye_sleepy(
     int y)
 {
     thick_line(x - 18, y, x + 18, y, COLOR_BLACK, 4);
+}
+
+//--------------------------------------------------
+
+static void eye_x(
+    int x,
+    int y,
+    int size,
+    int thickness)
+{
+    thick_line(x - size, y - size, x + size, y + size, COLOR_BLACK, thickness);
+    thick_line(x - size, y + size, x + size, y - size, COLOR_BLACK, thickness);
 }
 
 //--------------------------------------------------
@@ -1116,6 +1222,17 @@ static void face_confused()
 }
 
 //--------------------------------------------------
+static void face_dead()
+{
+    clear_face_panel();
+
+    eye_x(FACE_CX - 55, FACE_CY - 35, 18, 4);
+    eye_x(FACE_CX + 55, FACE_CY - 35, 18, 4);
+
+    mouth_flat();
+}
+
+//--------------------------------------------------
 
 static void draw_face_locked(
     Face face)
@@ -1165,6 +1282,9 @@ static void draw_face_locked(
             face_confused();
             break;
 
+        case FACE_DEAD:
+            face_dead();
+            break;
         default:
             face_excited();
             break;
@@ -1173,6 +1293,24 @@ static void draw_face_locked(
     flush_framebuffer_locked();
 
     ESP_LOGI(TAG, "Face actually rendered: %s(%d)", face_name(face), (int)face);
+}
+
+static void unpaired_face_revert_timer_cb(void *arg)
+{
+    if(!lock_display(pdMS_TO_TICKS(500)))
+        return;
+
+    unpaired_revert_active = false;
+
+    if(display_ready && current_display_mode == DisplayMode::IDLE &&
+       !pairing_code_active && !qr_code_active && !ble_pairing_active && is_unpaired_locked())
+    {
+        current_touch_face = FACE_DEAD;
+        draw_face_locked(FACE_DEAD);
+        ESP_LOGI(TAG, "Unpaired auto-revert: face returned to FACE_DEAD");
+    }
+
+    unlock_display();
 }
 
 static void draw_shy_frame_locked(int frame_index)
@@ -1249,7 +1387,8 @@ static void shy_animation_task(void *param)
                        display_ready &&
                        current_display_mode == DisplayMode::IDLE &&
                        !pairing_code_active &&
-                       !qr_code_active)
+                       !qr_code_active &&
+                       !ble_pairing_active)
                     {
                         draw_face_locked(current_touch_face);
                     }
@@ -1273,7 +1412,8 @@ static void shy_animation_task(void *param)
                    display_ready &&
                    current_display_mode == DisplayMode::IDLE &&
                    !pairing_code_active &&
-                   !qr_code_active)
+                   !qr_code_active &&
+                   !ble_pairing_active)
                 {
                     draw_shy_frame_locked(frame_index);
                 }
@@ -1289,7 +1429,7 @@ static void shy_animation_task(void *param)
 
 //--------------------------------------------------
 
-static bool is_six_digit_pairing_code(
+[[maybe_unused]] static bool is_six_digit_pairing_code(
     const char *code)
 {
     if(code == NULL || strlen(code) != 6)
@@ -1489,6 +1629,20 @@ void display_init()
         }
     }
 
+    if(unpaired_face_revert_timer == NULL)
+    {
+        esp_timer_create_args_t timer_args = {};
+        timer_args.callback = unpaired_face_revert_timer_cb;
+        timer_args.arg = NULL;
+        timer_args.name = "unpaired_revert";
+        esp_err_t err = esp_timer_create(&timer_args, &unpaired_face_revert_timer);
+        if(err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to create unpaired revert timer: %s", esp_err_to_name(err));
+            unpaired_face_revert_timer = NULL;
+        }
+    }
+
     ESP_LOGI(TAG, "ILI9341 Ready");
 }
 
@@ -1501,6 +1655,7 @@ void display_sleep()
 
     cancel_shy_animation();
     audio_cancelExpressionAudio();
+    cancel_unpaired_revert_timer_locked();
 
     if(!lock_display(pdMS_TO_TICKS(1000)))
         return;
@@ -1567,6 +1722,7 @@ void display_face(
     }
 
     cancel_shy_animation();
+    cancel_unpaired_revert_timer_locked();
 
     if(!lock_display(pdMS_TO_TICKS(1000)))
     {
@@ -1582,11 +1738,14 @@ void display_face(
     {
         draw_pairing_overlay_locked();
     }
+    else if(current_display_mode == DisplayMode::IDLE && ble_pairing_active)
+    {
+        draw_ble_pairing_overlay_locked();
+    }
     else
     {
         draw_face_locked(face);
     }
-
     unlock_display();
 }
 
@@ -1599,6 +1758,7 @@ void display_set_idle_face(Face face)
     }
 
     cancel_shy_animation();
+    cancel_unpaired_revert_timer_locked();
 
     if(!lock_display(pdMS_TO_TICKS(1000)))
     {
@@ -1607,6 +1767,7 @@ void display_set_idle_face(Face face)
     }
 
     current_touch_face = face;
+    ble_pairing_active = false;
 
     if(current_display_mode == DisplayMode::IDLE)
     {
@@ -1617,7 +1778,6 @@ void display_set_idle_face(Face face)
         else
             draw_face_locked(current_touch_face);
     }
-
     unlock_display();
     ESP_LOGI(TAG, "Idle face set: face=%s(%d)", face_name(face), (int)face);
 }
@@ -1630,32 +1790,61 @@ Face display_next_touch_face()
         return next_face;
 
     cancel_shy_animation();
+    cancel_unpaired_revert_timer_locked();
 
     const Face previous_face = current_touch_face;
-    const int next_face_index =
-        (static_cast<int>(current_touch_face) + 1) % TOUCH_FACE_COUNT;
-    current_touch_face = static_cast<Face>(next_face_index);
-    next_face = current_touch_face;
 
-    if(display_ready && current_display_mode == DisplayMode::IDLE)
+    if(is_unpaired_locked())
     {
-        if(qr_code_active)
-            draw_qr_overlay_locked();
-        else if(pairing_code_active)
-            draw_pairing_overlay_locked();
-        else
-            draw_face_locked(current_touch_face);
+        const int next_face_index = s_unpaired_cycle_index % static_cast<int>(FACE_DEAD);
+        s_unpaired_cycle_index = (next_face_index + 1) % static_cast<int>(FACE_DEAD);
+        current_touch_face = static_cast<Face>(next_face_index);
+        next_face = current_touch_face;
+
+        if(display_ready && current_display_mode == DisplayMode::IDLE)
+        {
+            if(qr_code_active)
+                draw_qr_overlay_locked();
+            else if(pairing_code_active)
+                draw_pairing_overlay_locked();
+            else if(ble_pairing_active)
+                draw_ble_pairing_overlay_locked();
+            else
+                draw_face_locked(current_touch_face);
+        }
+
+        schedule_unpaired_revert_timer_locked();
+    }
+    else
+    {
+        const int next_face_index =
+            (static_cast<int>(current_touch_face) + 1) % TOUCH_FACE_COUNT;
+        current_touch_face = static_cast<Face>(next_face_index);
+        next_face = current_touch_face;
+
+        if(display_ready && current_display_mode == DisplayMode::IDLE)
+        {
+            if(qr_code_active)
+                draw_qr_overlay_locked();
+            else if(pairing_code_active)
+                draw_pairing_overlay_locked();
+            else if(ble_pairing_active)
+                draw_ble_pairing_overlay_locked();
+            else
+                draw_face_locked(current_touch_face);
+        }
     }
 
     ESP_LOGI(
         TAG,
-        "Idle face advance: before=%s(%d) after=%s(%d) render_requested=%d mode=%s",
+        "Idle face advance: before=%s(%d) after=%s(%d) render_requested=%d mode=%s unpaired=%d",
         face_name(previous_face),
         (int)previous_face,
         face_name(current_touch_face),
         (int)current_touch_face,
         display_ready && current_display_mode == DisplayMode::IDLE ? 1 : 0,
-        display_mode_name(current_display_mode));
+        display_mode_name(current_display_mode),
+        is_unpaired_locked() ? 1 : 0);
 
     unlock_display();
     return next_face;
@@ -1683,11 +1872,14 @@ bool display_start_shy()
 
     if(current_display_mode != DisplayMode::IDLE ||
        pairing_code_active ||
-       qr_code_active)
+       qr_code_active ||
+       ble_pairing_active)
     {
         unlock_display();
         return false;
     }
+
+    cancel_unpaired_revert_timer_locked();
 
     // Shy is transient. HAPPY remains the persistent idle face that is
     // restored after five seconds or after a higher-priority interaction.
@@ -1722,12 +1914,45 @@ bool display_is_shy_active()
     return active;
 }
 
+bool display_is_unpaired_revert_active()
+{
+    if(!lock_display(pdMS_TO_TICKS(500)))
+        return unpaired_revert_active;
+    bool active = unpaired_revert_active;
+    unlock_display();
+    return active;
+}
+
+void display_cancel_unpaired_revert()
+{
+    if(!lock_display(pdMS_TO_TICKS(500)))
+        return;
+    cancel_unpaired_revert_timer_locked();
+    unlock_display();
+}
+
+void display_trigger_unpaired_revert()
+{
+    if(!lock_display(pdMS_TO_TICKS(500)))
+        return;
+    cancel_unpaired_revert_timer_locked();
+    if(display_ready && current_display_mode == DisplayMode::IDLE &&
+       !pairing_code_active && !qr_code_active && !ble_pairing_active && is_unpaired_locked())
+    {
+        current_touch_face = FACE_DEAD;
+        draw_face_locked(FACE_DEAD);
+        ESP_LOGI(TAG, "Unpaired revert triggered: face returned to FACE_DEAD");
+    }
+    unlock_display();
+}
+
 void display_set_mode(DisplayMode mode)
 {
     if(mode != DisplayMode::IDLE)
     {
         cancel_shy_animation();
         audio_cancelExpressionAudio();
+        cancel_unpaired_revert_timer_locked();
     }
 
     if(!lock_display(pdMS_TO_TICKS(1000)))
@@ -1760,6 +1985,12 @@ void display_set_mode(DisplayMode mode)
         return;
     }
 
+    if(mode == DisplayMode::IDLE && ble_pairing_active)
+    {
+        draw_ble_pairing_overlay_locked();
+        unlock_display();
+        return;
+    }
     switch(mode)
     {
         case DisplayMode::IDLE:
@@ -1790,65 +2021,13 @@ bool display_set_pairing_code(
     const char code[7],
     time_t expires_at_epoch)
 {
-    if(!is_six_digit_pairing_code(code))
-        return false;
-
-    cancel_shy_animation();
-    audio_cancelExpressionAudio();
-
-    if(!lock_display(pdMS_TO_TICKS(1000)))
-        return false;
-
-    if(pairing_code_active && memcmp(pairing_code, code, sizeof(pairing_code)) == 0 &&
-       pairing_expires_at_epoch == expires_at_epoch)
-    {
-        unlock_display();
-        return true;
-    }
-
-    secure_clear_pairing_code_locked();
-    memcpy(pairing_code, code, 6);
-    pairing_code[6] = '\0';
-    pairing_expires_at_epoch = expires_at_epoch;
-    if(expires_at_epoch > 0)
-    {
-        const time_t now_epoch = time(NULL);
-        if(expires_at_epoch > now_epoch)
-            pairing_total_duration_sec = static_cast<int>(expires_at_epoch - now_epoch);
-        else
-            pairing_total_duration_sec = 0;
-    }
-    pairing_code_active = true;
-
-    if(display_ready && current_display_mode == DisplayMode::IDLE && !qr_code_active)
-        draw_pairing_overlay_locked();
-    unlock_display();
+    // Legacy pairing code overlay disabled: pairing is managed via BLE Scheme 2
     return true;
 }
 
 void display_update_pairing_countdown()
 {
-    if(!lock_display(pdMS_TO_TICKS(100)))
-        return;
-
-    if(display_ready && display_on && pairing_code_active && !qr_code_active && current_display_mode == DisplayMode::IDLE &&
-       pairing_expires_at_epoch > 0 && pairing_total_duration_sec > 0)
-    {
-        const time_t now_epoch = time(NULL);
-        const int remaining_sec =
-            (pairing_expires_at_epoch > now_epoch) ?
-                static_cast<int>(pairing_expires_at_epoch - now_epoch) : 0;
-        const int inner_max_width = PAIRING_TOTAL_WIDTH - 2;
-        int fill_width = (remaining_sec * inner_max_width) / pairing_total_duration_sec;
-        fill_width = clamp_value(fill_width, 0, inner_max_width);
-
-        if(fill_width != last_rendered_fill_width)
-        {
-            draw_pairing_overlay_locked();
-        }
-    }
-
-    unlock_display();
+    // Legacy countdown overlay disabled
 }
 
 void display_clear_pairing_code()
@@ -1881,17 +2060,7 @@ void display_clear_pairing_code()
 
 bool display_pairing_code_is_visible()
 {
-    if(!lock_display(pdMS_TO_TICKS(100)))
-        return false;
-
-    const bool visible =
-        display_ready &&
-        display_on &&
-        pairing_code_active &&
-        !qr_code_active &&
-        current_display_mode == DisplayMode::IDLE;
-    unlock_display();
-    return visible;
+    return false;
 }
 
 bool display_set_qr_code(
@@ -2018,6 +2187,82 @@ bool display_qr_code_is_visible()
         display_ready &&
         display_on &&
         qr_code_active &&
+        current_display_mode == DisplayMode::IDLE;
+    unlock_display();
+    return visible;
+}
+
+bool display_show_ble_pairing(int remaining_seconds)
+{
+    cancel_shy_animation();
+    cancel_unpaired_revert_timer_locked();
+
+    if(!lock_display(pdMS_TO_TICKS(1000)))
+        return false;
+
+    ble_pairing_active = true;
+    ble_pairing_remaining_sec = remaining_seconds;
+
+    if(display_ready && current_display_mode == DisplayMode::IDLE)
+        draw_ble_pairing_overlay_locked();
+
+    unlock_display();
+    return true;
+}
+
+void display_update_ble_countdown(int remaining_seconds)
+{
+    if(!lock_display(pdMS_TO_TICKS(100)))
+        return;
+
+    if(display_ready && display_on && ble_pairing_active && current_display_mode == DisplayMode::IDLE)
+    {
+        ble_pairing_remaining_sec = remaining_seconds;
+        draw_ble_pairing_overlay_locked();
+    }
+
+    unlock_display();
+}
+
+void display_hide_ble_pairing()
+{
+    if(!lock_display(pdMS_TO_TICKS(1000)))
+        return;
+
+    if(!ble_pairing_active)
+    {
+        unlock_display();
+        return;
+    }
+
+    ble_pairing_active = false;
+    ble_pairing_remaining_sec = 0;
+
+    const bool redraw_idle_face =
+        display_ready && current_display_mode == DisplayMode::IDLE;
+
+    if(redraw_idle_face)
+    {
+        if(qr_code_active)
+            draw_qr_overlay_locked();
+        else if(pairing_code_active)
+            draw_pairing_overlay_locked();
+        else
+            draw_face_locked(current_touch_face);
+    }
+
+    unlock_display();
+}
+
+bool display_ble_pairing_is_visible()
+{
+    if(!lock_display(pdMS_TO_TICKS(100)))
+        return false;
+
+    const bool visible =
+        display_ready &&
+        display_on &&
+        ble_pairing_active &&
         current_display_mode == DisplayMode::IDLE;
     unlock_display();
     return visible;

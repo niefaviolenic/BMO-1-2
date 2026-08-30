@@ -12,7 +12,10 @@
       "icon": "./assets/images/icon.png",
       "associatedDomains": [
         "applinks:myjoy.binerlabs.com"
-      ]
+      ],
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "Joy uses Bluetooth to discover and configure your physical Joy Robot."
+      }
     },
     "android": {
       "package": "com.binerlabs.joy",
@@ -22,6 +25,13 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
       "predictiveBackGestureEnabled": false,
       "intentFilters": [
         {
@@ -52,6 +62,14 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "modes": ["peripheral", "central"],
+          "bluetoothAlwaysPermission": "Joy requires Bluetooth to pair with your Joy Robot companion."
+        }
+      ],
       [
         "expo-splash-screen",
         {

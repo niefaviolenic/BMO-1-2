@@ -180,7 +180,7 @@ static size_t preroll_drain_locked(int16_t *dest, size_t max_samples)
     return count_to_copy;
 }
 
-static void preroll_reset()
+[[maybe_unused]] static void preroll_reset()
 {
     portENTER_CRITICAL(&preroll_mux);
     preroll_count = 0;
@@ -434,9 +434,8 @@ static esp_err_t wakeword_i2s_init(
 
     i2s_chan_config_t channel_config =
         I2S_CHANNEL_DEFAULT_CONFIG(
-            I2S_NUM_AUTO,
+            I2S_NUM_1,
             I2S_ROLE_MASTER);
-
     ESP_RETURN_ON_ERROR(
         i2s_new_channel(
             &channel_config,
@@ -646,7 +645,7 @@ static void wakeword_listener_task(
                 if(detected == WAKENET_DETECTED)
                 {
                     PairingSnapshot pairing_snapshot = pairing_get_snapshot();
-                    if (pairing_snapshot.phase != PairingPhase::NONE || display_pairing_code_is_visible() || display_qr_code_is_visible())
+                    if (pairing_snapshot.phase != PairingPhase::NONE || display_pairing_code_is_visible() || display_qr_code_is_visible() || display_ble_pairing_is_visible())
                     {
                         ESP_LOGW(TAG, "Hi Joy detected but ignored: robot is in pairing mode or QR display mode");
                         continue;
@@ -847,10 +846,11 @@ void wakeword_init()
 
     ESP_LOGI(
         TAG,
-        "WakeNet model: %s",
-        model_name);
-
-    if(wake_words != NULL)
+        "WakeNet model: %s (Free Internal Heap: %lu bytes, Free SPIRAM: %lu bytes)",
+        model_name,
+        (unsigned long)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+        (unsigned long)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+    if (wake_words != NULL)
     {
         ESP_LOGI(
             TAG,
@@ -860,7 +860,6 @@ void wakeword_init()
         free(
             wake_words);
     }
-
     wakenet =
         esp_wn_handle_from_name(
             model_name);
@@ -871,6 +870,12 @@ void wakeword_init()
             TAG,
             "WakeNet handle failed");
 
+        return;
+    }
+    size_t free_spiram = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    if (free_spiram < 200000) {
+        ESP_LOGE(TAG, "Insufficient SPIRAM for WakeNet (%lu bytes available, >=200KB required). Wakeword disabled safely to prevent crash.",
+                 (unsigned long)free_spiram);
         return;
     }
 
@@ -949,14 +954,15 @@ void wakeword_init()
     }
 
     BaseType_t task_created =
-        xTaskCreatePinnedToCore(
+        xTaskCreatePinnedToCoreWithCaps(
             wakeword_listener_task,
             "wakeword_listener",
             WAKEWORD_TASK_STACK_SIZE,
             NULL,
             WAKEWORD_TASK_PRIORITY,
             &wakeword_task_handle,
-            1);
+            1,
+            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 
     if(task_created != pdPASS)
     {
@@ -977,7 +983,7 @@ void wakeword_init()
 bool wakeword_task()
 {
     PairingSnapshot pairing_snapshot = pairing_get_snapshot();
-    if (pairing_snapshot.phase != PairingPhase::NONE || display_pairing_code_is_visible() || display_qr_code_is_visible())
+    if (pairing_snapshot.phase != PairingPhase::NONE || display_pairing_code_is_visible() || display_qr_code_is_visible() || display_ble_pairing_is_visible())
     {
         ESP_LOGW(TAG, "Wake task rejected: robot is in pairing mode or QR display mode");
         return false;

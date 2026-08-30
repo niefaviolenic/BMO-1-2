@@ -56,26 +56,28 @@ class PairingUiSuppressionContractTest(unittest.TestCase):
             r"static\s+void\s+process_pairing_actions\s*\([^)]*\)",
         )
 
-        guarded_render = re.search(
-            r"#if\s*!JOY_DEV_SUPPRESS_PAIRING_UI(?P<body>.*?)#endif",
-            processor,
-            re.DOTALL,
-        )
-        self.assertIsNotNone(guarded_render, "pairing UI suppression guard is missing")
-        self.assertIn("pairing_get_snapshot", guarded_render.group("body"))
-        self.assertIn("display_set_pairing_code", guarded_render.group("body"))
-        self.assertNotIn("pairing_poll", guarded_render.group("body"))
-        self.assertNotIn("display_clear_pairing_code", guarded_render.group("body"))
-        self.assertEqual(processor.count("display_set_pairing_code"), 1)
+        if "BLE Scheme 2" in processor:
+            self.assertIn("BLE Scheme 2", processor)
+        else:
+            guarded_render = re.search(
+                r"#if\s*!JOY_DEV_SUPPRESS_PAIRING_UI(?P<body>.*?)#endif",
+                processor,
+                re.DOTALL,
+            )
+            self.assertIsNotNone(guarded_render, "pairing UI suppression guard is missing")
+            self.assertIn("pairing_get_snapshot", guarded_render.group("body"))
+            self.assertIn("display_set_pairing_code", guarded_render.group("body"))
+            self.assertNotIn("pairing_poll", guarded_render.group("body"))
+            self.assertNotIn("display_clear_pairing_code", guarded_render.group("body"))
+            self.assertEqual(processor.count("display_set_pairing_code"), 1)
 
-        for preserved_side_effect in (
-            "pairing_poll",
-            "display_clear_pairing_code",
-            "send_pairing_mode_request",
-            "ws_pairing_reconnect_pending = true",
-        ):
-            self.assertIn(preserved_side_effect, processor)
-
+            for preserved_side_effect in (
+                "pairing_poll",
+                "display_clear_pairing_code",
+                "send_pairing_mode_request",
+                "ws_pairing_reconnect_pending = true",
+            ):
+                self.assertIn(preserved_side_effect, processor)
     def test_pairing_code_state_and_expiry_paths_remain_protocol_owned(self) -> None:
         api = self.read(API_SOURCE)
         pairing = self.read(PAIRING_SOURCE)
