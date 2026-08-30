@@ -68,6 +68,12 @@ void display_clear_qr_code();
 
 bool display_qr_code_is_visible();
 
+// BLE Pairing UI with Bluetooth logo and countdown timer (seconds remaining)
+bool display_show_ble_pairing(int remaining_seconds);
+void display_update_ble_countdown(int remaining_seconds);
+void display_hide_ble_pairing();
+bool display_ble_pairing_is_visible();
+
 void display_test_pattern();
 
 #endif

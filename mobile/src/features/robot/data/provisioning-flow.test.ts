@@ -5,7 +5,12 @@ import {
   type DiscoveredWifiNetwork,
 } from './provisioning-flow';
 import { bleClient } from '@/lib/ble/ble-transport';
-import { prepareProvisioning, confirmProvisioning, commitClaim } from './device-api';
+import {
+  prepareProvisioning,
+  confirmProvisioning,
+  commitClaim,
+  getProvisioningStatus,
+} from './device-api';
 
 vi.mock('@/lib/ble/ble-transport', () => ({
   bleClient: {
@@ -63,7 +68,7 @@ vi.mock('./device-api', () => ({
     reservation_id: '66666666-7777-4888-8999-aaaaaaaaaaaa',
   }),
   getProvisioningStatus: vi.fn().mockResolvedValue({
-    status: 'COMMITTED',
+    status: 'FINALIZED_PENDING_RUNTIME_ACK',
     hardware_id: 'joy_11111111-2222-4333-8444-555555555555',
     device_id: 'dev_01',
     updated_at: '2026-08-30T12:05:00.000Z',
@@ -181,6 +186,84 @@ describe('JoyProvisioningManager (Real BLE v4 Implementation)', () => {
 
     await expect(manager.selectJoy(mockJoy)).rejects.toThrow(
       'Invalid or incomplete hardware identity received from robot via BLE'
+    );
+    expect(manager.getState().step).toBe('error');
+  });
+
+  it('fails loudly when backend finalization times out during polling', async () => {
+    vi.mocked(getProvisioningStatus).mockResolvedValue({
+      status: 'COMMITTED',
+      hardware_id: 'joy_11111111-2222-4333-8444-555555555555',
+      device_id: null,
+      updated_at: '2026-08-30T12:05:00.000Z',
+    });
+
+    const mockJoy: DiscoveredJoy = {
+      id: 'ble-peripheral-01',
+      name: 'JOY-A7F2',
+      provisioningRef: 'A7F2',
+      hardwareId: '',
+      setupNonce: '',
+      resetEpoch: 0,
+      rssi: -55,
+    };
+
+    await manager.selectJoy(mockJoy);
+    await manager.onPhysicalConfirmationReceived({
+      confirmation_nonce: 'EBESExQVFhcYGRobHB0eHw',
+      proof: 'TOmZUKCRvTvowaPBCBMM1ndVLR4GTcwrOXbdydNsdwg',
+    });
+
+    const mockNetwork: DiscoveredWifiNetwork = {
+      ssid: 'Home-WiFi-2.4G',
+      rssi: -40,
+      security: 'WPA2',
+    };
+    manager.setDiscoveredWifiNetworks([mockNetwork]);
+    manager.selectWifiNetwork(mockNetwork);
+
+    await expect(
+      manager.submitWifiCredentials('pass', undefined, { maxPollAttempts: 3, pollIntervalMs: 1 })
+    ).rejects.toThrow(
+      'Robot Wi-Fi configured, but backend finalization timed out'
+    );
+    expect(manager.getState().step).toBe('error');
+  });
+
+  it('fails loudly when backend returns CANCELLED status during polling', async () => {
+    vi.mocked(getProvisioningStatus).mockResolvedValueOnce({
+      status: 'CANCELLED',
+      hardware_id: 'joy_11111111-2222-4333-8444-555555555555',
+      device_id: null,
+      updated_at: '2026-08-30T12:05:00.000Z',
+    });
+
+    const mockJoy: DiscoveredJoy = {
+      id: 'ble-peripheral-01',
+      name: 'JOY-A7F2',
+      provisioningRef: 'A7F2',
+      hardwareId: '',
+      setupNonce: '',
+      resetEpoch: 0,
+      rssi: -55,
+    };
+
+    await manager.selectJoy(mockJoy);
+    await manager.onPhysicalConfirmationReceived({
+      confirmation_nonce: 'EBESExQVFhcYGRobHB0eHw',
+      proof: 'TOmZUKCRvTvowaPBCBMM1ndVLR4GTcwrOXbdydNsdwg',
+    });
+
+    const mockNetwork: DiscoveredWifiNetwork = {
+      ssid: 'Home-WiFi-2.4G',
+      rssi: -40,
+      security: 'WPA2',
+    };
+    manager.setDiscoveredWifiNetworks([mockNetwork]);
+    manager.selectWifiNetwork(mockNetwork);
+
+    await expect(manager.submitWifiCredentials('pass')).rejects.toThrow(
+      'Provisioning session was cancelled'
     );
     expect(manager.getState().step).toBe('error');
   });

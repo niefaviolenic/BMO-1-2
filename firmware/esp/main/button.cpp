@@ -379,12 +379,15 @@ void button_update()
             } else if (duration_us < 2000000LL) {
                 // Short click:
                 if (released_btn == BtnKind::EXPR || released_btn == BtnKind::BOOT) {
-                    if (getState() == JoyState::IDLE) {
+                    if (getState() == JoyState::IDLE &&
+                        !display_pairing_code_is_visible() &&
+                        !display_qr_code_is_visible() &&
+                        !display_ble_pairing_is_visible()) {
                         const Face next_face = display_next_touch_face();
                         ESP_LOGI(TAG, "Expression button click -> switched to face=%d", (int)next_face);
                         audio_triggerExpressionAudio((int)next_face);
                     } else {
-                        ESP_LOGW(TAG, "Expression button ignored: state=%s (not IDLE)", joy_state_name(getState()));
+                        ESP_LOGW(TAG, "Expression button ignored: state=%s (not IDLE or pairing visible)", joy_state_name(getState()));
                     }
                 } else if (released_btn == BtnKind::VOL_UP) {
                     audio_adjustVolume(VOLUME_STEP);
@@ -413,19 +416,23 @@ void button_update()
             hold_us >= 2000000LL && !s_hold_2s_triggered) {
             s_hold_2s_triggered = true;
             joy_ble_on_physical_hold_2s();
-            display_set_idle_face(FACE_HAPPY);
             ESP_LOGI(TAG, "=======================================================");
             ESP_LOGI(TAG, ">>> PHYSICAL PROOF 2S HOLD CONFIRMED & SENT VIA BLE! <<<");
             ESP_LOGI(TAG, "=======================================================");
         }
 
-        // 5-second hold for BLE pairing window reset:
+        // 5-second hold for BLE pairing window reset / unpair:
         if (hold_us >= 5000000LL && !s_hold_5s_triggered) {
             s_hold_5s_triggered = true;
-            ESP_LOGI(TAG, ">>> 5-SECOND HOLD DETECTED! Opening BLE Pairing Window! <<<");
-            joy_identity_increment_reset_epoch(nullptr);
-            joy_runtime_clear_provisioning();
-            joy_ble_start_pairing_window();
+            const joy_runtime_creds_t *runtime = joy_runtime_get();
+            const bool was_provisioned = (runtime && runtime->is_provisioned);
+            if (was_provisioned) {
+                ESP_LOGI(TAG, ">>> 5-SECOND HOLD DETECTED (PAIRED): Unpairing to FACE_DEAD and UNPAIRED_IDLE <<<");
+                joy_ble_unpair();
+            } else {
+                ESP_LOGI(TAG, ">>> 5-SECOND HOLD DETECTED (UNPAIRED): Opening BLE Pairing Window! <<<");
+                joy_ble_start_pairing_window();
+            }
         }
     }
     const bool touch_level = read_touch_level();

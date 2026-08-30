@@ -2,6 +2,7 @@ import {
   prepareProvisioning,
   confirmProvisioning,
   commitClaim,
+  getProvisioningStatus,
   type ProvisioningPrepareResponse,
   type ProvisioningConfirmResponse,
 } from './device-api';
@@ -15,6 +16,15 @@ import {
   CHR_COMMIT_UUID,
 } from '@/lib/ble/ble-transport';
 import { encryptSessionEnvelope } from '@/lib/ble/scheme2-crypto';
+function delay(ms: number): Promise<void> {
+  if (typeof Promise.withResolvers === 'function') {
+    const { promise, resolve } = Promise.withResolvers<void>();
+    setTimeout(resolve, ms);
+    return promise;
+  }
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 
 export interface DiscoveredJoy {
   id: string;
@@ -310,7 +320,11 @@ export class JoyProvisioningManager {
     this.updateState({ selectedNetwork: network });
   }
 
-  async submitWifiCredentials(password: string, customSsid?: string): Promise<void> {
+  async submitWifiCredentials(
+    password: string,
+    customSsid?: string,
+    options?: { pollIntervalMs?: number; maxPollAttempts?: number }
+  ): Promise<void> {
     const { selectedJoy, selectedNetwork, confirmData } = this.state;
     const ssid = customSsid || selectedNetwork?.ssid;
     if (!ssid || !selectedJoy || !confirmData) {
@@ -360,7 +374,45 @@ export class JoyProvisioningManager {
         commit_proof: commitData.commit_proof,
       });
 
-      // 11. Hydrate device registry and complete setup
+      // 11. Poll backend until device is finalized by firmware (or max timeout reached)
+      const maxPollAttempts = options?.maxPollAttempts ?? 45;
+      const pollIntervalMs = options?.pollIntervalMs ?? 1000;
+      let finalized = false;
+      let terminalError: string | null = null;
+
+      for (let attempt = 0; attempt < maxPollAttempts; attempt++) {
+        try {
+          const statusRes = await getProvisioningStatus(confirmData.reservation_id);
+          if (
+            statusRes.device_id ||
+            statusRes.status === 'FINALIZED_PENDING_RUNTIME_ACK' ||
+            statusRes.status === 'COMPLETED'
+          ) {
+            finalized = true;
+            break;
+          } else if (statusRes.status === 'CANCELLED' || statusRes.status === 'FAILED') {
+            terminalError = `Provisioning session was ${statusRes.status.toLowerCase()}`;
+            break;
+          }
+        } catch (pollErr: unknown) {
+          if (pollErr instanceof Error && (pollErr.message.includes('404') || pollErr.message.includes('410'))) {
+            terminalError = pollErr.message;
+            break;
+          }
+        }
+        if (attempt < maxPollAttempts - 1) {
+          await delay(pollIntervalMs);
+        }
+      }
+
+      if (terminalError) {
+        throw new Error(terminalError);
+      }
+
+      if (!finalized) {
+        throw new Error('Robot Wi-Fi configured, but backend finalization timed out. Please check if Joy is online and retry.');
+      }
+      // 12. Hydrate device registry and complete setup
       await hydrateDevices();
       this.updateState({ step: 'success' });
     } catch (err: unknown) {

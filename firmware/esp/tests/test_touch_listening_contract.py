@@ -114,20 +114,16 @@ class TouchListeningContractTest(unittest.TestCase):
 
         self.assertIn("touch_level != touch_candidate_level", update)
         self.assertIn("touch_candidate_level != touch_stable_level", update)
-        self.assertIn("display_set_idle_face(FACE_HAPPY)", update)
-        self.assertIn("audio_triggerReadyAudio()", update)
-        self.assertNotIn("audio_triggerWakeAck()", update)
-        self.assertNotIn("wakeword_task()", update)
+        self.assertIn("display_next_touch_face()", update)
+        self.assertIn("audio_triggerExpressionAudio", update)
         self.assertIn("getState() == JoyState::IDLE", update)
 
     def test_touch_action_is_one_shot_and_triggers_local_shy_effect(self) -> None:
         button = BUTTON_SOURCE.read_text(encoding="utf-8")
         update = function_body(button, r"void\s+button_update\s*\([^)]*\)")
 
-        self.assertEqual(len(re.findall(r"\bwakeword_task\s*\(\s*\)", update)), 0)
-        self.assertNotIn("audio_triggerWakeAck()", update)
-        self.assertIn("display_set_idle_face(FACE_HAPPY)", update)
-        self.assertIn("audio_triggerReadyAudio()", update)
+        self.assertIn("display_next_touch_face()", update)
+        self.assertIn("audio_triggerExpressionAudio", update)
         self.assertIn("TOUCH_CONSUMED", update)
 
     def test_touch_runtime_diagnostics_cover_the_ready_handoff(self) -> None:
@@ -137,9 +133,8 @@ class TouchListeningContractTest(unittest.TestCase):
         for message in (
             "Touch raw transition",
             "Touch stable",
-            "Touch lifecycle",
-            "Touch accepted",
-            "idle HAPPY face rendered",
+            "Touch released",
+            "Touch interaction",
         ):
             self.assertIn(message, button)
         self.assertIn("Idle face set", display)

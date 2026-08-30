@@ -33,6 +33,7 @@ enum class JoyBleState
 esp_err_t joy_ble_provisioning_init(void);
 void joy_ble_start_pairing_window(void);
 void joy_ble_stop_provisioning(void);
+void joy_ble_unpair(void);
 bool joy_ble_is_active(void);
 void joy_ble_on_physical_hold_2s(void);
 void joy_ble_poll(void);

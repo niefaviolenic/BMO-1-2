@@ -12,6 +12,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_heap_caps.h"
 
 static const char *TAG = "MAIN";
 
@@ -61,6 +62,8 @@ extern "C" void app_main()
     audio_playHello();
     ESP_LOGI(TAG, "OUTPUT_DIAG speaker end: elapsed_ms=%lu",
              (unsigned long)((xTaskGetTickCount() - speaker_diag_start) * portTICK_PERIOD_MS));
+    wakeword_init();
+
 
     button_init();
     joy_identity_init();
@@ -70,23 +73,24 @@ extern "C" void app_main()
     // Inisialisasi koneksi WiFi
     wifi_init();
 
-    xTaskCreate(
+    xTaskCreateWithCaps(
         api_init_when_network_ready_task,
         "api_init_network",
         4096,
         NULL,
         3,
-        NULL);
+        NULL,
+        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 
     // Jalankan background task state machine orchestrator
     joy_state_machine_init();
 
-    wakeword_init();
 
     while (true)
     {
         button_update();
         joy_ble_poll();
+        wifi_poll();
         vTaskDelay(pdMS_TO_TICKS(20));
     }
 }

@@ -70,8 +70,8 @@ void joy_ble_start_pairing_window(void)
 
     ESP_LOGI(TAG, "Started 5-minute BLE pairing window: local_name=%s, setup_nonce=%s",
              ble_name, s_setup_nonce);
-
-    display_set_idle_face(FACE_CUTE);
+    display_show_ble_pairing(300);
+    audio_playBleActivated();
     joy_ble_nimble_start_advertising();
 }
 
@@ -83,11 +83,22 @@ void joy_ble_stop_provisioning(void)
     memset(s_session_id, 0, sizeof(s_session_id));
     memset(s_challenge, 0, sizeof(s_challenge));
     joy_ble_nimble_stop();
+    display_hide_ble_pairing();
     const joy_runtime_creds_t *runtime = joy_runtime_get();
     if (runtime && !runtime->is_provisioned) {
         display_set_idle_face(FACE_DEAD);
     }
     ESP_LOGI(TAG, "Stopped BLE provisioning");
+}
+
+void joy_ble_unpair(void)
+{
+    ESP_LOGI(TAG, "Unpairing device: clearing credentials and transitioning to UNPAIRED_IDLE / FACE_DEAD");
+    joy_identity_increment_reset_epoch(nullptr);
+    joy_runtime_clear_provisioning();
+    joy_ble_stop_provisioning();
+    display_set_idle_face(FACE_DEAD);
+    audio_playUnpairedSad();
 }
 
 bool joy_ble_is_active(void)
@@ -178,7 +189,7 @@ void joy_ble_on_physical_hold_2s(void)
 
     s_state = JoyBleState::PHYSICAL_CONFIRMED;
     ESP_LOGI(TAG, "Physical presence confirmed! Generated proof for session %s", s_session_id);
-
+    display_hide_ble_pairing();
     display_set_idle_face(FACE_EXCITED);
     // Send GATT notification to mobile on Char 3
     joy_ble_nimble_notify_proof(s_confirmation_nonce, s_physical_proof);
@@ -251,6 +262,14 @@ void joy_ble_poll(void)
         return;
     }
 
+    if (s_state == JoyBleState::BOOTSTRAP_ADVERTISING || s_state == JoyBleState::BOOTSTRAP_CONNECTED) {
+        static int last_countdown_sec = -1;
+        int remaining_sec = (int)((s_window_deadline_us - now) / 1000000LL);
+        if (remaining_sec != last_countdown_sec) {
+            last_countdown_sec = remaining_sec;
+            display_update_ble_countdown(remaining_sec);
+        }
+    }
     if (s_state == JoyBleState::PHYSICAL_CONFIRM_PENDING && now >= s_arm_deadline_us) {
         ESP_LOGW(TAG, "Physical confirm arming expired (60s timeout)");
         s_state = JoyBleState::BOOTSTRAP_CONNECTED;
@@ -345,6 +364,7 @@ esp_err_t joy_ble_finalize_with_backend(void)
         }
         joy_ble_nimble_stop();
         s_state = JoyBleState::RUNTIME_OPERATIONAL;
+        display_hide_ble_pairing();
         display_set_idle_face(FACE_HAPPY);
         audio_triggerExpressionAudio((int)FACE_HAPPY);
         return ESP_OK;

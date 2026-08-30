@@ -2,9 +2,11 @@ import re
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 WAKEWORD_SOURCE = ROOT / "main" / "wakeword.cpp"
+AUDIO_SOURCE = ROOT / "main" / "audio.cpp"
+STATE_SOURCE = ROOT / "main" / "state.cpp"
+MAIN_SOURCE = ROOT / "main" / "main.cpp"
 
 
 def function_body(source: str, signature: str) -> str:
@@ -85,6 +87,53 @@ class WakewordSilenceContractTest(unittest.TestCase):
         self.assertIn("silence_reached", task_body)
         self.assertIn('finalize_recording("silence_detected")', task_body)
         self.assertIn('fail_recording(\n                    RecordingStatus::ABORTED,\n                    "leading_silence_timeout")', task_body)
+
+    def test_wakeword_listener_task_created_in_psram(self) -> None:
+        init_body = function_body(
+            self.source,
+            r"void\s+wakeword_init\s*\([^)]*\)",
+        )
+        self.assertIn("xTaskCreatePinnedToCoreWithCaps", init_body)
+        self.assertIn("MALLOC_CAP_SPIRAM", init_body)
+        self.assertIn("MALLOC_CAP_8BIT", init_body)
+        self.assertIn("WAKEWORD_TASK_STACK_SIZE", init_body)
+
+    def test_i2s_ports_are_separated(self) -> None:
+        mic_init = function_body(self.source, r"static\s+esp_err_t\s+wakeword_i2s_init\s*\([^)]*\)")
+        self.assertIn("I2S_NUM_1", mic_init)
+
+        audio_source = AUDIO_SOURCE.read_text(encoding="utf-8")
+        speaker_init = function_body(audio_source, r"void\s+audio_init\s*\([^)]*\)")
+        self.assertIn("I2S_NUM_0", speaker_init)
+
+    def test_audio_and_state_and_api_tasks_use_spiram(self) -> None:
+        audio_source = AUDIO_SOURCE.read_text(encoding="utf-8")
+        speaker_init = function_body(audio_source, r"void\s+audio_init\s*\([^)]*\)")
+        self.assertIn("wake_ack_worker", speaker_init)
+        self.assertIn("thinking_filler", speaker_init)
+        self.assertIn("expression_audio", speaker_init)
+        self.assertIn("ready_audio", speaker_init)
+        self.assertEqual(speaker_init.count("xTaskCreatePinnedToCoreWithCaps"), 4)
+        self.assertEqual(speaker_init.count("MALLOC_CAP_SPIRAM"), 4)
+
+        state_source = STATE_SOURCE.read_text(encoding="utf-8")
+        state_init = function_body(state_source, r"void\s+joy_state_machine_init\s*\([^)]*\)")
+        self.assertIn("xTaskCreateWithCaps", state_init)
+        self.assertIn("MALLOC_CAP_SPIRAM", state_init)
+
+        main_source = MAIN_SOURCE.read_text(encoding="utf-8")
+        self.assertIn("xTaskCreateWithCaps", main_source)
+        self.assertIn("MALLOC_CAP_SPIRAM", main_source)
+
+    def test_wakeword_init_called_early_in_app_main(self) -> None:
+        main_source = MAIN_SOURCE.read_text(encoding="utf-8")
+        app_main_body = function_body(main_source, r"extern\s+\"C\"\s+void\s+app_main\s*\([^)]*\)")
+        self.assertEqual(app_main_body.count("wakeword_init();"), 1)
+        audio_pos = app_main_body.find("audio_init();")
+        wake_pos = app_main_body.find("wakeword_init();")
+        wifi_pos = app_main_body.find("wifi_init();")
+        self.assertGreater(wake_pos, audio_pos, "wakeword_init should be after audio_init")
+        self.assertLess(wake_pos, wifi_pos, "wakeword_init should be called before wifi_init")
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,6 +19,8 @@ idf_component_register(
         "audio_wav/thinking_03.wav"
         "audio_wav/thinking_04.wav"
         "audio_wav/thinking_05.wav"
+        "audio_wav/ble_activated.wav"
+        "audio_wav/unpaired_sad.wav"
     PRIV_INCLUDE_DIRS "${JOY_CREDENTIAL_INCLUDE_DIR}"
     REQUIRES
         driver

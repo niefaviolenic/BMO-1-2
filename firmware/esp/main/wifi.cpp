@@ -13,12 +13,29 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_heap_caps.h"
 #include <time.h>
 #include <string.h>
 
 static const char *WIFI_TAG = "WIFI";
 
 static TaskHandle_t time_sync_task_handle = NULL;
+static TaskHandle_t s_finalize_task_handle = NULL;
+static volatile bool s_finalize_spawn_pending = false;
+
+static void log_heap_diagnostics(const char *context)
+{
+    size_t free_heap = esp_get_free_heap_size();
+    size_t internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    size_t internal_largest = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    size_t spiram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    size_t spiram_largest = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+
+    ESP_LOGI(WIFI_TAG, "[%s] Heap diagnostics: total_free=%u internal_free=%u internal_largest=%u spiram_free=%u spiram_largest=%u",
+             context ? context : "MEMORY",
+             (unsigned)free_heap, (unsigned)internal_free, (unsigned)internal_largest,
+             (unsigned)spiram_free, (unsigned)spiram_largest);
+}
 
 // Wi-Fi Remote Switch & Auto-Rollback Engine State
 static esp_timer_handle_t s_wifi_switch_timer = NULL;
@@ -140,11 +157,16 @@ static void start_time_sync_after_ip()
 
     if (time_sync_task_handle == NULL)
     {
+        log_heap_diagnostics("SNTP_PRE_CREATE");
         BaseType_t task_result = xTaskCreate(
             time_sync_task, "sntp_wait", 3072, NULL, 3, &time_sync_task_handle);
         ESP_LOGI(WIFI_TAG, "SNTP worker create return=%s handle_available=%d",
                  task_result == pdPASS ? "pdPASS" : "pdFAIL",
                  time_sync_task_handle != NULL ? 1 : 0);
+        if (task_result != pdPASS)
+        {
+            log_heap_diagnostics("SNTP_POST_CREATE_FAIL");
+        }
     }
     else
     {
@@ -203,9 +225,100 @@ static void wifi_mgr_on_switch_timeout(void *arg)
 static void finalize_worker_task(void *param)
 {
     ESP_LOGI(WIFI_TAG, "Finalize worker task started (stack: 8192 bytes)");
-    vTaskDelay(pdMS_TO_TICKS(500));
-    joy_ble_finalize_with_backend();
+
+    // Wait for SNTP time synchronization to ensure TLS certificate verification succeeds
+    ESP_LOGI(WIFI_TAG, "Waiting for valid network time before backend finalize...");
+    EventBits_t bits = network_wait_for_valid_time(pdMS_TO_TICKS(15000));
+    if ((bits & NETWORK_TIME_SYNCED_BIT) == 0)
+    {
+        ESP_LOGW(WIFI_TAG, "Time sync timeout reached; proceeding with finalize attempt anyway");
+    }
+
+    constexpr int MAX_FINALIZE_ATTEMPTS = 5;
+    const int retry_delays_ms[MAX_FINALIZE_ATTEMPTS] = { 500, 1500, 3000, 5000, 5000 };
+
+    for (int attempt = 1; attempt <= MAX_FINALIZE_ATTEMPTS; attempt++)
+    {
+        if (!network_has_ip())
+        {
+            ESP_LOGW(WIFI_TAG, "Finalize attempt %d/%d paused: no IP address", attempt, MAX_FINALIZE_ATTEMPTS);
+            network_wait_for_got_ip(pdMS_TO_TICKS(10000));
+        }
+
+        ESP_LOGI(WIFI_TAG, "Executing backend finalize attempt %d/%d...", attempt, MAX_FINALIZE_ATTEMPTS);
+        esp_err_t err = joy_ble_finalize_with_backend();
+        if (err == ESP_OK)
+        {
+            ESP_LOGI(WIFI_TAG, "Backend finalize completed successfully on attempt %d!", attempt);
+            break;
+        }
+
+        ESP_LOGW(WIFI_TAG, "Backend finalize attempt %d failed (%s)", attempt, esp_err_to_name(err));
+        if (attempt < MAX_FINALIZE_ATTEMPTS)
+        {
+            int delay_ms = retry_delays_ms[attempt - 1];
+            vTaskDelay(pdMS_TO_TICKS(delay_ms));
+        }
+    }
+
+    UBaseType_t hwm = uxTaskGetStackHighWaterMark(NULL);
+    ESP_LOGI(WIFI_TAG, "Finalize worker task exiting: stack_hwm=%u bytes", (unsigned)(hwm * sizeof(StackType_t)));
+    s_finalize_task_handle = NULL;
     vTaskDelete(NULL);
+}
+
+static void try_start_finalize_worker()
+{
+    const joy_runtime_creds_t *rt = joy_runtime_get();
+    if (!rt || !rt->pending_finalize)
+    {
+        s_finalize_spawn_pending = false;
+        return;
+    }
+
+    if (!network_has_ip())
+    {
+        return;
+    }
+
+    if (s_finalize_task_handle != NULL)
+    {
+        s_finalize_spawn_pending = false;
+        return;
+    }
+
+    log_heap_diagnostics("FINALIZE_PRE_CREATE");
+
+    ESP_LOGI(WIFI_TAG, "Attempting to create ble_finalize task (stack: 8192 bytes)...");
+    BaseType_t ret = xTaskCreateWithCaps(
+        finalize_worker_task,
+        "ble_finalize",
+        8192,
+        NULL,
+        5,
+        &s_finalize_task_handle,
+        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+
+    if (ret == pdPASS && s_finalize_task_handle != NULL)
+    {
+        s_finalize_spawn_pending = false;
+        ESP_LOGI(WIFI_TAG, "ble_finalize task created successfully (handle=%p)", s_finalize_task_handle);
+        log_heap_diagnostics("FINALIZE_POST_CREATE_PASS");
+    }
+    else
+    {
+        s_finalize_spawn_pending = true;
+        ESP_LOGE(WIFI_TAG, "Failed to create ble_finalize task: ret=%d (pdFAIL=%d)", (int)ret, (int)pdFAIL);
+        log_heap_diagnostics("FINALIZE_POST_CREATE_FAIL");
+    }
+}
+
+void wifi_poll(void)
+{
+    if (s_finalize_spawn_pending)
+    {
+        try_start_finalize_worker();
+    }
 }
 
 static void event_handler(
@@ -296,8 +409,9 @@ static void event_handler(
         const joy_runtime_creds_t *rt = joy_runtime_get();
         if (rt && rt->pending_finalize)
         {
-            ESP_LOGI(WIFI_TAG, "Spawning finalize background task after IP acquisition...");
-            xTaskCreate(finalize_worker_task, "ble_finalize", 8192, NULL, 5, NULL);
+            ESP_LOGI(WIFI_TAG, "Scheduling finalize background task after IP acquisition...");
+            s_finalize_spawn_pending = true;
+            try_start_finalize_worker();
         }
     }
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_LOST_IP)

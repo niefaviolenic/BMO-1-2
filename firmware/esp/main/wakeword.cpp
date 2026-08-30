@@ -434,9 +434,8 @@ static esp_err_t wakeword_i2s_init(
 
     i2s_chan_config_t channel_config =
         I2S_CHANNEL_DEFAULT_CONFIG(
-            I2S_NUM_AUTO,
+            I2S_NUM_1,
             I2S_ROLE_MASTER);
-
     ESP_RETURN_ON_ERROR(
         i2s_new_channel(
             &channel_config,
@@ -646,7 +645,7 @@ static void wakeword_listener_task(
                 if(detected == WAKENET_DETECTED)
                 {
                     PairingSnapshot pairing_snapshot = pairing_get_snapshot();
-                    if (pairing_snapshot.phase != PairingPhase::NONE || display_pairing_code_is_visible() || display_qr_code_is_visible())
+                    if (pairing_snapshot.phase != PairingPhase::NONE || display_pairing_code_is_visible() || display_qr_code_is_visible() || display_ble_pairing_is_visible())
                     {
                         ESP_LOGW(TAG, "Hi Joy detected but ignored: robot is in pairing mode or QR display mode");
                         continue;
@@ -955,14 +954,15 @@ void wakeword_init()
     }
 
     BaseType_t task_created =
-        xTaskCreatePinnedToCore(
+        xTaskCreatePinnedToCoreWithCaps(
             wakeword_listener_task,
             "wakeword_listener",
             WAKEWORD_TASK_STACK_SIZE,
             NULL,
             WAKEWORD_TASK_PRIORITY,
             &wakeword_task_handle,
-            1);
+            1,
+            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 
     if(task_created != pdPASS)
     {
@@ -983,7 +983,7 @@ void wakeword_init()
 bool wakeword_task()
 {
     PairingSnapshot pairing_snapshot = pairing_get_snapshot();
-    if (pairing_snapshot.phase != PairingPhase::NONE || display_pairing_code_is_visible() || display_qr_code_is_visible())
+    if (pairing_snapshot.phase != PairingPhase::NONE || display_pairing_code_is_visible() || display_qr_code_is_visible() || display_ble_pairing_is_visible())
     {
         ESP_LOGW(TAG, "Wake task rejected: robot is in pairing mode or QR display mode");
         return false;

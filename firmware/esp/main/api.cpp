@@ -10,6 +10,7 @@
 #include "network.h"
 #include "wifi.h"
 #include "joy_identity.h"
+#include "joy_ble_provisioning.h"
 #include "esp_http_client.h"
 #include "esp_websocket_client.h"
 #include "esp_crt_bundle.h"
@@ -929,6 +930,15 @@ static void handle_ws_message(const char *payload, int len) {
     else if (!ws_authenticated) {
         ESP_LOGW(TAG, "Ignoring WS event before valid authentication");
     }
+    else if (strcmp(event, "device_unpaired") == 0 ||
+             strcmp(event, "device_binding_revoked") == 0 ||
+             strcmp(event, "unpaired") == 0) {
+        ESP_LOGI(TAG, "Received unpair event from backend/app: transitioning to FACE_DEAD and UNPAIRED_IDLE");
+        joy_ble_unpair();
+        mark_ws_down("device_unpaired");
+        if (ws_client != NULL)
+            esp_websocket_client_close(ws_client, portMAX_DELAY);
+    }
     else if (strcmp(event, "pairing_code") == 0) {
         cJSON *code_node = cJSON_GetObjectItem(root, "code");
         cJSON *expires_node = cJSON_GetObjectItem(root, "expires_at");
@@ -938,8 +948,14 @@ static void handle_ws_message(const char *payload, int len) {
                 sizeof(PAIRING_CODE_FIELDS) / sizeof(PAIRING_CODE_FIELDS[0])) &&
             code_node != NULL && cJSON_IsString(code_node) &&
             expires_node != NULL && cJSON_IsString(expires_node);
-        if (valid_pairing_code)
+        if (valid_pairing_code) {
+            const joy_runtime_creds_t *runtime = joy_runtime_get();
+            if (runtime && runtime->is_provisioned) {
+                ESP_LOGI(TAG, "Received pairing_code while provisioned (app unpair): unpairing to FACE_DEAD");
+                joy_ble_unpair();
+            }
             (void)pairing_on_code(code_node->valuestring, expires_node->valuestring, time(NULL));
+        }
     }
     else if (strcmp(event, "pairing_completed") == 0) {
         cJSON *status_node = cJSON_GetObjectItem(root, "status");

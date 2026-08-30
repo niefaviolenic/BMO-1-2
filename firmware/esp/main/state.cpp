@@ -7,6 +7,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 
 #include <stdint.h>
 
@@ -202,11 +203,12 @@ static void joy_state_machine_task(void *pvParameters)
 
 void joy_state_machine_init()
 {
-    xTaskCreate(
+    xTaskCreateWithCaps(
         joy_state_machine_task,
         "joy_state_task",
         8192,
         NULL,
         4,
-        NULL);
+        NULL,
+        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 }
