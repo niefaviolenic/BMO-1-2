@@ -8,8 +8,9 @@ import {
   type ScheduleCardItem,
   type ScheduleStatusFilter,
 } from '../domain/schedule';
-import type { UpdateScheduleBody } from './schedule-api';
+import type { CreateScheduleInput, UpdateScheduleBody } from './schedule-api';
 import {
+  addNewSchedule,
   createScheduleFromPrompt,
   deleteScheduleById,
   getScheduleStoreState,
@@ -46,6 +47,13 @@ export function useSchedules(filter: ScheduleStatusFilter) {
   const createFromPrompt = useCallback(async (prompt: string) => {
     await createScheduleFromPrompt(prompt);
   }, []);
+
+  const create = useCallback(
+    async (input: CreateScheduleInput) => {
+      await addNewSchedule(input);
+    },
+    [],
+  );
 
   const pause = useCallback(async (id: string) => {
     await pauseScheduleById(id);
@@ -85,6 +93,7 @@ export function useSchedules(filter: ScheduleStatusFilter) {
   );
 
   return {
+    create,
     cards: visibleCards,
     hasSchedules,
     scheduleCount: snapshot.schedules.length,

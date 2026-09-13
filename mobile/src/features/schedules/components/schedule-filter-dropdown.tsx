@@ -4,7 +4,7 @@ import { type StyleProp, type ViewStyle } from 'react-native';
 import { DropdownMenu, type DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { useTheme } from '@/hooks/use-theme';
 
-export type ScheduleFilterOption = 'Active' | 'Paused' | 'Completed';
+export type ScheduleFilterOption = 'All' | 'Active' | 'Paused' | 'Completed';
 
 export type ScheduleFilterDropdownProps = {
   selectedOption?: ScheduleFilterOption;
@@ -20,7 +20,7 @@ export function ScheduleFilterDropdown({
   testID = 'schedule-filter-dropdown',
 }: ScheduleFilterDropdownProps) {
   const theme = useTheme();
-  const options: ScheduleFilterOption[] = ['Active', 'Paused', 'Completed'];
+  const options: ScheduleFilterOption[] = ['All', 'Active', 'Paused', 'Completed'];
 
   const items: DropdownMenuItem[] = options.map((opt) => ({
     id: opt,

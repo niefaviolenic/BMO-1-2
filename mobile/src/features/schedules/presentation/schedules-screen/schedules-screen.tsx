@@ -18,8 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/hooks/use-theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AnimatedDropdownOverlay } from '@/components/ui/animated-dropdown-overlay';
-import { BottomWhiteFadeOverlay } from '@/components/ui/bottom-white-fade-overlay';
-import { ChatComposer } from '@/components/ui/chat-composer';
+import { Plus } from 'lucide-react-native';
 import { FilterIconButton } from '@/components/ui/filter-icon-button';
 import { LiquidGlassIconButton } from '@/components/ui/liquid-glass-icon-button';
 import { ScheduleTokens, SidebarTokens } from '@/constants/theme';
@@ -27,7 +26,8 @@ import { useSidebarShell } from '@/features/chat/presentation/sidebar-shell';
 import {
   DEFAULT_HYDRATION_PROMPT,
   DEFAULT_MORNING_PROMPT,
-  EditScheduleSheet,
+  ScheduleFormSheet,
+  type ScheduleFormData,
   ScheduleCompletedCard,
   ScheduleContextMenu,
   ScheduleFilterDropdown,
@@ -60,20 +60,18 @@ export function SchedulesScreen({ style, testID = 'schedules-screen' }: Schedule
   const insets = useSafeAreaInsets();
   const { open, navigate, registerActions, isOpen } = useSidebarShell();
 
-  const [inputValue, setInputValue] = useState('');
-  const [filter, setFilter] = useState<ScheduleFilterOption>('Active');
+  const [filter, setFilter] = useState<ScheduleFilterOption>('All');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [createInitialPrompt, setCreateInitialPrompt] = useState('');
   const [contextMenuItemId, setContextMenuItemId] = useState<string | null>(null);
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
-  const inputValueRef = useRef(inputValue);
-  inputValueRef.current = inputValue;
-
   const {
     cards: visibleItems,
     hasSchedules,
     isMutating,
     load,
-    createFromPrompt,
+    create,
     pause,
     resume,
     remove,
@@ -110,8 +108,8 @@ export function SchedulesScreen({ style, testID = 'schedules-screen' }: Schedule
 
   const paddingTop = Math.max(insets.top, 20);
   const paddingBottom = Math.max(insets.bottom, 12);
-  const composerHeight = 68 + paddingBottom;
-  const isFilterActive = filter === 'Paused' || filter === 'Completed';
+  const bottomBarHeight = 52 + paddingBottom;
+  const isFilterActive = filter !== 'All';
 
   const contextMenuItem = useMemo(
     () => cardById(contextMenuItemId),
@@ -123,30 +121,44 @@ export function SchedulesScreen({ style, testID = 'schedules-screen' }: Schedule
     [editingScheduleId, rawScheduleById]
   );
 
-  const handleSaveEdit = useCallback(
-    async (id: string, patch: { prompt?: string; timeOfDay?: ScheduleTimeOfDay }) => {
-      await update(id, patch);
+  const handleCreateSubmit = useCallback(
+    async (data: ScheduleFormData) => {
+      await create({
+        prompt: data.prompt,
+        frequency: data.frequency,
+        exactTime: data.exactTime,
+        timeOfDay: data.timeOfDay,
+        date: data.date,
+        days: data.days,
+        repeatDay: data.repeatDay,
+        deliveryTargets: ['MOBILE'],
+      });
+      setFilter('All');
+    },
+    [create],
+  );
+
+  const handleEditSubmit = useCallback(
+    async (data: ScheduleFormData) => {
+      if (!editingScheduleId) return;
+      await update(editingScheduleId, {
+        prompt: data.prompt,
+        frequency: data.frequency,
+        exactTime: data.exactTime,
+        timeOfDay: data.timeOfDay,
+        date: data.date,
+        days: data.days,
+        repeatDay: data.repeatDay,
+      });
       setEditingScheduleId(null);
     },
-    [update]
+    [editingScheduleId, update],
   );
 
   const handleSuggestionPress = useCallback((label: string) => {
-    setInputValue(label);
+    setCreateInitialPrompt(label);
+    setIsCreateOpen(true);
   }, []);
-
-  const handleSubmit = useCallback(() => {
-    const trimmed = inputValueRef.current.trim();
-    if (!trimmed || isMutating) return;
-    setInputValue('');
-    setFilter('Active');
-    setIsFilterOpen(false);
-    setContextMenuItemId(null);
-    void createFromPrompt(trimmed).catch((error) => {
-      setInputValue(trimmed);
-      Alert.alert('Unable to create schedule', mapScheduleApiError(error));
-    });
-  }, [isMutating, createFromPrompt]);
 
   const handleFilterSelect = useCallback((option: ScheduleFilterOption) => {
     setFilter(option);
@@ -292,7 +304,7 @@ export function SchedulesScreen({ style, testID = 'schedules-screen' }: Schedule
             contentContainerStyle={[
               styles.scrollContent,
               !hasSchedules && styles.scrollContentEmpty,
-              { paddingBottom: composerHeight + 24 },
+              { paddingBottom: bottomBarHeight + 24 },
             ]}
             style={styles.scrollView}
             testID={`${testID}-scroll-view`}
@@ -327,22 +339,26 @@ export function SchedulesScreen({ style, testID = 'schedules-screen' }: Schedule
             )}
           </ScrollView>
 
-          <BottomWhiteFadeOverlay
-            height={composerHeight}
-            color={isOpen && colorScheme === 'dark' ? SidebarTokens.colors.dark.surface : undefined}
-            testID={`${testID}-bottom-fade-overlay`}
-          />
-
-          <View style={[styles.composerOverlay, { paddingBottom }]} pointerEvents="box-none">
-            <ChatComposer
-              value={inputValue}
-              onChangeText={setInputValue}
-              onSubmit={handleSubmit}
-              placeholder="Schedule a task"
-              disabled={false}
-              sendDisabled={isMutating}
-              testID={`${testID}-composer`}
-            />
+          <View style={[styles.bottomBar, { paddingBottom }]} pointerEvents="box-none">
+            <Pressable
+              style={({ pressed }) => [
+                styles.createButton,
+                { backgroundColor: theme.text },
+                pressed && styles.createButtonPressed,
+              ]}
+              onPress={() => {
+                setCreateInitialPrompt('');
+                setIsCreateOpen(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="New Schedule"
+              testID={`${testID}-new-schedule-button`}
+            >
+              <Plus size={18} color={theme.background} strokeWidth={2.5} />
+              <Text style={[styles.createButtonText, { color: theme.background }]}>
+                New Schedule
+              </Text>
+            </Pressable>
           </View>
 
           <AnimatedDropdownOverlay
@@ -388,11 +404,28 @@ export function SchedulesScreen({ style, testID = 'schedules-screen' }: Schedule
             </View>
           ) : null}
 
-          <EditScheduleSheet
+          <ScheduleFormSheet
+            isVisible={isCreateOpen}
+            mode="create"
+            schedule={
+              createInitialPrompt
+                ? ({ payload: { prompt: createInitialPrompt } } as unknown as Schedule)
+                : null
+            }
+            onClose={() => {
+              setIsCreateOpen(false);
+              setCreateInitialPrompt('');
+            }}
+            onSubmit={handleCreateSubmit}
+            testID={`${testID}-create-sheet`}
+          />
+
+          <ScheduleFormSheet
             isVisible={Boolean(editingScheduleId)}
-            onClose={() => setEditingScheduleId(null)}
+            mode="edit"
             schedule={editingSchedule}
-            onSave={handleSaveEdit}
+            onClose={() => setEditingScheduleId(null)}
+            onSubmit={handleEditSubmit}
             testID={`${testID}-edit-sheet`}
           />
         </View>
@@ -446,13 +479,33 @@ const styles = StyleSheet.create({
     gap: 16,
     width: '100%',
   },
-  composerOverlay: {
+  bottomBar: {
     position: 'absolute',
     bottom: 0,
     left: SCREEN_HORIZONTAL_PADDING,
     right: SCREEN_HORIZONTAL_PADDING,
     zIndex: 10,
     paddingTop: 12,
+  },
+  createButton: {
+    height: 52,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  createButtonPressed: {
+    opacity: 0.85,
+  },
+  createButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
   filterBackdrop: {
     zIndex: 40,

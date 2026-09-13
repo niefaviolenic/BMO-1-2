@@ -34,7 +34,7 @@ type MockComponentProps = {
 };
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react');
+  const actual = await vi.importActual<Record<string, unknown>>('react');
   return {
     ...actual,
     useState: vi.fn((initial: unknown) => [
@@ -123,6 +123,11 @@ vi.mock('@/features/chat/presentation/sidebar-shell', () => ({
     registerActions: vi.fn(() => vi.fn()),
   }),
 }));
+vi.mock('lucide-react-native', () => ({
+  Plus: (props: MockComponentProps) => ({ type: 'Plus', props }),
+  Check: (props: MockComponentProps) => ({ type: 'Check', props }),
+}));
+
 
 vi.mock('@/features/schedules/components', () => ({
   DEFAULT_HYDRATION_PROMPT: 'Hydration prompt',
@@ -135,7 +140,7 @@ vi.mock('@/features/schedules/components', () => ({
   ScheduleMorningCard: (props: MockComponentProps) => ({ type: 'ScheduleMorningCard', props }),
   SchedulePausedCard: (props: MockComponentProps) => ({ type: 'SchedulePausedCard', props }),
   ScheduleWeeklyCard: (props: MockComponentProps) => ({ type: 'ScheduleWeeklyCard', props }),
-  EditScheduleSheet: (props: MockComponentProps) => ({ type: 'EditScheduleSheet', props }),
+  ScheduleFormSheet: (props: MockComponentProps) => ({ type: 'ScheduleFormSheet', props }),
 }));
 
 vi.mock('@/features/schedules/data/use-schedules', () => ({
@@ -204,8 +209,15 @@ describe('SchedulesScreen Keyboard Behavior', () => {
     expect(keyboardView?.props?.behavior).toBe('padding');
   });
 
-  it('renders EditScheduleSheet component in the tree', () => {
+  it('renders New Schedule button and ScheduleFormSheet in the tree', () => {
     const tree = SchedulesScreen({ testID: 'schedules-screen' });
+    const newButton = findElement(tree, (el) => el.props?.testID === 'schedules-screen-new-schedule-button');
+    expect(newButton).toBeDefined();
+
+    const createSheet = findElement(tree, (el) => el.props?.testID === 'schedules-screen-create-sheet');
+    expect(createSheet).toBeDefined();
+    expect(createSheet?.props?.isVisible).toBe(false);
+
     const editSheet = findElement(tree, (el) => el.props?.testID === 'schedules-screen-edit-sheet');
     expect(editSheet).toBeDefined();
     expect(editSheet?.props?.isVisible).toBe(false);

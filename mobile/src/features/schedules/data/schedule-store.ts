@@ -8,10 +8,12 @@ import {
 import {
   cancelSchedule as cancelScheduleRequest,
   createDailyMobileSchedule,
+  createSchedule as createScheduleRequest,
   listSchedules,
   pauseSchedule as pauseScheduleRequest,
   resumeSchedule as resumeScheduleRequest,
   updateSchedule as updateScheduleRequest,
+  type CreateScheduleInput,
   type UpdateScheduleBody,
 } from './schedule-api';
 
@@ -129,20 +131,24 @@ export async function refreshSchedules(): Promise<void> {
   }
 }
 
+export async function addNewSchedule(input: CreateScheduleInput): Promise<Schedule> {
+  bucket().loadGeneration += 1;
+  setState({ isMutating: true });
+  try {
+    const created = await createScheduleRequest(input);
+    upsertSchedule(created);
+    return created;
+  } finally {
+    setState({ isMutating: false });
+  }
+}
+
 export async function createScheduleFromPrompt(prompt: string): Promise<void> {
   const trimmed = prompt.trim();
   if (!trimmed) {
     return;
   }
-
-  bucket().loadGeneration += 1;
-  setState({ isMutating: true });
-  try {
-    const created = await createDailyMobileSchedule(trimmed);
-    upsertSchedule(created);
-  } finally {
-    setState({ isMutating: false });
-  }
+  await addNewSchedule({ prompt: trimmed });
 }
 
 export async function pauseScheduleById(id: string): Promise<void> {

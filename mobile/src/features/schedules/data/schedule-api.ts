@@ -15,12 +15,17 @@ type ScheduleListResponse = {
   nextCursor: string | null;
 };
 
-export type CreateScheduleBody = {
+export type CreateScheduleInput = {
   prompt: string;
-  frequency: 'Daily';
-  every: 1;
-  timeOfDay: 'Morning';
-  deliveryTargets: ['MOBILE'];
+  frequency?: 'Daily' | 'Weekly' | 'Once';
+  every?: number;
+  timeOfDay?: 'Morning' | 'Afternoon' | 'Evening';
+  exactTime?: string;
+  date?: string;
+  repeatDay?: string;
+  days?: string[];
+  deliveryTargets?: Array<'MOBILE' | 'DEVICE'>;
+  deviceId?: string;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -73,19 +78,38 @@ export async function listSchedules(): Promise<Schedule[]> {
   return (payload.schedules ?? []).map(asSchedule);
 }
 
-export async function createDailyMobileSchedule(prompt: string): Promise<Schedule> {
-  const body: CreateScheduleBody = {
-    prompt: prompt.trim().slice(0, SCHEDULE_PROMPT_MAX_LENGTH),
-    frequency: CREATE_SCHEDULE_DEFAULTS.frequency,
-    every: CREATE_SCHEDULE_DEFAULTS.every,
-    timeOfDay: CREATE_SCHEDULE_DEFAULTS.timeOfDay,
-    deliveryTargets: [...CREATE_SCHEDULE_DEFAULTS.deliveryTargets],
+export async function createSchedule(input: CreateScheduleInput): Promise<Schedule> {
+  const frequency = input.frequency ?? 'Daily';
+  const every = input.every ?? 1;
+  const timeOfDay = input.timeOfDay ?? (input.exactTime ? undefined : 'Morning');
+  const deliveryTargets = input.deliveryTargets ?? ['MOBILE'];
+
+  const body: Record<string, unknown> = {
+    prompt: input.prompt.trim().slice(0, SCHEDULE_PROMPT_MAX_LENGTH),
+    frequency,
+    every,
+    deliveryTargets,
+    ...(input.exactTime ? { exactTime: input.exactTime } : {}),
+    ...(timeOfDay ? { timeOfDay } : {}),
+    ...(frequency === 'Once' && input.date ? { date: input.date } : {}),
+    ...(frequency === 'Weekly' && input.days ? { days: input.days, repeatDay: input.repeatDay ?? input.days[0] } : {}),
+    ...(input.deviceId ? { deviceId: input.deviceId } : {}),
   };
   const payload = await apiRequest<ScheduleResponse>('/schedules', {
     method: 'POST',
     body,
   });
   return asSchedule(payload.schedule);
+}
+
+export async function createDailyMobileSchedule(prompt: string): Promise<Schedule> {
+  return createSchedule({
+    prompt,
+    frequency: 'Daily',
+    every: 1,
+    timeOfDay: 'Morning',
+    deliveryTargets: ['MOBILE'],
+  });
 }
 
 export async function pauseSchedule(
@@ -123,6 +147,10 @@ export type UpdateScheduleBody = {
   frequency?: 'Daily' | 'Weekly' | 'Once';
   every?: number;
   timeOfDay?: 'Morning' | 'Afternoon' | 'Evening';
+  exactTime?: string;
+  date?: string;
+  repeatDay?: string;
+  days?: string[];
 };
 
 export async function updateSchedule(

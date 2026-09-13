@@ -64,7 +64,7 @@ export type ScheduleCardItem = {
   footerText?: string;
 };
 
-export type ScheduleStatusFilter = 'Active' | 'Paused' | 'Completed';
+export type ScheduleStatusFilter = 'All' | 'Active' | 'Paused' | 'Completed';
 
 export type ScheduleContextMenuVariant = 'active' | 'paused' | 'completed';
 
@@ -184,6 +184,9 @@ export function filterScheduleCards(
   items: ScheduleCardItem[],
   filter: ScheduleStatusFilter,
 ): ScheduleCardItem[] {
+  if (filter === 'All') {
+    return items;
+  }
   if (filter === 'Active') {
     return items.filter((item) => item.status === 'MONITORING' || item.status === 'WEEKLY');
   }
