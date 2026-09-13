@@ -139,24 +139,31 @@ function handleRealtimeEvent(event: MobileInboundEvent): void {
       });
     }
   } else if (eventName === 'schedule_status') {
-    const title = typeof raw.title === 'string' ? raw.title : 'Joy Schedule Reminder';
-    const body =
-      typeof raw.body === 'string' && raw.body
-        ? raw.body
-        : typeof raw.prompt === 'string' && raw.prompt
-          ? raw.prompt
-          : typeof raw.message === 'string' && raw.message
-            ? raw.message
-            : typeof raw.statusLabel === 'string' && raw.statusLabel
-              ? raw.statusLabel
-              : 'Your scheduled reminder is ready';
-    const scheduleId = typeof raw.scheduleId === 'string' ? raw.scheduleId : String(Date.now());
+    const isDueOrRun =
+      raw.status === 'due' ||
+      raw.status === 'triggered' ||
+      (typeof raw.runId === 'string' && raw.runId.length > 0);
 
-    void presentLocalNotification({
-      title,
-      body,
-      data: { id: scheduleId, type: 'schedule', scheduleId, ...raw },
-    });
+    if (isDueOrRun) {
+      const title = typeof raw.title === 'string' ? raw.title : 'Joy Schedule Reminder';
+      const body =
+        typeof raw.body === 'string' && raw.body
+          ? raw.body
+          : typeof raw.prompt === 'string' && raw.prompt
+            ? raw.prompt
+            : typeof raw.message === 'string' && raw.message
+              ? raw.message
+              : typeof raw.statusLabel === 'string' && raw.statusLabel
+                ? raw.statusLabel
+                : 'Your scheduled reminder is ready';
+      const scheduleId = typeof raw.scheduleId === 'string' ? raw.scheduleId : String(Date.now());
+
+      void presentLocalNotification({
+        title,
+        body,
+        data: { id: scheduleId, type: 'schedule', scheduleId, ...raw },
+      });
+    }
   } else if (eventName === 'whatsapp_notification') {
     const displayName = typeof raw.displayName === 'string' ? raw.displayName : 'WhatsApp';
     const conversationId = typeof raw.conversationId === 'string' ? raw.conversationId : '';

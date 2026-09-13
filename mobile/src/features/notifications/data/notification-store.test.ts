@@ -140,6 +140,19 @@ describe('NotificationStore', () => {
     });
   });
 
+  it('does NOT present local notification when schedule_status is an administrative change (active, paused)', () => {
+    expect(mockWsCallback).not.toBeNull();
+    const event: MobileInboundEvent = {
+      event: 'schedule_status',
+      scheduleId: 'sched-789',
+      status: 'PAUSED',
+      statusLabel: 'PAUSED',
+    };
+    mockWsCallback?.(event);
+
+    expect(NotificationService.presentLocalNotification).not.toHaveBeenCalled();
+  });
+
   it('requests permission on initialize if permission status is undetermined', async () => {
     vi.mocked(NotificationService.getNotificationPermissionStatus).mockResolvedValueOnce('undetermined');
     vi.mocked(NotificationService.requestNotificationPermissions).mockResolvedValueOnce('granted');

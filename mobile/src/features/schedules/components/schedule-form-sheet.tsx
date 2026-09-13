@@ -55,6 +55,8 @@ const TIME_PRESETS = [
   { label: 'Malam 20:00', hour: '20', minute: '00', period: 'Evening' as const },
 ];
 
+type TimePreset = (typeof TIME_PRESETS)[number];
+
 function deriveTimeOfDay(hourNum: number): ScheduleTimeOfDay {
   if (hourNum < 12) return 'Morning';
   if (hourNum < 18) return 'Afternoon';
@@ -169,7 +171,7 @@ export function ScheduleFormSheet({
     });
   };
 
-  const handlePresetSelect = (preset: typeof TIME_PRESETS[0]) => {
+  const handlePresetSelect = (preset: TimePreset) => {
     setHour(preset.hour);
     setMinute(preset.minute);
   };

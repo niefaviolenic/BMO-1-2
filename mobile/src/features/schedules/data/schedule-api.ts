@@ -81,7 +81,8 @@ export async function listSchedules(): Promise<Schedule[]> {
 export async function createSchedule(input: CreateScheduleInput): Promise<Schedule> {
   const frequency = input.frequency ?? 'Daily';
   const every = input.every ?? 1;
-  const timeOfDay = input.timeOfDay ?? (input.exactTime ? undefined : 'Morning');
+  const cleanHour = input.exactTime ? parseInt(input.exactTime.split(':')[0] ?? '9', 10) : 9;
+  const timeOfDay = input.timeOfDay ?? (cleanHour < 12 ? 'Morning' : cleanHour < 18 ? 'Afternoon' : 'Evening');
   const deliveryTargets = input.deliveryTargets ?? ['MOBILE'];
 
   const body: Record<string, unknown> = {
@@ -90,7 +91,7 @@ export async function createSchedule(input: CreateScheduleInput): Promise<Schedu
     every,
     deliveryTargets,
     ...(input.exactTime ? { exactTime: input.exactTime } : {}),
-    ...(timeOfDay ? { timeOfDay } : {}),
+    timeOfDay,
     ...(frequency === 'Once' && input.date ? { date: input.date } : {}),
     ...(frequency === 'Weekly' && input.days ? { days: input.days, repeatDay: input.repeatDay ?? input.days[0] } : {}),
     ...(input.deviceId ? { deviceId: input.deviceId } : {}),
