@@ -1,8 +1,6 @@
 #include "joy_crypto.h"
 #include "mbedtls/base64.h"
-#include "mbedtls/gcm.h"
-#include "mbedtls/hkdf.h"
-#include "mbedtls/md.h"
+#include "psa/crypto.h"
 #include "esp_log.h"
 #include <cstring>
 #include <cstdlib>
@@ -26,7 +24,6 @@ esp_err_t joy_crypto_base64url_decode(
     size_t rem = src_len % 4;
     size_t pad_len = (rem == 0) ? 0 : (4 - rem);
     if (rem == 1) {
-        // Invalid base64 length
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -67,19 +64,19 @@ esp_err_t joy_crypto_derive_session_key(
 {
     if (!pop_base64url || !setup_nonce || !out_key) return ESP_ERR_INVALID_ARG;
 
-    const mbedtls_md_info_t *md = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-    if (!md) return ESP_FAIL;
+    // HKDF-SHA256:
+    // 1. Extract: PRK = HMAC-SHA256(Salt = setup_nonce, IKM = pop_base64url)
+    uint8_t prk[32] = {0};
+    const char *ikm_fields[] = { pop_base64url };
+    joy_crypto_raw_hmac((const uint8_t *)setup_nonce, strlen(setup_nonce), ikm_fields, 1, prk, 32);
 
-    // HKDF-SHA256: IKM = pop_base64url, Salt = setup_nonce, Info = "joy-sec2-session-v1"
-    int ret = mbedtls_hkdf(
-        md,
-        (const unsigned char *)setup_nonce, strlen(setup_nonce),
-        (const unsigned char *)pop_base64url, strlen(pop_base64url),
-        (const unsigned char *)"joy-sec2-session-v1", strlen("joy-sec2-session-v1"),
-        out_key, 32
-    );
+    // 2. Expand: OKM = HMAC-SHA256(PRK, Info || 0x01)
+    char info_buf[64];
+    snprintf(info_buf, sizeof(info_buf), "%s%c", "joy-sec2-session-v1", 0x01);
+    const char *info_fields[] = { info_buf };
+    joy_crypto_raw_hmac(prk, 32, info_fields, 1, out_key, 32);
 
-    return ret == 0 ? ESP_OK : ESP_FAIL;
+    return ESP_OK;
 }
 
 esp_err_t joy_crypto_decrypt_session_envelope(
@@ -93,33 +90,49 @@ esp_err_t joy_crypto_decrypt_session_envelope(
     if (!session_key || !iv || !ciphertext || !tag || !out_plaintext) return ESP_ERR_INVALID_ARG;
     if (cipher_len >= max_out) return ESP_ERR_NO_MEM;
 
-    mbedtls_gcm_context gcm;
-    mbedtls_gcm_init(&gcm);
+    psa_crypto_init();
 
-    int ret = mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, session_key, 256);
-    if (ret != 0) {
-        mbedtls_gcm_free(&gcm);
+    psa_key_attributes_t attr = psa_key_attributes_init();
+    psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_DECRYPT);
+    psa_set_key_algorithm(&attr, PSA_ALG_GCM);
+    psa_set_key_type(&attr, PSA_KEY_TYPE_AES);
+    psa_set_key_bits(&attr, 256);
+
+    mbedtls_svc_key_id_t key_id;
+    psa_status_t status = psa_import_key(&attr, session_key, 32, &key_id);
+    if (status != PSA_SUCCESS) {
+        ESP_LOGE(TAG, "psa_import_key failed: %d", (int)status);
         return ESP_FAIL;
     }
 
-    ret = mbedtls_gcm_auth_decrypt(
-        &gcm,
-        cipher_len,
+    uint8_t *ct_with_tag = (uint8_t *)malloc(cipher_len + tag_len);
+    if (!ct_with_tag) {
+        psa_destroy_key(key_id);
+        return ESP_ERR_NO_MEM;
+    }
+    memcpy(ct_with_tag, ciphertext, cipher_len);
+    memcpy(ct_with_tag + cipher_len, tag, tag_len);
+
+    size_t output_len = 0;
+    status = psa_aead_decrypt(
+        key_id,
+        PSA_ALG_GCM,
         iv, iv_len,
-        (const unsigned char *)aad, aad_len,
-        tag, tag_len,
-        ciphertext,
-        (unsigned char *)out_plaintext
+        (const uint8_t *)aad, aad_len,
+        ct_with_tag, cipher_len + tag_len,
+        (uint8_t *)out_plaintext, max_out,
+        &output_len
     );
 
-    mbedtls_gcm_free(&gcm);
+    free(ct_with_tag);
+    psa_destroy_key(key_id);
 
-    if (ret != 0) {
-        ESP_LOGE(TAG, "AES-GCM Auth Decrypt failed: ret=-0x%04x (Auth Tag mismatch)", -ret);
+    if (status != PSA_SUCCESS) {
+        ESP_LOGE(TAG, "psa_aead_decrypt failed: %d (Auth Tag mismatch)", (int)status);
         return ESP_ERR_INVALID_STATE;
     }
 
-    out_plaintext[cipher_len] = '\0';
+    out_plaintext[output_len] = '\0';
     return ESP_OK;
 }
 
@@ -133,36 +146,48 @@ esp_err_t joy_crypto_encrypt_session_envelope(
     uint8_t out_tag[16])
 {
     if (!session_key || !iv || !plaintext || !out_ciphertext || !out_cipher_len || !out_tag) return ESP_ERR_INVALID_ARG;
-    if (plaintext_len > max_cipher_out) return ESP_ERR_NO_MEM;
+    if (plaintext_len + 16 > max_cipher_out) return ESP_ERR_NO_MEM;
 
-    mbedtls_gcm_context gcm;
-    mbedtls_gcm_init(&gcm);
+    psa_crypto_init();
 
-    int ret = mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, session_key, 256);
-    if (ret != 0) {
-        mbedtls_gcm_free(&gcm);
-        return ESP_FAIL;
+    psa_key_attributes_t attr = psa_key_attributes_init();
+    psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_ENCRYPT);
+    psa_set_key_algorithm(&attr, PSA_ALG_GCM);
+    psa_set_key_type(&attr, PSA_KEY_TYPE_AES);
+    psa_set_key_bits(&attr, 256);
+
+    mbedtls_svc_key_id_t key_id;
+    psa_status_t status = psa_import_key(&attr, session_key, 32, &key_id);
+    if (status != PSA_SUCCESS) return ESP_FAIL;
+
+    uint8_t *out_buf = (uint8_t *)malloc(plaintext_len + 16);
+    if (!out_buf) {
+        psa_destroy_key(key_id);
+        return ESP_ERR_NO_MEM;
     }
 
-    ret = mbedtls_gcm_crypt_and_tag(
-        &gcm,
-        MBEDTLS_GCM_ENCRYPT,
-        plaintext_len,
+    size_t output_length = 0;
+    status = psa_aead_encrypt(
+        key_id,
+        PSA_ALG_GCM,
         iv, iv_len,
-        (const unsigned char *)aad, aad_len,
-        (const unsigned char *)plaintext,
-        out_ciphertext,
-        16,
-        out_tag
+        (const uint8_t *)aad, aad_len,
+        (const uint8_t *)plaintext, plaintext_len,
+        out_buf, plaintext_len + 16,
+        &output_length
     );
 
-    mbedtls_gcm_free(&gcm);
+    psa_destroy_key(key_id);
 
-    if (ret != 0) {
-        ESP_LOGE(TAG, "AES-GCM Encrypt failed: ret=-0x%04x", -ret);
+    if (status != PSA_SUCCESS || output_length < 16) {
+        free(out_buf);
         return ESP_FAIL;
     }
 
-    *out_cipher_len = plaintext_len;
+    size_t ct_len = output_length - 16;
+    memcpy(out_ciphertext, out_buf, ct_len);
+    memcpy(out_tag, out_buf + ct_len, 16);
+    *out_cipher_len = ct_len;
+    free(out_buf);
     return ESP_OK;
 }

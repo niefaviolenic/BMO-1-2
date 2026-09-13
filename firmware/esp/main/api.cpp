@@ -623,50 +623,6 @@ static bool send_playback_failed(const char *req_id, const char *reason) {
     free(json_str);
     return sent;
 }
-bool api_ws_send_wifi_config_received(const char *config_id) {
-    if (config_id == NULL) return false;
-
-    cJSON *root = cJSON_CreateObject();
-    if (root == NULL) return false;
-
-    cJSON_AddStringToObject(root, "event", "wifi_configuration_received");
-    cJSON_AddStringToObject(root, "configuration_id", config_id);
-
-    char *json_str = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-
-    if (json_str == NULL) return false;
-
-    ESP_LOGI(TAG, "Sending wifi_configuration_received for %s", config_id);
-    bool sent = ws_send_text(json_str, true);
-    free(json_str);
-    return sent;
-}
-
-bool api_ws_send_wifi_config_result(const char *config_id, const char *status, int rssi, const char *reason) {
-    if (config_id == NULL || status == NULL) return false;
-
-    cJSON *root = cJSON_CreateObject();
-    if (root == NULL) return false;
-
-    cJSON_AddStringToObject(root, "event", "wifi_configuration_result");
-    cJSON_AddStringToObject(root, "configuration_id", config_id);
-    cJSON_AddStringToObject(root, "status", status);
-    cJSON_AddNumberToObject(root, "rssi", rssi);
-    if (reason != NULL) {
-        cJSON_AddStringToObject(root, "reason", reason);
-    }
-
-    char *json_str = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-
-    if (json_str == NULL) return false;
-
-    ESP_LOGI(TAG, "Sending wifi_configuration_result: id=%s status=%s rssi=%d", config_id, status, rssi);
-    bool sent = ws_send_text(json_str, true);
-    free(json_str);
-    return sent;
-}
 
 // WebSocket Send Authenticate
 static bool send_authenticate() {
@@ -987,21 +943,6 @@ static void handle_ws_message(const char *payload, int len) {
     else if (strcmp(event, "clear_qr") == 0) {
         ESP_LOGI(TAG, "Received clear_qr event");
         display_clear_qr_code();
-    }
-    else if (strcmp(event, "wifi_configuration") == 0) {
-        cJSON *config_id_node = cJSON_GetObjectItem(root, "configuration_id");
-        cJSON *ssid_node = cJSON_GetObjectItem(root, "ssid");
-        cJSON *password_node = cJSON_GetObjectItem(root, "password");
-
-        if (config_id_node != NULL && cJSON_IsString(config_id_node) &&
-            ssid_node != NULL && cJSON_IsString(ssid_node)) {
-            const char *password = (password_node != NULL && cJSON_IsString(password_node)) ? password_node->valuestring : NULL;
-            ESP_LOGI(TAG, "Received wifi_configuration event: config_id=%s, ssid=%s",
-                     config_id_node->valuestring, ssid_node->valuestring);
-            wifi_mgr_handle_remote_config(config_id_node->valuestring, ssid_node->valuestring, password);
-        } else {
-            ESP_LOGW(TAG, "Malformed wifi_configuration event");
-        }
     }
     else if (strcmp(event, "display_status") == 0) {
         cJSON *req_id_node = cJSON_GetObjectItem(root, "request_id");
@@ -1333,12 +1274,12 @@ static void ws_monitor_task(void *param) {
             last_pairing_countdown_tick_ms = now_ms;
             display_update_pairing_countdown();
         }
-
         static int64_t last_qr_countdown_tick_ms = 0;
         if (display_qr_code_is_visible() && (now_ms - last_qr_countdown_tick_ms >= 1000)) {
             last_qr_countdown_tick_ms = now_ms;
             display_update_qr_countdown();
         }
+
 
         if (!network_has_ip() || !network_has_valid_time()) {
             stop_ws_if_started("monitor_network_not_ready");

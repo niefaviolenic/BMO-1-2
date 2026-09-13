@@ -135,6 +135,7 @@ vi.mock('@/features/schedules/components', () => ({
   ScheduleMorningCard: (props: MockComponentProps) => ({ type: 'ScheduleMorningCard', props }),
   SchedulePausedCard: (props: MockComponentProps) => ({ type: 'SchedulePausedCard', props }),
   ScheduleWeeklyCard: (props: MockComponentProps) => ({ type: 'ScheduleWeeklyCard', props }),
+  EditScheduleSheet: (props: MockComponentProps) => ({ type: 'EditScheduleSheet', props }),
 }));
 
 vi.mock('@/features/schedules/data/use-schedules', () => ({
@@ -149,6 +150,8 @@ vi.mock('@/features/schedules/data/use-schedules', () => ({
     pause: vi.fn().mockResolvedValue(undefined),
     resume: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
+    update: vi.fn().mockResolvedValue(undefined),
+    rawScheduleById: vi.fn().mockReturnValue(null),
     cardById: vi.fn(),
     getContextMenuVariant: vi.fn(),
   }),
@@ -199,5 +202,12 @@ describe('SchedulesScreen Keyboard Behavior', () => {
     );
     expect(keyboardView).toBeDefined();
     expect(keyboardView?.props?.behavior).toBe('padding');
+  });
+
+  it('renders EditScheduleSheet component in the tree', () => {
+    const tree = SchedulesScreen({ testID: 'schedules-screen' });
+    const editSheet = findElement(tree, (el) => el.props?.testID === 'schedules-screen-edit-sheet');
+    expect(editSheet).toBeDefined();
+    expect(editSheet?.props?.isVisible).toBe(false);
   });
 });

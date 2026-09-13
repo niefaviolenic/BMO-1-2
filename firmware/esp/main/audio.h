@@ -31,10 +31,6 @@ void audio_playExpressionAudio(int expression_index);
 void audio_triggerExpressionAudio(int expression_index);
 void audio_cancelExpressionAudio();
 
-// Play the local spoken "I'm ready" cue without contacting the backend.
-void audio_playReady();
-void audio_triggerReadyAudio();
-void audio_cancelReadyAudio();
 
 // Play the local spoken "Bluetooth activated! Pair with me on the Joy app." phrase.
 void audio_playBleActivated();

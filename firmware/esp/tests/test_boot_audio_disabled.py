@@ -27,14 +27,15 @@ def app_main_body(source: str) -> str:
 
 
 class BootAudioTest(unittest.TestCase):
-    def test_boot_runs_speaker_self_test_at_configured_volume(self) -> None:
+    def test_boot_audio_and_display_test_pattern_are_disabled_for_power_stability(self) -> None:
         body = app_main_body(MAIN_CPP.read_text(encoding="utf-8"))
 
+        self.assertIn("boot_diagnostics_init()", body)
         self.assertIn("audio_init();", body)
         self.assertRegex(body, r"audio_setVolume\((?:100|SPEAKER_DEFAULT_VOLUME)\);")
-        self.assertIn("audio_playHello();", body)
-        self.assertIn("OUTPUT_DIAG speaker", body)
-
+        self.assertNotIn("audio_playHello()", body)
+        self.assertNotIn("display_test_pattern()", body)
+        self.assertNotIn("OUTPUT_DIAG speaker", body)
 
 if __name__ == "__main__":
     unittest.main()

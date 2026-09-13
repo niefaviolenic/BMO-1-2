@@ -159,9 +159,12 @@ export class JoyProvisioningManager {
         });
       });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Bluetooth scanning failed';
+      this.clearScanTimer();
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Gagal memulai pemindaian Bluetooth. Pastikan Bluetooth aktif dan didukung.';
       this.updateState({ error: msg, isScanning: false, step: 'error' });
-      throw err;
     }
   }
 

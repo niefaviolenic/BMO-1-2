@@ -5,4 +5,3 @@ export * from './robot-disconnect-modal';
 export * from './robot-hero-card';
 export * from './robot-option-card';
 export * from './robot-wifi-card';
-export * from './wifi-switcher-sheet';

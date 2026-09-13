@@ -11,6 +11,8 @@ import {
   listSchedules,
   pauseSchedule as pauseScheduleRequest,
   resumeSchedule as resumeScheduleRequest,
+  updateSchedule as updateScheduleRequest,
+  type UpdateScheduleBody,
 } from './schedule-api';
 
 type Listener = () => void;
@@ -198,6 +200,34 @@ export async function deleteScheduleById(id: string): Promise<void> {
   } finally {
     setState({ isMutating: false });
   }
+}
+
+export async function updateScheduleById(
+  id: string,
+  patch: Omit<UpdateScheduleBody, 'version'>,
+): Promise<void> {
+  bucket().loadGeneration += 1;
+  setState({ isMutating: true });
+  try {
+    await withConflictRetry(async () => {
+      const current = scheduleById(id);
+      if (!current) {
+        return;
+      }
+      const updated = await updateScheduleRequest(id, {
+        ...patch,
+        version: current.version,
+      });
+      upsertSchedule(updated);
+    });
+  } finally {
+    setState({ isMutating: false });
+  }
+}
+
+export function getScheduleById(id: string | null): Schedule | null {
+  if (!id) return null;
+  return scheduleById(id) ?? null;
 }
 
 export function visibleSchedules(): Schedule[] {

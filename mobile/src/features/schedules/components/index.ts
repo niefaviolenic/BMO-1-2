@@ -15,3 +15,4 @@ export * from './schedule-time-field';
 export * from './schedule-frequency-field';
 export * from './schedule-days-selection-field';
 export * from './schedule-date-field';
+export * from './edit-schedule-sheet';

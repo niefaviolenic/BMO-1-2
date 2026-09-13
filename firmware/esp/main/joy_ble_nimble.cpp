@@ -107,10 +107,24 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
                 .val_handle = &s_commit_val_handle,
                 .cpfd = NULL,
             },
-            { 0 }
+            {
+                .uuid = NULL,
+                .access_cb = NULL,
+                .arg = NULL,
+                .descriptors = NULL,
+                .flags = 0,
+                .min_key_size = 0,
+                .val_handle = NULL,
+                .cpfd = NULL,
+            }
         },
     },
-    { 0 }
+    {
+        .type = 0,
+        .uuid = NULL,
+        .includes = NULL,
+        .characteristics = NULL,
+    }
 };
 
 static int gatt_svr_chr_access_identity(uint16_t conn_handle, uint16_t attr_handle,
@@ -467,6 +481,9 @@ void joy_ble_nimble_start_advertising(void)
     adv_fields.uuids128 = (ble_uuid128_t *)&gatt_svr_svc_uuid;
     adv_fields.num_uuids128 = 1;
     adv_fields.uuids128_is_complete = 1;
+    adv_fields.name = (uint8_t *)dev_name;
+    adv_fields.name_len = strlen(dev_name);
+    adv_fields.name_is_complete = 1;
 
     int rc = ble_gap_adv_set_fields(&adv_fields);
     if (rc != 0) {
@@ -575,9 +592,14 @@ void joy_ble_nimble_stop(void)
 {
     if (!s_nimble_started) return;
 
+    if (s_conn_handle != BLE_HS_CONN_HANDLE_NONE) {
+        ESP_LOGI(TAG, "Terminating active BLE connection handle=%d", s_conn_handle);
+        ble_gap_terminate(s_conn_handle, BLE_ERR_REM_USER_CONN_TERM);
+        s_conn_handle = BLE_HS_CONN_HANDLE_NONE;
+    }
+
     ESP_LOGI(TAG, "Stopping NimBLE advertising");
     ble_gap_adv_stop();
-    s_conn_handle = BLE_HS_CONN_HANDLE_NONE;
 }
 
 bool joy_ble_nimble_is_connected(void)

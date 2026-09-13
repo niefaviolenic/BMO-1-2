@@ -5,6 +5,9 @@ import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import * as WebBrowser from 'expo-web-browser';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { LogBox } from 'react-native';
+
+LogBox.ignoreAllLogs(true);
 
 import { AuthGate } from '@/features/auth/presentation/auth-gate';
 import { AuthSessionProvider, useAuthSession } from '@/features/auth/presentation/auth-session-provider';

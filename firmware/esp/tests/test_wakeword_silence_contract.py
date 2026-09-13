@@ -112,9 +112,9 @@ class WakewordSilenceContractTest(unittest.TestCase):
         self.assertIn("wake_ack_worker", speaker_init)
         self.assertIn("thinking_filler", speaker_init)
         self.assertIn("expression_audio", speaker_init)
-        self.assertIn("ready_audio", speaker_init)
-        self.assertEqual(speaker_init.count("xTaskCreatePinnedToCoreWithCaps"), 4)
-        self.assertEqual(speaker_init.count("MALLOC_CAP_SPIRAM"), 4)
+        self.assertNotIn("ready_audio", speaker_init)
+        self.assertEqual(speaker_init.count("xTaskCreatePinnedToCoreWithCaps"), 3)
+        self.assertEqual(speaker_init.count("MALLOC_CAP_SPIRAM"), 3)
 
         state_source = STATE_SOURCE.read_text(encoding="utf-8")
         state_init = function_body(state_source, r"void\s+joy_state_machine_init\s*\([^)]*\)")

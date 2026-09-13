@@ -48,9 +48,6 @@ static volatile bool thinking_filler_running = false;
 static volatile bool thinking_filler_stop_requested = false;
 static volatile bool expression_audio_running = false;
 static volatile bool expression_audio_stop_requested = false;
-static TaskHandle_t ready_audio_worker_task_handle = NULL;
-static volatile bool ready_audio_running = false;
-static volatile bool ready_audio_stop_requested = false;
 static int pending_expression_index = -1;
 static portMUX_TYPE expression_audio_mux = portMUX_INITIALIZER_UNLOCKED;
 static int last_thinking_filler_index = -1;
@@ -102,8 +99,6 @@ extern const uint8_t _binary_10_wav_start[];
 extern const uint8_t _binary_10_wav_end[];
 extern const uint8_t _binary_wake_ack_wav_start[];
 extern const uint8_t _binary_wake_ack_wav_end[];
-extern const uint8_t _binary_ready_wav_start[];
-extern const uint8_t _binary_ready_wav_end[];
 extern const uint8_t _binary_thinking_01_wav_start[];
 extern const uint8_t _binary_thinking_01_wav_end[];
 extern const uint8_t _binary_thinking_02_wav_start[];
@@ -391,36 +386,6 @@ static void wake_ack_worker_task(void *param)
 static void thinking_filler_worker_task(void *param);
 static void expression_audio_worker_task(void *param);
 
-static void ready_audio_worker_task(void *param)
-{
-    while(true)
-    {
-        (void)ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
-        if(ready_audio_stop_requested || !local_expression_is_allowed())
-            continue;
-
-        ready_audio_running = true;
-        ESP_LOGI(TAG, "Local ready worker playing \"I'm ready\"");
-
-        const bool played = audio_play_embedded_wav_clip_cancellable(
-            _binary_ready_wav_start,
-            _binary_ready_wav_end,
-            "ready",
-            &ready_audio_stop_requested);
-
-        ready_audio_running = false;
-
-        if(!played && !ready_audio_stop_requested)
-        {
-            ESP_LOGW(TAG, "Ready WAV unavailable; using hello cue fallback");
-            audio_playHello();
-        }
-
-        if(!ready_audio_stop_requested)
-            (void)speaker_write_silence(30);
-    }
-}
 
 void audio_init()
 {
@@ -585,23 +550,6 @@ void audio_init()
         {
             ESP_LOGE(TAG, "Failed to create expression_audio task");
             expression_audio_task_handle = NULL;
-        }
-    }
-    if(ready_audio_worker_task_handle == NULL)
-    {
-        BaseType_t ret = xTaskCreatePinnedToCoreWithCaps(
-            ready_audio_worker_task,
-            "ready_audio",
-            4096,
-            NULL,
-            5,
-            &ready_audio_worker_task_handle,
-            0,
-            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if(ret != pdPASS)
-        {
-            ESP_LOGE(TAG, "Failed to create ready_audio task");
-            ready_audio_worker_task_handle = NULL;
         }
     }
 }
@@ -877,9 +825,6 @@ void audio_triggerWakeAck()
 {
     // Wakeword audio has priority over local touch/expression audio. The
     // detection and recording path itself remains unchanged.
-    ready_audio_stop_requested = true;
-    if(ready_audio_worker_task_handle != NULL)
-        xTaskNotifyGive(ready_audio_worker_task_handle);
     audio_cancelExpressionAudio();
 
     if(wake_ack_worker_task_handle != NULL)
@@ -893,81 +838,38 @@ void audio_triggerWakeAck()
     }
 }
 
-void audio_playReady()
-{
-    ESP_LOGI(TAG, "Play local ready phrase");
-    (void)audio_set_sample_rate(SPEAKER_SAMPLE_RATE);
-
-    if(audio_play_embedded_wav_clip(
-           _binary_ready_wav_start,
-           _binary_ready_wav_end,
-           "ready"))
-    {
-        return;
-    }
-
-    ESP_LOGW(TAG, "Ready WAV unavailable; using hello cue fallback");
-    audio_playHello();
-}
-
-void audio_triggerReadyAudio()
+void audio_playBleActivated()
 {
     if(!speaker_ready)
         return;
 
-    audio_cancelExpressionAudio();
-    ready_audio_stop_requested = false;
+    ESP_LOGI(TAG, "Trigger non-blocking local BLE activated phrase");
+    portENTER_CRITICAL(&expression_audio_mux);
+    pending_expression_index = -2;
+    expression_audio_stop_requested = false;
+    portEXIT_CRITICAL(&expression_audio_mux);
 
-    if(ready_audio_worker_task_handle != NULL)
+    if(expression_audio_task_handle != NULL)
     {
-        xTaskNotifyGive(ready_audio_worker_task_handle);
+        xTaskNotifyGive(expression_audio_task_handle);
     }
-    else
-    {
-        ESP_LOGW(TAG, "ready_audio task not ready, falling back to direct playback");
-        audio_playReady();
-    }
-}
-
-void audio_cancelReadyAudio()
-{
-    ready_audio_stop_requested = true;
-    if(ready_audio_worker_task_handle != NULL)
-        xTaskNotifyGive(ready_audio_worker_task_handle);
-}
-
-void audio_playBleActivated()
-{
-    ESP_LOGI(TAG, "Play local BLE activated phrase");
-    (void)audio_set_sample_rate(SPEAKER_SAMPLE_RATE);
-
-    if(audio_play_embedded_wav_clip(
-           _binary_ble_activated_wav_start,
-           _binary_ble_activated_wav_end,
-           "ble_activated"))
-    {
-        return;
-    }
-
-    ESP_LOGW(TAG, "BLE activated WAV unavailable; using fallback tone");
-    audio_playHello();
 }
 
 void audio_playUnpairedSad()
 {
-    ESP_LOGI(TAG, "Play local unpaired sad phrase");
-    (void)audio_set_sample_rate(SPEAKER_SAMPLE_RATE);
-
-    if(audio_play_embedded_wav_clip(
-           _binary_unpaired_sad_wav_start,
-           _binary_unpaired_sad_wav_end,
-           "unpaired_sad"))
-    {
+    if(!speaker_ready)
         return;
-    }
 
-    ESP_LOGW(TAG, "Unpaired sad WAV unavailable; using fallback error tone");
-    audio_play_error();
+    ESP_LOGI(TAG, "Trigger non-blocking local unpaired sad phrase");
+    portENTER_CRITICAL(&expression_audio_mux);
+    pending_expression_index = -3;
+    expression_audio_stop_requested = false;
+    portEXIT_CRITICAL(&expression_audio_mux);
+
+    if(expression_audio_task_handle != NULL)
+    {
+        xTaskNotifyGive(expression_audio_task_handle);
+    }
 }
 
 //--------------------------------------------------
@@ -994,7 +896,6 @@ void audio_triggerExpressionAudio(int expression_index)
         return;
     }
 
-    audio_cancelReadyAudio();
 
     portENTER_CRITICAL(&expression_audio_mux);
     pending_expression_index = expression_index;
@@ -1279,12 +1180,66 @@ static void expression_audio_worker_task(void *param)
             portENTER_CRITICAL(&expression_audio_mux);
             expression_index = pending_expression_index;
             pending_expression_index = -1;
-            if(expression_index >= 0)
+            if(expression_index != -1)
                 expression_audio_stop_requested = false;
             portEXIT_CRITICAL(&expression_audio_mux);
 
-            if(expression_index < 0)
+            if(expression_index == -1)
                 break;
+
+            if(expression_index == -2)
+            {
+                expression_audio_running = true;
+                ESP_LOGI(TAG, "Local expression worker playing ble_activated");
+                const bool played = audio_play_embedded_wav_clip_cancellable(
+                    _binary_ble_activated_wav_start,
+                    _binary_ble_activated_wav_end,
+                    "ble_activated",
+                    &expression_audio_stop_requested);
+                if(!played && !expression_audio_stop_requested)
+                {
+                    ESP_LOGW(TAG, "ble_activated unavailable; using fallback tone");
+                    audio_playHello();
+                }
+                expression_audio_running = false;
+                if(played && !expression_audio_stop_requested)
+                    (void)speaker_write_silence(30);
+
+                portENTER_CRITICAL(&expression_audio_mux);
+                const bool has_pending_expression = pending_expression_index != -1;
+                portEXIT_CRITICAL(&expression_audio_mux);
+
+                if(!has_pending_expression)
+                    break;
+                continue;
+            }
+
+            if(expression_index == -3)
+            {
+                expression_audio_running = true;
+                ESP_LOGI(TAG, "Local expression worker playing unpaired_sad");
+                const bool played = audio_play_embedded_wav_clip_cancellable(
+                    _binary_unpaired_sad_wav_start,
+                    _binary_unpaired_sad_wav_end,
+                    "unpaired_sad",
+                    &expression_audio_stop_requested);
+                if(!played && !expression_audio_stop_requested)
+                {
+                    ESP_LOGW(TAG, "unpaired_sad unavailable; using fallback error tone");
+                    audio_play_error();
+                }
+                expression_audio_running = false;
+                if(played && !expression_audio_stop_requested)
+                    (void)speaker_write_silence(30);
+
+                portENTER_CRITICAL(&expression_audio_mux);
+                const bool has_pending_expression = pending_expression_index != -1;
+                portEXIT_CRITICAL(&expression_audio_mux);
+
+                if(!has_pending_expression)
+                    break;
+                continue;
+            }
 
             if(!local_expression_is_allowed())
             {
@@ -1324,7 +1279,7 @@ static void expression_audio_worker_task(void *param)
                 (void)speaker_write_silence(30);
 
             portENTER_CRITICAL(&expression_audio_mux);
-            const bool has_pending_expression = pending_expression_index >= 0;
+            const bool has_pending_expression = pending_expression_index != -1;
             portEXIT_CRITICAL(&expression_audio_mux);
 
             if(!has_pending_expression)

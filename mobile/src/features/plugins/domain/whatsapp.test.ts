@@ -9,7 +9,6 @@ import {
   isWhatsAppConnected,
   secondsUntilExpiry,
   toWhatsAppE164,
-  toWhatsAppLinkedDevicesUrl,
 } from './whatsapp';
 
 describe('formatWhatsAppDisplayNumber', () => {
@@ -63,10 +62,6 @@ describe('whatsapp domain helpers', () => {
     expect(classifyQrPayload('random-qr-text')).toBe('text');
   });
 
-  it('generates linked devices url', () => {
-    expect(toWhatsAppLinkedDevicesUrl(null)).toBeNull();
-    expect(toWhatsAppLinkedDevicesUrl('sample-code')).toBe('https://wa.me/settings/linked_devices#sample-code');
-  });
 
   it('generates deterministic avatar colors', () => {
     const color1 = conversationAvatarColor('conv-1');

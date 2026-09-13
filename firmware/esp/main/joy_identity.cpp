@@ -6,7 +6,7 @@
 #include "esp_log.h"
 #include "esp_random.h"
 #include "esp_mac.h"
-#include "mbedtls/md.h"
+#include "joy_crypto.h"
 static const char *TAG = "JOY_IDENTITY";
 
 static joy_identity_t s_identity = {};
@@ -18,16 +18,12 @@ static void derive_dev_secrets(const char *hardware_id, const char *provisioning
 {
     char msg[256];
     snprintf(msg, sizeof(msg), "joy-dev-v1\n%s\n%s", hardware_id, provisioning_ref);
-
-    const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-
+    const char *fields[] = { msg };
     const char root_key[] = "joy-dev-root-secret-v1";
-    mbedtls_md_hmac(md_info, (const unsigned char *)root_key, strlen(root_key),
-                    (const unsigned char *)msg, strlen(msg), out_root_secret);
+    joy_crypto_raw_hmac((const uint8_t *)root_key, strlen(root_key), fields, 1, out_root_secret, 32);
 
     const char mfg_key[] = "joy-dev-mfg-secret-v1";
-    mbedtls_md_hmac(md_info, (const unsigned char *)mfg_key, strlen(mfg_key),
-                    (const unsigned char *)msg, strlen(msg), out_mfg_secret);
+    joy_crypto_raw_hmac((const uint8_t *)mfg_key, strlen(mfg_key), fields, 1, out_mfg_secret, 32);
 }
 
 static void generate_default_identity(void)
@@ -57,11 +53,6 @@ esp_err_t joy_identity_init(void)
 {
     if (s_initialized) return ESP_OK;
 
-    esp_err_t nvs_ret = nvs_flash_init();
-    if (nvs_ret == ESP_ERR_NVS_NO_FREE_PAGES || nvs_ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        nvs_flash_erase();
-        nvs_ret = nvs_flash_init();
-    }
 
     nvs_handle_t factory_handle;
     esp_err_t err = nvs_open("joy_factory", NVS_READWRITE, &factory_handle);

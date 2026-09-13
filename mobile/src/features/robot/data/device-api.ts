@@ -17,10 +17,6 @@ export type DeviceTelemetry = {
   observedAt: string | null;
 };
 
-export type DeviceWifi = {
-  ssid: string | null;
-  status: string | null;
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === 'object' && !Array.isArray(value);
@@ -71,16 +67,6 @@ function asTelemetry(value: unknown): DeviceTelemetry {
   };
 }
 
-function asWifi(value: unknown): DeviceWifi | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  return {
-    ssid: asString(value.ssid),
-    status: asString(value.status),
-  };
-}
 
 export async function claimDevice(code: string): Promise<SafeDevice> {
   const payload = await apiRequest<DeviceResponse>('/pairing/claim', {
@@ -111,24 +97,6 @@ export async function getDeviceTelemetry(deviceId: string): Promise<DeviceTeleme
   return asTelemetry(payload.telemetry);
 }
 
-export async function getDeviceWifi(deviceId: string): Promise<DeviceWifi | null> {
-  const payload = await apiRequest<{ wifi: unknown }>(`/devices/${deviceId}/wifi`);
-  return asWifi(payload.wifi);
-}
-export async function updateDeviceWifi(
-  deviceId: string,
-  input: { ssid: string; password?: string }
-): Promise<{ wifi: DeviceWifi }> {
-  const payload = await apiRequest<{ wifi: unknown }>(`/devices/${deviceId}/wifi`, {
-    method: 'PUT',
-    body: input,
-  });
-  const wifi = asWifi(payload.wifi);
-  if (!wifi) {
-    throw new Error('Malformed wifi response from server');
-  }
-  return { wifi };
-}
 
 export type ProvisioningPrepareInput = {
   protocol_version?: number;

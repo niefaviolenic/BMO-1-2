@@ -45,8 +45,6 @@ export function PluginConnectSheet({
       onClose={onClose}
       testID={testID}
       closeButtonTestID={`${testID}-close-button`}
-      disableScrollView
-      fitContent
     >
       <View style={[styles.container, style]} testID={`${testID}-content`}>
         {/* Top Logos Row */}
@@ -99,7 +97,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
     paddingTop: 4,
-    paddingBottom: 8,
+    paddingBottom: 24,
   },
   logosWrapper: {
     width: '100%',

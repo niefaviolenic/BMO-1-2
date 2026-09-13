@@ -3,6 +3,7 @@
 #include "joy_identity.h"
 #include "joy_crypto.h"
 #include "wifi.h"
+#include "esp_wifi.h"
 #include "display.h"
 #include "audio.h"
 #include <cstring>
@@ -60,6 +61,7 @@ esp_err_t joy_ble_provisioning_init(void)
 
 void joy_ble_start_pairing_window(void)
 {
+    esp_wifi_disconnect();
     generate_nonce(s_setup_nonce, sizeof(s_setup_nonce));
     s_window_deadline_us = esp_timer_get_time() + PROVISIONING_WINDOW_US;
     s_state = JoyBleState::BOOTSTRAP_ADVERTISING;

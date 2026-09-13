@@ -28,6 +28,7 @@ import {
   disconnectWhatsApp as disconnectWhatsAppRequest,
   dismissWhatsAppQr,
   fetchWhatsAppConversations,
+  fetchWhatsAppPairing,
   fetchWhatsAppQr,
   fetchWhatsAppRules,
   fetchWhatsAppStatus,
@@ -135,6 +136,29 @@ async function pollOnce(generation: number): Promise<void> {
     return;
   }
 
+  const currentPairing = store.state.pairing;
+  const isPairingActive =
+    Boolean(currentPairing?.code) &&
+    (currentPairing?.expiresAt ? (secondsUntilExpiry(currentPairing.expiresAt) ?? 0) : 0) > 0;
+
+  if (isPairingActive) {
+    const connection = await fetchWhatsAppStatus();
+    if (generation !== store.pollGeneration) {
+      return;
+    }
+    setState({ connection, error: null });
+    if (isWhatsAppConnected(connection.status)) {
+      stopPolling();
+      await refreshPluginCatalog().catch(() => undefined);
+    }
+    return;
+  }
+
+  if (currentPairing?.code && !isPairingActive) {
+    stopPolling();
+    return;
+  }
+
   const currentQr = store.state.qr;
   const isCurrentQrActive =
     Boolean(currentQr?.qr) &&
@@ -218,7 +242,7 @@ export async function startWhatsAppConnect(
   store.pollGeneration += 1;
   const generation = store.pollGeneration;
   stopPolling();
-  setState({ isConnecting: true, qr: null, error: null });
+  setState({ isConnecting: true, qr: null, error: null, ...(phoneNumber ? { pairing: null } : {}) });
 
   if (options?.forceReset) {
     await disconnectWhatsAppRequest().catch(() => undefined);
@@ -254,8 +278,17 @@ export function stopWhatsAppConnectPolling(): void {
 }
 
 export async function hydrateWhatsAppSession(): Promise<void> {
-  const connection = await fetchWhatsAppStatus();
-  setState({ connection, error: null });
+  const [connection, pairing] = await Promise.all([
+    fetchWhatsAppStatus().catch(() => null),
+    fetchWhatsAppPairing().catch(() => null),
+  ]);
+  if (connection) {
+    setState({
+      connection,
+      ...(pairing?.code ? { pairing } : {}),
+      error: null,
+    });
+  }
 }
 
 export async function confirmWhatsAppPairing(): Promise<WhatsAppConnection> {

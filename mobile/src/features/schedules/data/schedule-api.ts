@@ -116,3 +116,22 @@ export async function cancelSchedule(scheduleId: string, version: number): Promi
     body: { version },
   });
 }
+
+export type UpdateScheduleBody = {
+  version: number;
+  prompt?: string;
+  frequency?: 'Daily' | 'Weekly' | 'Once';
+  every?: number;
+  timeOfDay?: 'Morning' | 'Afternoon' | 'Evening';
+};
+
+export async function updateSchedule(
+  scheduleId: string,
+  body: UpdateScheduleBody,
+): Promise<Schedule> {
+  const payload = await apiRequest<ScheduleResponse>(`/schedules/${scheduleId}`, {
+    method: 'PATCH',
+    body,
+  });
+  return asSchedule(payload.schedule);
+}

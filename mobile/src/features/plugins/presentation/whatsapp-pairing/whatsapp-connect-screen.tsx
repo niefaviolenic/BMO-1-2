@@ -1,12 +1,12 @@
+import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
-import { RefreshCw } from 'lucide-react-native';
+import { Check, Copy, RefreshCw } from 'lucide-react-native';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Animated,
   AppState,
-  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -23,10 +23,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { LiquidGlassBackButton } from '@/components/ui/liquid-glass-back-button';
 import { WhatsAppConnectScreenTokens as Tokens } from '@/constants/theme';
 import { useWhatsAppSession } from '@/features/plugins/data/use-whatsapp-session';
-import { useRobotConnection } from '@/features/robot/data/use-robot-connection';
 import {
-  confirmWhatsAppPairing,
-  dismissWhatsAppSessionQr,
   getWhatsAppSessionState,
   hydrateWhatsAppSession,
   startWhatsAppConnect,
@@ -34,29 +31,31 @@ import {
 } from '@/features/plugins/data/whatsapp-session-store';
 import { mapPluginApiError } from '@/features/plugins/domain/plugin';
 import {
+  formatWhatsAppDisplayNumber,
   isWhatsAppConnected,
   secondsUntilExpiry,
-  toWhatsAppLinkedDevicesUrl,
+  toWhatsAppE164,
 } from '@/features/plugins/domain/whatsapp';
 import {
   ActiveJoyCapabilitiesCard,
+  PairingCodeDisplayBox,
+  PairingCodeHero,
   PairingInstructionsCard,
+  PairingPhoneHero,
   PairingSuccessHero,
-  QRCodeDisplayBox,
-  QRPairingHero,
+  PhoneNumberInputCard,
   type PairingStep,
 } from '@/features/plugins/presentation/whatsapp-pairing/components';
 import { useStepSlideTransition } from '@/hooks/use-step-slide-transition';
 
-export type StepState = 'qr' | 'success';
+export type StepState = 'phone' | 'code' | 'success';
 
 export type WhatsAppConnectScreenProps = {
   style?: StyleProp<ViewStyle>;
   testID?: string;
 };
 
-const STEP_ORDER: StepState[] = ['qr', 'success'];
-
+const STEP_ORDER: StepState[] = ['phone', 'code', 'success'];
 
 function getStepDirection(from: StepState, to: StepState): number {
   return STEP_ORDER.indexOf(to) - STEP_ORDER.indexOf(from);
@@ -66,8 +65,47 @@ function headerTitle(step: StepState): string {
   if (step === 'success') {
     return 'WhatsApp Integration';
   }
+  if (step === 'code') {
+    return 'Pairing Code';
+  }
   return 'Link WhatsApp';
 }
+
+const PHONE_STEPS: PairingStep[] = [
+  {
+    step: 1,
+    title: 'Enter phone number',
+    description: 'Provide the number registered with your WhatsApp account.',
+  },
+  {
+    step: 2,
+    title: 'Get 8-digit pairing code',
+    description: 'Joy generates a secure code to link with your WhatsApp.',
+  },
+  {
+    step: 3,
+    title: 'Enter code in WhatsApp',
+    description: 'Link in Settings > Linked Devices > Link with phone number.',
+  },
+];
+
+const CODE_STEPS: PairingStep[] = [
+  {
+    step: 1,
+    title: 'Open WhatsApp',
+    description: 'Go to Settings > Linked Devices on your phone.',
+  },
+  {
+    step: 2,
+    title: 'Tap Link a Device',
+    description: "Choose 'Link with phone number instead'.",
+  },
+  {
+    step: 3,
+    title: 'Enter the 8-digit code',
+    description: 'Type or paste the code above to finish linking.',
+  },
+];
 
 export function WhatsAppConnectScreen({
   style,
@@ -87,44 +125,19 @@ export function WhatsAppConnectScreen({
   );
 
   const session = useWhatsAppSession();
-  const robotConnection = useRobotConnection();
-  const [pairingStep, setPairingStep] = useState<StepState>('qr');
-  const [isConfirming, setIsConfirming] = useState(false);
+  const [pairingStep, setPairingStep] = useState<StepState>(() => {
+    if (isWhatsAppConnected(session.connection?.status)) {
+      return 'success';
+    }
+    if (session.pairing?.code) {
+      return 'code';
+    }
+    return 'phone';
+  });
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [isCopied, setIsCopied] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
-  const isRobotOnline =
-    robotConnection.status === 'connected' &&
-    Boolean(robotConnection.device?.online);
-  const robotName = robotConnection.device?.name ?? 'Joy Robot';
-
-  const qrSteps = useMemo<PairingStep[]>(() => {
-    return [
-      {
-        step: 1,
-        title: 'Tap Link in WhatsApp',
-        description:
-          'Opens Linked Devices with the same pairing data as the QR.',
-      },
-      {
-        step: 2,
-        title: 'Confirm the link',
-        description: 'Approve Joy as a linked device in WhatsApp.',
-      },
-      isRobotOnline
-        ? {
-            step: 3,
-            title: 'Scan the QR on Joy Robot',
-            description:
-              "If WhatsApp is on this phone, point your WhatsApp Linked Devices camera at your Joy Robot's screen.",
-          }
-        : {
-            step: 3,
-            title: 'Or scan the QR',
-            description:
-              'If WhatsApp is on another phone, scan the code above.',
-          },
-    ];
-  }, [isRobotOnline]);
   const { activeStep, contentTranslateX } = useStepSlideTransition({
     currentStep: pairingStep,
     getDirection: getStepDirection,
@@ -132,17 +145,34 @@ export function WhatsAppConnectScreen({
     duration: Tokens.slide.duration,
   });
 
+  const isPhoneValid = useMemo(() => {
+    const digits = phoneNumber.replace(/\D/gu, '');
+    const national = digits.startsWith('0') ? digits.slice(1) : digits;
+    return national.length >= 8 && national.length <= 13;
+  }, [phoneNumber]);
+
+  const e164Phone = useMemo(() => {
+    if (!isPhoneValid) return null;
+    try {
+      return toWhatsAppE164(phoneNumber, '62');
+    } catch {
+      return null;
+    }
+  }, [isPhoneValid, phoneNumber]);
+
   useEffect(() => {
     void (async () => {
       await hydrateWhatsAppSession().catch(() => undefined);
-      if (isWhatsAppConnected(getWhatsAppSessionState().connection?.status)) {
+      const state = getWhatsAppSessionState();
+      if (isWhatsAppConnected(state.connection?.status)) {
         setPairingStep('success');
         return;
       }
-      try {
-        await startWhatsAppConnect();
-      } catch (error) {
-        Alert.alert('Unable to connect WhatsApp', mapPluginApiError(error));
+      if (state.pairing?.code) {
+        const remaining = secondsUntilExpiry(state.pairing.expiresAt);
+        if (remaining && remaining > 0) {
+          setPairingStep('code');
+        }
       }
     })();
     return () => {
@@ -159,14 +189,6 @@ export function WhatsAppConnectScreen({
           if (isWhatsAppConnected(currentStatus)) {
             stopWhatsAppConnectPolling();
             setPairingStep('success');
-          } else if (pairingStep === 'qr') {
-            const currentQr = getWhatsAppSessionState().qr;
-            const isCurrentQrActive =
-              Boolean(currentQr?.qr) &&
-              (currentQr?.expiresAt ? (secondsUntilExpiry(currentQr.expiresAt) ?? 0) : 0) > 0;
-            if (!isCurrentQrActive) {
-              await startWhatsAppConnect(undefined, { forceReset: true }).catch(() => undefined);
-            }
           }
         })();
       }
@@ -175,7 +197,8 @@ export function WhatsAppConnectScreen({
     return () => {
       subscription.remove();
     };
-  }, [pairingStep]);
+  }, []);
+
   useEffect(() => {
     if (isWhatsAppConnected(session.connection?.status)) {
       stopWhatsAppConnectPolling();
@@ -184,94 +207,71 @@ export function WhatsAppConnectScreen({
   }, [session.connection?.status]);
 
   useEffect(() => {
-    if (pairingStep !== 'qr') {
+    if (pairingStep !== 'code') {
       return;
     }
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [pairingStep]);
+
   const expiresInSeconds = useMemo(
-    () => (nowMs ? secondsUntilExpiry(session.qr?.expiresAt ?? null) ?? 0 : 0),
-    [nowMs, session.qr?.expiresAt],
+    () => (nowMs ? secondsUntilExpiry(session.pairing?.expiresAt ?? null) ?? 0 : 0),
+    [nowMs, session.pairing?.expiresAt],
   );
-  const isQrExpired = useMemo(() => {
-    if (!session.qr?.qr) return false;
+  const isCodeExpired = useMemo(() => {
+    if (!session.pairing?.code) return false;
     return expiresInSeconds <= 0;
-  }, [expiresInSeconds, session.qr?.qr]);
+  }, [expiresInSeconds, session.pairing?.code]);
 
   useEffect(() => {
-    if (isQrExpired) {
+    if (isCodeExpired) {
       stopWhatsAppConnectPolling();
     }
-  }, [isQrExpired]);
+  }, [isCodeExpired]);
 
-  const linkedDevicesUrl = useMemo(
-    () => (isQrExpired ? null : toWhatsAppLinkedDevicesUrl(session.qr?.qr ?? null)),
-    [isQrExpired, session.qr?.qr],
-  );
-
-  const handleRefreshQr = async () => {
+  const handleRequestCode = async () => {
+    if (!isPhoneValid || !e164Phone) {
+      Alert.alert('Invalid Phone Number', 'Please enter a valid WhatsApp phone number (8–13 digits).');
+      return;
+    }
     try {
-      await startWhatsAppConnect(undefined, { forceReset: true });
+      const result = await startWhatsAppConnect(e164Phone, { forceReset: true });
+      if (result.pairing?.code) {
+        setPairingStep('code');
+      }
     } catch (error) {
-      Alert.alert('Unable to refresh WhatsApp QR', mapPluginApiError(error));
+      Alert.alert('Unable to generate pairing code', mapPluginApiError(error));
     }
   };
-  const handleDismiss = () => {
-    stopWhatsAppConnectPolling();
-    if (!isWhatsAppConnected(getWhatsAppSessionState().connection?.status)) {
-      void dismissWhatsAppSessionQr().catch(() => undefined);
+
+  const handleCopyCode = async () => {
+    const code = session.pairing?.code;
+    if (!code) return;
+    try {
+      await Clipboard.setStringAsync(code);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2500);
+    } catch {
+      // Fallback
     }
+  };
+
+  const handleChangePhoneNumber = () => {
+    stopWhatsAppConnectPolling();
+    setPairingStep('phone');
+  };
+
+  const handleDismiss = () => {
+    if (pairingStep === 'code') {
+      handleChangePhoneNumber();
+      return;
+    }
+    stopWhatsAppConnectPolling();
     if (router.canGoBack()) {
       router.back();
       return;
     }
     router.replace('/plugin-detail');
-  };
-
-  const handleOpenWhatsApp = async () => {
-    if (!linkedDevicesUrl) {
-      Alert.alert(
-        'WhatsApp is not ready',
-        'Wait for the link to appear, then try again.',
-      );
-      return;
-    }
-    try {
-      const canOpen = await Linking.canOpenURL(linkedDevicesUrl);
-      if (!canOpen) {
-        Alert.alert(
-          'WhatsApp is not available',
-          'Install WhatsApp on this phone, or scan the QR from another device.',
-        );
-        return;
-      }
-      await Linking.openURL(linkedDevicesUrl);
-    } catch {
-      Alert.alert(
-        'Unable to open WhatsApp',
-        'Scan the QR code in Linked Devices instead.',
-      );
-    }
-  };
-
-  const handleScanned = async () => {
-    setIsConfirming(true);
-    try {
-      const connection = await confirmWhatsAppPairing();
-      if (isWhatsAppConnected(connection.status)) {
-        setPairingStep('success');
-        return;
-      }
-      Alert.alert(
-        'Still waiting',
-        'Scan the QR code in WhatsApp Linked Devices, then try again.',
-      );
-    } catch (error) {
-      Alert.alert('Unable to confirm WhatsApp', mapPluginApiError(error));
-    } finally {
-      setIsConfirming(false);
-    }
   };
 
   const showBackButton = activeStep !== 'success';
@@ -281,6 +281,8 @@ export function WhatsAppConnectScreen({
       : Tokens.layout.contentGapPairing;
   const paddingTop = Math.max(insets.top, 16);
   const paddingBottom = Math.max(insets.bottom, 16);
+
+  const displayPhone = formatWhatsAppDisplayNumber(phoneNumber || undefined);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }, style]} testID={testID}>
@@ -320,8 +322,8 @@ export function WhatsAppConnectScreen({
                   paddingBottom:
                     paddingBottom +
                     Tokens.layout.scrollBottomExtra +
-                    Tokens.primaryButton.height +
-                    Tokens.primaryButton.gap,
+                    Tokens.primaryButton.height * 2 +
+                    Tokens.primaryButton.gap * 2,
                   gap: contentGap,
                 },
               ]}
@@ -329,31 +331,44 @@ export function WhatsAppConnectScreen({
               keyboardShouldPersistTaps="handled"
               testID={`${testID}-scroll-view`}
             >
-              {activeStep === 'qr' ? (
+              {activeStep === 'phone' ? (
                 <>
-                  <QRPairingHero
+                  <PairingPhoneHero
                     style={{ width: sectionWidth }}
-                    testID={`${testID}-qr-hero`}
+                    testID={`${testID}-phone-hero`}
                   />
-                  <QRCodeDisplayBox
-                    qrValue={session.qr?.qr ?? null}
-                    expiresInSeconds={expiresInSeconds}
-                    isExpired={isQrExpired}
-                    isRefreshing={session.isConnecting}
-                    onRefresh={handleRefreshQr}
-                    waitingLabel={
-                      session.isConnecting
-                        ? 'Requesting WhatsApp QR…'
-                        : 'Waiting for WhatsApp QR…'
-                    }
-                    robotSync={{ online: isRobotOnline, name: robotName }}
+                  <PhoneNumberInputCard
+                    countryCode="+62"
+                    phoneNumber={phoneNumber}
+                    onChangePhoneNumber={setPhoneNumber}
                     style={{ width: sectionWidth }}
-                    testID={`${testID}-qr-box`}
+                    testID={`${testID}-phone-input`}
                   />
                   <PairingInstructionsCard
-                    steps={qrSteps}
+                    steps={PHONE_STEPS}
                     style={{ width: sectionWidth }}
-                    testID={`${testID}-qr-instructions`}
+                    testID={`${testID}-phone-instructions`}
+                  />
+                </>
+              ) : null}
+
+              {activeStep === 'code' ? (
+                <>
+                  <PairingCodeHero
+                    style={{ width: sectionWidth }}
+                    testID={`${testID}-code-hero`}
+                  />
+                  <PairingCodeDisplayBox
+                    code={session.pairing?.code ?? undefined}
+                    expiresInSeconds={expiresInSeconds}
+                    onCopy={handleCopyCode}
+                    style={{ width: sectionWidth }}
+                    testID={`${testID}-code-box`}
+                  />
+                  <PairingInstructionsCard
+                    steps={CODE_STEPS}
+                    style={{ width: sectionWidth }}
+                    testID={`${testID}-code-instructions`}
                   />
                 </>
               ) : null}
@@ -361,7 +376,7 @@ export function WhatsAppConnectScreen({
               {activeStep === 'success' ? (
                 <>
                   <PairingSuccessHero
-                    phoneNumber="WhatsApp"
+                    phoneNumber={displayPhone || 'WhatsApp'}
                     style={{ width: sectionWidth }}
                     testID={`${testID}-success-hero`}
                   />
@@ -388,9 +403,45 @@ export function WhatsAppConnectScreen({
           ]}
           testID={`${testID}-floating-cta`}
         >
-          {activeStep === 'qr' ? (
+          {activeStep === 'phone' ? (
             <View style={[styles.ctaStack, { width: sectionWidth }]}>
-              {isQrExpired ? (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  { backgroundColor: theme.buttonPrimaryBackground },
+                  (pressed || !isPhoneValid || session.isConnecting) && styles.primaryButtonPressed,
+                ]}
+                onPress={() => {
+                  void handleRequestCode();
+                }}
+                disabled={!isPhoneValid || session.isConnecting}
+                accessibilityRole="button"
+                accessibilityLabel="Get Pairing Code"
+                testID={`${testID}-get-code-cta-button`}
+              >
+                {session.isConnecting ? (
+                  <View style={styles.buttonLoadingRow}>
+                    <ActivityIndicator
+                      size="small"
+                      color={theme.buttonPrimaryText}
+                      testID={`${testID}-cta-spinner`}
+                    />
+                    <Text style={[styles.primaryButtonText, { color: theme.buttonPrimaryText }]}>
+                      Requesting Code…
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={[styles.primaryButtonText, { color: theme.buttonPrimaryText }]}>
+                    Get Pairing Code
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          ) : null}
+
+          {activeStep === 'code' ? (
+            <View style={[styles.ctaStack, { width: sectionWidth }]}>
+              {isCodeExpired ? (
                 <Pressable
                   style={({ pressed }) => [
                     styles.primaryButton,
@@ -398,12 +449,12 @@ export function WhatsAppConnectScreen({
                     (pressed || session.isConnecting) && styles.primaryButtonPressed,
                   ]}
                   onPress={() => {
-                    void handleRefreshQr();
+                    void handleRequestCode();
                   }}
                   disabled={session.isConnecting}
                   accessibilityRole="button"
-                  accessibilityLabel="Reload QR Code"
-                  testID={`${testID}-reload-qr-cta-button`}
+                  accessibilityLabel="Request New Code"
+                  testID={`${testID}-reload-code-cta-button`}
                 >
                   {session.isConnecting ? (
                     <View style={styles.buttonLoadingRow}>
@@ -412,12 +463,16 @@ export function WhatsAppConnectScreen({
                         color={theme.buttonPrimaryText}
                         testID={`${testID}-cta-spinner`}
                       />
-                      <Text style={[styles.primaryButtonText, { color: theme.buttonPrimaryText }]}>Requesting QR…</Text>
+                      <Text style={[styles.primaryButtonText, { color: theme.buttonPrimaryText }]}>
+                        Requesting Code…
+                      </Text>
                     </View>
                   ) : (
                     <View style={styles.buttonLoadingRow}>
                       <RefreshCw size={14} color={theme.buttonPrimaryText} />
-                      <Text style={[styles.primaryButtonText, { color: theme.buttonPrimaryText }]}>Reload QR Code</Text>
+                      <Text style={[styles.primaryButtonText, { color: theme.buttonPrimaryText }]}>
+                        Request New Code
+                      </Text>
                     </View>
                   )}
                 </Pressable>
@@ -426,58 +481,41 @@ export function WhatsAppConnectScreen({
                   style={({ pressed }) => [
                     styles.primaryButton,
                     { backgroundColor: theme.buttonPrimaryBackground },
-                    (pressed || !linkedDevicesUrl || session.isConnecting) &&
-                      styles.primaryButtonPressed,
+                    pressed && styles.primaryButtonPressed,
                   ]}
                   onPress={() => {
-                    void handleOpenWhatsApp();
+                    void handleCopyCode();
                   }}
-                  disabled={!linkedDevicesUrl || session.isConnecting}
                   accessibilityRole="button"
-                  accessibilityLabel="Link device in WhatsApp"
-                  testID={`${testID}-open-whatsapp-cta-button`}
+                  accessibilityLabel="Copy pairing code"
+                  testID={`${testID}-copy-code-cta-button`}
                 >
-                  {!linkedDevicesUrl || session.isConnecting ? (
-                    <View style={styles.buttonLoadingRow}>
-                      <ActivityIndicator
-                        size="small"
-                        color={theme.buttonPrimaryText}
-                        testID={`${testID}-cta-spinner`}
-                      />
-                      <Text style={[styles.primaryButtonText, { color: theme.buttonPrimaryText }]}>
-                        {session.isConnecting ? 'Requesting QR…' : 'Preparing link…'}
-                      </Text>
-                    </View>
-                  ) : (
-                    <Text style={[styles.primaryButtonText, { color: theme.buttonPrimaryText }]}>Link Device in WhatsApp</Text>
-                  )}
+                  <View style={styles.buttonLoadingRow}>
+                    {isCopied ? (
+                      <Check size={16} color={theme.buttonPrimaryText} />
+                    ) : (
+                      <Copy size={16} color={theme.buttonPrimaryText} />
+                    )}
+                    <Text style={[styles.primaryButtonText, { color: theme.buttonPrimaryText }]}>
+                      {isCopied ? 'Code Copied!' : 'Copy Pairing Code'}
+                    </Text>
+                  </View>
                 </Pressable>
               )}
+
               <Pressable
                 style={({ pressed }) => [
                   styles.secondaryButton,
-                  (pressed || isConfirming) && styles.secondaryButtonPressed,
+                  pressed && styles.secondaryButtonPressed,
                 ]}
-                onPress={() => {
-                  void handleScanned();
-                }}
-                disabled={isConfirming}
+                onPress={handleChangePhoneNumber}
                 accessibilityRole="button"
-                accessibilityLabel="I've linked the device"
-                testID={`${testID}-scanned-qr-cta-button`}
+                accessibilityLabel="Change Phone Number"
+                testID={`${testID}-change-phone-cta-button`}
               >
-                {isConfirming ? (
-                  <View style={styles.buttonLoadingRow}>
-                    <ActivityIndicator
-                      size="small"
-                      color={theme.text}
-                      testID={`${testID}-confirming-spinner`}
-                    />
-                    <Text style={[styles.secondaryButtonText, { color: theme.textSecondary }]}>Confirming…</Text>
-                  </View>
-                ) : (
-                  <Text style={[styles.secondaryButtonText, { color: theme.text }]}>I&apos;ve Linked the Device</Text>
-                )}
+                <Text style={[styles.secondaryButtonText, { color: theme.text }]}>
+                  Change Phone Number
+                </Text>
               </Pressable>
             </View>
           ) : null}

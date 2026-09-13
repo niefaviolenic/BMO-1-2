@@ -4,10 +4,11 @@ import {
   filterScheduleCards,
   getContextMenuVariant,
   toScheduleCardItem,
+  type Schedule,
   type ScheduleCardItem,
   type ScheduleStatusFilter,
 } from '../domain/schedule';
-
+import type { UpdateScheduleBody } from './schedule-api';
 import {
   createScheduleFromPrompt,
   deleteScheduleById,
@@ -16,8 +17,8 @@ import {
   refreshSchedules,
   resumeScheduleById,
   subscribeSchedules,
+  updateScheduleById,
 } from './schedule-store';
-
 export function useSchedules(filter: ScheduleStatusFilter) {
   const snapshot = useSyncExternalStore(
     subscribeSchedules,
@@ -57,6 +58,21 @@ export function useSchedules(filter: ScheduleStatusFilter) {
   const remove = useCallback(async (id: string) => {
     await deleteScheduleById(id);
   }, []);
+  const update = useCallback(
+    async (id: string, patch: Omit<UpdateScheduleBody, 'version'>) => {
+      await updateScheduleById(id, patch);
+    },
+    [],
+  );
+
+  const rawScheduleById = useCallback(
+    (id: string | null): Schedule | null => {
+      if (!id) return null;
+      return snapshot.schedules.find((item) => item.id === id) ?? null;
+    },
+    [snapshot.schedules],
+  );
+
 
   const cardById = useCallback(
     (id: string | null): ScheduleCardItem | null => {
@@ -80,6 +96,8 @@ export function useSchedules(filter: ScheduleStatusFilter) {
     resume,
     remove,
     cardById,
+    update,
+    rawScheduleById,
     getContextMenuVariant,
   };
 }

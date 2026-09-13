@@ -2,3 +2,10 @@ allowBuilds:
   unrs-resolver: true
 minimumReleaseAgeExclude:
   - eslint-config-expo@57.0.1
+
+overrides:
+  eslint-plugin-react-hooks>zod-validation-error: ^4.0.2
+
+patchedDependencies:
+  expo-modules-jsi@57.0.5: patches/expo-modules-jsi@57.0.5.patch
+  expo-notifications@57.0.15: patches/expo-notifications@57.0.15.patch

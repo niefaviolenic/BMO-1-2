@@ -89,23 +89,6 @@ export function classifyQrPayload(
   return 'text';
 }
 
-/** Deep link WhatsApp uses for Linked Devices instead of scanning a QR. */
-export function toWhatsAppLinkedDevicesUrl(qr: string | null): string | null {
-  if (!qr) {
-    return null;
-  }
-  const value = qr.trim();
-  if (value.length === 0 || value.startsWith('data:image')) {
-    return null;
-  }
-  if (/^https?:\/\/(?:www\.)?wa\.me\/settings\/linked_devices/iu.test(value)) {
-    return value;
-  }
-  if (/^https?:\/\//u.test(value)) {
-    return null;
-  }
-  return `https://wa.me/settings/linked_devices#${value}`;
-}
 
 const AVATAR_COLORS = ['#E56666', '#4D99E5', '#33B280', '#9966CC', '#E5A04D'] as const;
 

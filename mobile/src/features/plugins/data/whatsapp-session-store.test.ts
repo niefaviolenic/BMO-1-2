@@ -2,7 +2,7 @@
 // @ts-ignore
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { WhatsAppConnection, WhatsAppQr } from '../domain/whatsapp';
+import type { WhatsAppConnection, WhatsAppPairing, WhatsAppQr } from '../domain/whatsapp';
 import * as whatsappApi from './whatsapp-api';
 import {
   getWhatsAppSessionState,
@@ -152,5 +152,36 @@ describe('WhatsAppSessionStore (State 1 Only Fresh QR Flow)', () => {
     expect(state.connection?.status).toBe('CONNECTED');
     expect(state.connection?.phoneNumber).toBe('+628993000101');
     expect(state.connection?.accountName).toBe('Rangga Biner');
+  });
+
+  it('starts connect with phone number, receives pairing code, and polls only status', async () => {
+    const mockConnection: WhatsAppConnection = {
+      provider: 'whatsapp',
+      status: 'DISCONNECTED',
+      connectedAt: null,
+      scopes: [],
+    };
+    const mockPairing: WhatsAppPairing = {
+      code: '8K2P9XLM',
+      expiresAt: new Date(Date.now() + 600_000).toISOString(),
+      status: 'PENDING',
+    };
+
+    vi.spyOn(whatsappApi, 'connectWhatsApp').mockResolvedValue({
+      connection: mockConnection,
+      blocked: true,
+      pairing: mockPairing,
+    });
+    const fetchStatusSpy = vi.spyOn(whatsappApi, 'fetchWhatsAppStatus').mockResolvedValue(mockConnection);
+    const fetchQrSpy = vi.spyOn(whatsappApi, 'fetchWhatsAppQr');
+
+    await startWhatsAppConnect('+6281234567890');
+
+    const state = getWhatsAppSessionState();
+    expect(state.pairing?.code).toBe('8K2P9XLM');
+    expect(state.connection?.status).toBe('DISCONNECTED');
+    expect(state.isConnecting).toBe(false);
+    expect(fetchStatusSpy).toHaveBeenCalled();
+    expect(fetchQrSpy).not.toHaveBeenCalled();
   });
 });

@@ -27,6 +27,7 @@ import { useSidebarShell } from '@/features/chat/presentation/sidebar-shell';
 import {
   DEFAULT_HYDRATION_PROMPT,
   DEFAULT_MORNING_PROMPT,
+  EditScheduleSheet,
   ScheduleCompletedCard,
   ScheduleContextMenu,
   ScheduleFilterDropdown,
@@ -41,6 +42,7 @@ import { useSchedules } from '@/features/schedules/data/use-schedules';
 import {
   mapScheduleApiError,
   type ScheduleCardItem,
+  type ScheduleTimeOfDay,
 } from '@/features/schedules/domain/schedule';
 
 const HEADER_BAR_HEIGHT = 44;
@@ -62,6 +64,7 @@ export function SchedulesScreen({ style, testID = 'schedules-screen' }: Schedule
   const [filter, setFilter] = useState<ScheduleFilterOption>('Active');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [contextMenuItemId, setContextMenuItemId] = useState<string | null>(null);
+  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
   const inputValueRef = useRef(inputValue);
   inputValueRef.current = inputValue;
 
@@ -74,6 +77,8 @@ export function SchedulesScreen({ style, testID = 'schedules-screen' }: Schedule
     pause,
     resume,
     remove,
+    update,
+    rawScheduleById,
     cardById,
     getContextMenuVariant,
   } = useSchedules(filter);
@@ -111,6 +116,19 @@ export function SchedulesScreen({ style, testID = 'schedules-screen' }: Schedule
   const contextMenuItem = useMemo(
     () => cardById(contextMenuItemId),
     [cardById, contextMenuItemId]
+  );
+
+  const editingSchedule = useMemo(
+    () => rawScheduleById(editingScheduleId),
+    [editingScheduleId, rawScheduleById]
+  );
+
+  const handleSaveEdit = useCallback(
+    async (id: string, patch: { prompt?: string; timeOfDay?: ScheduleTimeOfDay }) => {
+      await update(id, patch);
+      setEditingScheduleId(null);
+    },
+    [update]
   );
 
   const handleSuggestionPress = useCallback((label: string) => {
@@ -356,7 +374,10 @@ export function SchedulesScreen({ style, testID = 'schedules-screen' }: Schedule
                 {renderScheduleCard(contextMenuItem, true)}
                 <ScheduleContextMenu
                   variant={getContextMenuVariant(contextMenuItem.status)}
-                  onEdit={() => setContextMenuItemId(null)}
+                  onEdit={() => {
+                    setEditingScheduleId(contextMenuItem.id);
+                    setContextMenuItemId(null);
+                  }}
                   onPause={() => handlePauseItem(contextMenuItem.id)}
                   onResume={() => handleResumeItem(contextMenuItem.id)}
                   onDelete={() => handleDeleteItem(contextMenuItem.id)}
@@ -366,6 +387,14 @@ export function SchedulesScreen({ style, testID = 'schedules-screen' }: Schedule
               </View>
             </View>
           ) : null}
+
+          <EditScheduleSheet
+            isVisible={Boolean(editingScheduleId)}
+            onClose={() => setEditingScheduleId(null)}
+            schedule={editingSchedule}
+            onSave={handleSaveEdit}
+            testID={`${testID}-edit-sheet`}
+          />
         </View>
       </KeyboardAvoidingView>
     </View>

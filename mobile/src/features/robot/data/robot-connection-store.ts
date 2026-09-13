@@ -17,7 +17,6 @@ import {
 import {
   claimDevice,
   getDeviceTelemetry,
-  getDeviceWifi,
   listDevices,
   unpairDevice,
 } from './device-api';
@@ -50,21 +49,12 @@ function mergeLive(
 }
 
 async function enrichDevice(device: SafeDevice): Promise<RobotDeviceInfo> {
-  const [telemetryResult, wifiResult] = await Promise.allSettled([
-    getDeviceTelemetry(device.id),
-    getDeviceWifi(device.id),
-  ]);
-
-  const telemetry = telemetryResult.status === 'fulfilled' ? telemetryResult.value : null;
-  const wifi = wifiResult.status === 'fulfilled' ? wifiResult.value : null;
-  const wifiConnected =
-    telemetry?.wifiConnected ??
-    (wifi?.status === 'CONNECTED' ? true : wifi?.status ? false : null);
+  const telemetry = await getDeviceTelemetry(device.id).catch(() => null);
 
   return mergeLive(device, {
     online: telemetry?.wifiConnected === true,
     batteryPercent: telemetry?.batteryPercent ?? null,
-    wifiConnected,
+    wifiConnected: telemetry?.wifiConnected ?? null,
   });
 }
 

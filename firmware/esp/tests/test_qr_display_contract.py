@@ -1,6 +1,7 @@
 import ctypes
 import os
 import re
+import shutil
 import unittest
 from pathlib import Path
 
@@ -92,6 +93,7 @@ class QrDisplayContractTest(unittest.TestCase):
         wakeword = self.read(WAKEWORD_CPP)
         self.assertGreaterEqual(wakeword.count("display_qr_code_is_visible()"), 2)
 
+    @unittest.skipIf(shutil.which("gcc") is None, "gcc not found in PATH")
     def test_qrcodegen_compilation_and_whatsapp_payload_encoding(self) -> None:
         so_path = "/tmp/libqrcodegen_test.so"
         ret = os.system(f"gcc -shared -fPIC -O2 -I{MAIN_DIR} {QRCODEGEN_C} -o {so_path}")

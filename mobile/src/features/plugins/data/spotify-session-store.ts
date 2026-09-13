@@ -32,6 +32,7 @@ import {
   setSpotifyPreferredDevice,
 } from './spotify-api';
 
+export { fetchSpotifyStatus };
 type Listener = () => void;
 
 export type SpotifySessionState = {

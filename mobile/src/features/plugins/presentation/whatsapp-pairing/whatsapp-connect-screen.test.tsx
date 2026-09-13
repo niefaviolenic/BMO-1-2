@@ -14,29 +14,19 @@ type MockComponentProps = {
 };
 
 // --- Mock state holders ---
-let mockRobotConnection: {
-  status: string;
-  device: any;
-  isHydrating: boolean;
-  isPairing: boolean;
-  isUnpairing: boolean;
-  error: null | string;
-} = {
+let mockRobotConnection = {
   status: 'disconnected',
-  device: null,
+  device: null as unknown,
   isHydrating: false,
   isPairing: false,
   isUnpairing: false,
-  error: null,
+  error: null as string | null,
 };
 
 let mockWhatsAppSession = {
   connection: null as { status: string } | null,
-  pairing: null,
-  qr: { qr: '2@mock-qr-code-payload', expiresAt: new Date(Date.now() + 60000).toISOString() } as {
-    qr: string | null;
-    expiresAt: string | null;
-  } | null,
+  pairing: null as { code: string | null; expiresAt: string | null; status?: string } | null,
+  qr: null as { qr: string | null; expiresAt: string | null } | null,
   rules: [],
   conversations: [],
   isConnecting: false,
@@ -44,11 +34,17 @@ let mockWhatsAppSession = {
   error: null,
 };
 
-const mockStartWhatsAppConnect = vi.fn().mockResolvedValue({ connection: { status: 'DISCONNECTED' } });
+const mockStartWhatsAppConnect = vi.fn().mockResolvedValue({
+  connection: { status: 'DISCONNECTED' },
+  pairing: { code: '8K2P9XLM', expiresAt: new Date(Date.now() + 600000).toISOString(), status: 'PENDING' },
+});
 const mockStopWhatsAppConnectPolling = vi.fn();
 const mockHydrateWhatsAppSession = vi.fn().mockResolvedValue(undefined);
-const mockConfirmWhatsAppPairing = vi.fn().mockResolvedValue({ status: 'CONNECTED' });
 const mockGetWhatsAppSessionState = vi.fn(() => mockWhatsAppSession);
+const mockSetStringAsync = vi.fn().mockResolvedValue(true);
+
+let mockStateMap: Record<string, unknown> = {};
+let mockSetStateMap: Record<string, (val: unknown) => void> = {};
 
 vi.mock('react', async (importOriginal: () => Promise<Record<string, unknown>>) => {
   const actual = await importOriginal();
@@ -58,10 +54,17 @@ vi.mock('react', async (importOriginal: () => Promise<Record<string, unknown>>) 
     useRef: vi.fn((initial?: unknown) => ({ current: initial })),
     useCallback: vi.fn((fn: (...args: unknown[]) => unknown) => fn),
     useMemo: vi.fn((factory: () => unknown) => factory()),
-    useState: vi.fn((initial: unknown) => [
-      typeof initial === 'function' ? (initial as () => unknown)() : initial,
-      vi.fn(),
-    ]),
+    useState: vi.fn((initial: unknown) => {
+      const key = typeof initial === 'string' ? `str_${initial}` : typeof initial;
+      if (!(key in mockStateMap)) {
+        mockStateMap[key] = typeof initial === 'function' ? (initial as () => unknown)() : initial;
+      }
+      const setter = vi.fn((val: unknown) => {
+        mockStateMap[key] = typeof val === 'function' ? (val as (prev: unknown) => unknown)(mockStateMap[key]) : val;
+      });
+      mockSetStateMap[key] = setter;
+      return [mockStateMap[key], setter];
+    }),
     useEffect: vi.fn((effect: () => void | (() => void)) => {
       effect();
     }),
@@ -91,10 +94,6 @@ vi.mock('react-native', () => ({
     }),
     currentState: 'active',
   },
-  Linking: {
-    canOpenURL: vi.fn().mockResolvedValue(true),
-    openURL: vi.fn().mockResolvedValue(true),
-  },
   Pressable: (props: MockComponentProps) => ({ type: 'Pressable', props }),
   ScrollView: (props: MockComponentProps) => ({ type: 'ScrollView', props }),
   StyleSheet: {
@@ -102,7 +101,29 @@ vi.mock('react-native', () => ({
   },
   Text: (props: MockComponentProps) => ({ type: 'Text', props }),
   useWindowDimensions: () => ({ width: 390, height: 844 }),
+  Platform: {
+    OS: 'ios',
+    select: vi.fn((obj: Record<string, unknown>) => obj.ios ?? obj.default),
+  },
   View: (props: MockComponentProps) => ({ type: 'View', props }),
+}));
+
+vi.mock('expo-clipboard', () => ({
+  setStringAsync: (text: string) => mockSetStringAsync(text),
+}));
+
+vi.mock('expo-image', () => ({
+  Image: (props: MockComponentProps) => ({ type: 'Image', props }),
+}));
+vi.mock('react-native-qrcode-svg', () => ({
+  default: (props: MockComponentProps) => ({ type: 'QRCode', props }),
+}));
+
+
+vi.mock('lucide-react-native', () => ({
+  Check: (props: MockComponentProps) => ({ type: 'Check', props }),
+  Copy: (props: MockComponentProps) => ({ type: 'Copy', props }),
+  RefreshCw: (props: MockComponentProps) => ({ type: 'RefreshCw', props }),
 }));
 
 vi.mock('react-native-safe-area-context', () => ({
@@ -118,133 +139,25 @@ vi.mock('expo-router', () => ({
   }),
 }));
 
-vi.mock('expo-image', () => ({
-  Image: (props: MockComponentProps) => ({ type: 'Image', props }),
+vi.mock('@/hooks/use-theme', () => ({
+  useTheme: () => ({
+    background: '#FFFFFF',
+    text: '#000000',
+    textSecondary: '#666666',
+    textMuted: '#999999',
+    border: '#E0E0E0',
+    cardBackground: '#F9F9F9',
+    buttonPrimaryBackground: '#000000',
+    buttonPrimaryText: '#FFFFFF',
+  }),
 }));
 
-vi.mock('react-native-qrcode-svg', () => ({
-  default: (props: MockComponentProps) => ({ type: 'QRCode', props }),
-}));
-
-vi.mock('lucide-react-native', () => ({
-  RefreshCw: (props: MockComponentProps) => ({ type: 'RefreshCw', props }),
-  ExternalLink: (props: MockComponentProps) => ({ type: 'ExternalLink', props }),
-  ChevronLeft: (props: MockComponentProps) => ({ type: 'ChevronLeft', props }),
-}));
-
-vi.mock('@/constants/theme', () => ({
-  Colors: { light: {}, dark: {} },
-  QRCodeDisplayBoxTokens: {
-    colors: {
-      cardBackground: '#FFFFFF',
-      cardBorder: '#E3E8F0',
-      headerLabel: '#64748B',
-      timerBadgeBackground: '#FCF2F2',
-      timerBadgeBorder: '#FAD1D1',
-      timerBadgeText: '#DB2626',
-      qrBoxBackground: '#F7FAFC',
-      qrBoxBorder: '#E3E8F0',
-      qrPlaceholderFill: '#0F1729',
-      qrPlaceholderInset: '#FFFFFF',
-      mirrorBadgeBackground: '#F0FDF4',
-      mirrorBadgeBorder: '#BBF7D0',
-      mirrorBadgeText: '#15803D',
-      mirrorDot: '#22C55E',
-    },
-    layout: {
-      width: 354,
-      height: 260,
-      borderRadius: 16,
-      padding: 16,
-      gap: 14,
-      qrSize: 180,
-    },
-    header: {
-      fontSize: 11,
-      fontWeight: '600',
-      letterSpacing: 0.3,
-      rowHeight: 24,
-    },
-    mirrorBadge: {
-      borderRadius: 6,
-      borderWidth: 1,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      fontSize: 10,
-      fontWeight: '600',
-      letterSpacing: 0.2,
-      dotSize: 6,
-    },
-    timerBadge: {
-      borderRadius: 6,
-      borderWidth: 1,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      fontSize: 10,
-      fontWeight: '600',
-    },
-    qrBox: {
-      borderRadius: 12,
-      borderWidth: 1,
-      finderOuterSize: 40,
-      finderOuterRadius: 6,
-      finderMidSize: 26,
-      finderMidRadius: 4,
-      finderInnerSize: 14,
-      finderInnerRadius: 2,
-      finderInset: 15,
-      moduleSize: 10,
-      moduleRadius: 2,
-    },
-  },
-  WhatsAppConnectScreenTokens: {
-    layout: {
-      sectionWidth: 354,
-      horizontalPadding: 18,
-      headerHeight: 44,
-      headerMarginBottom: 16,
-      headerButtonSize: 40,
-      contentGapPairing: 20,
-      contentGapSuccess: 24,
-      scrollBottomExtra: 24,
-      floatingPaddingTop: 16,
-      floatingPaddingBottomMin: 16,
-    },
-    headerTitle: {
-      fontSize: 17,
-      fontWeight: '600',
-      paddingHorizontal: 8,
-    },
-    colors: {
-      background: '#FFFFFF',
-      headerTitle: '#0F1729',
-      primaryButton: '#18181B',
-      primaryButtonText: '#FFFFFF',
-      toggleLink: '#0F1729',
-    },
-    slide: {
-      duration: 260,
-    },
-    primaryButton: {
-      height: 52,
-      borderRadius: 14,
-      fontSize: 15,
-      fontWeight: '600',
-      gap: 12,
-      pressedOpacity: 0.85,
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 6,
-      elevation: 2,
-    },
-    toggleLink: {
-      fontSize: 14,
-      fontWeight: '600',
-      pressedOpacity: 0.6,
-    },
-  },
-}));
+vi.mock('@/constants/theme', async (importOriginal: () => Promise<Record<string, unknown>>) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+  };
+});
 
 vi.mock('@/features/plugins/domain/whatsapp', () => ({
   DEFAULT_WHATSAPP_QR_TTL_SECONDS: 25,
@@ -260,8 +173,15 @@ vi.mock('@/features/plugins/domain/whatsapp', () => ({
     if (!Number.isFinite(deltaMs)) return null;
     return Math.max(0, Math.floor(deltaMs / 1000));
   },
-  toWhatsAppLinkedDevicesUrl: (qr: string | null) => (qr ? `https://wa.me/settings/linked_devices#${qr}` : null),
+  toWhatsAppE164: (phone: string) => {
+    const digits = phone.replace(/\D/gu, '');
+    if (digits.startsWith('62')) return `+${digits}`;
+    if (digits.startsWith('0')) return `+62${digits.slice(1)}`;
+    return `+62${digits}`;
+  },
+  formatWhatsAppDisplayNumber: (phone?: string) => phone ?? '',
 }));
+
 
 vi.mock('@/features/plugins/domain/plugin', () => ({
   mapPluginApiError: (err: unknown) => (err instanceof Error ? err.message : 'Error'),
@@ -274,16 +194,15 @@ vi.mock('@/components/ui/liquid-glass-back-button', () => ({
 vi.mock('@/features/robot/data/use-robot-connection', () => ({
   useRobotConnection: () => mockRobotConnection,
 }));
+
 vi.mock('@/features/plugins/data/use-whatsapp-session', () => ({
   useWhatsAppSession: () => mockWhatsAppSession,
 }));
 
 vi.mock('@/features/plugins/data/whatsapp-session-store', () => ({
-  startWhatsAppConnect: () => mockStartWhatsAppConnect(),
+  startWhatsAppConnect: (phone?: string, opts?: unknown) => mockStartWhatsAppConnect(phone, opts),
   stopWhatsAppConnectPolling: () => mockStopWhatsAppConnectPolling(),
-  dismissWhatsAppSessionQr: vi.fn().mockResolvedValue(undefined),
   hydrateWhatsAppSession: () => mockHydrateWhatsAppSession(),
-  confirmWhatsAppPairing: () => mockConfirmWhatsAppPairing(),
   getWhatsAppSessionState: () => mockGetWhatsAppSessionState(),
 }));
 
@@ -294,28 +213,37 @@ vi.mock('@/hooks/use-step-slide-transition', () => ({
   }),
 }));
 
-vi.mock('@/features/plugins/presentation/whatsapp-pairing/components', async () => {
-  const qrModule = await import('./components/qr-code-display-box');
-  return {
-    ActiveJoyCapabilitiesCard: (props: MockComponentProps) => ({ type: 'ActiveJoyCapabilitiesCard', props }),
-    PairingInstructionsCard: (props: MockComponentProps) => ({ type: 'PairingInstructionsCard', props }),
-    PairingSuccessHero: (props: MockComponentProps) => ({ type: 'PairingSuccessHero', props }),
-    QRPairingHero: (props: MockComponentProps) => ({ type: 'QRPairingHero', props }),
-    QRCodeDisplayBox: qrModule.QRCodeDisplayBox,
-  };
-});
+vi.mock('@/features/plugins/presentation/whatsapp-pairing/components', () => ({
+  ActiveJoyCapabilitiesCard: (props: MockComponentProps) => ({ type: 'ActiveJoyCapabilitiesCard', props }),
+  PairingCodeDisplayBox: (props: MockComponentProps) => ({ type: 'PairingCodeDisplayBox', props }),
+  PairingCodeHero: (props: MockComponentProps) => ({ type: 'PairingCodeHero', props }),
+  PairingInstructionsCard: (props: MockComponentProps) => ({ type: 'PairingInstructionsCard', props }),
+  PairingPhoneHero: (props: MockComponentProps) => ({ type: 'PairingPhoneHero', props }),
+  PairingSuccessHero: (props: MockComponentProps) => ({ type: 'PairingSuccessHero', props }),
+  PhoneNumberInputCard: (props: MockComponentProps) => ({ type: 'PhoneNumberInputCard', props }),
+  QRPairingHero: (props: MockComponentProps) => ({ type: 'QRPairingHero', props }),
+  QRCodeDisplayBox: (props: MockComponentProps) => QRCodeDisplayBox(props as unknown as Parameters<typeof QRCodeDisplayBox>[0]),
+}));
 
-function findComponentByTestId(node: any, testID: string): any {
-  if (!node) return null;
-  if (node.props?.testID === testID) return node;
-  const children = React.Children.toArray(node.props?.children);
+type ElementNode = {
+  props?: {
+    testID?: string;
+    children?: ElementNode | ElementNode[];
+    [key: string]: unknown;
+  };
+};
+
+function findComponentByTestId(node: unknown, testID: string): ElementNode | null {
+  if (!node || typeof node !== 'object') return null;
+  const element = node as ElementNode;
+  if (element.props?.testID === testID) return element;
+  const children = React.Children.toArray(element.props?.children as React.ReactNode);
   for (const child of children) {
     const found = findComponentByTestId(child, testID);
     if (found) return found;
   }
   return null;
 }
-
 describe('QRCodeDisplayBox Component', () => {
   it('renders MIRRORED TO JOY ROBOT badge when robotSync is online and QR is present', () => {
     const element = QRCodeDisplayBox({
@@ -360,42 +288,13 @@ describe('QRCodeDisplayBox Component', () => {
     const mirrorBadge = findComponentByTestId(element, 'qr-box-mirror-badge');
     expect(mirrorBadge).toBeNull();
   });
-
-  it('does NOT render mirror badge when qrValue is empty even if robot is online', () => {
-    const element = QRCodeDisplayBox({
-      qrValue: null,
-      robotSync: { online: true, name: 'Joy Robot' },
-      testID: 'qr-box',
-    });
-
-    const mirrorBadge = findComponentByTestId(element, 'qr-box-mirror-badge');
-    expect(mirrorBadge).toBeNull();
-  });
-
-  it('renders EXPIRED badge and reload overlay when isExpired is true', () => {
-    const onRefreshMock = vi.fn();
-    const element = QRCodeDisplayBox({
-      qrValue: '2@mock-qr-code-payload',
-      isExpired: true,
-      onRefresh: onRefreshMock,
-      testID: 'qr-box',
-    });
-
-    const timerBadge = findComponentByTestId(element, 'qr-box-timer-badge');
-    expect(timerBadge).toBeDefined();
-    expect(timerBadge.props.children.props.children).toBe('EXPIRED');
-
-    const overlay = findComponentByTestId(element, 'qr-box-expired-overlay');
-    expect(overlay).toBeDefined();
-
-    overlay.props.onPress();
-    expect(onRefreshMock).toHaveBeenCalledTimes(1);
-  });
 });
 
-describe('WhatsAppConnectScreen Component', () => {
+describe('WhatsAppConnectScreen Component (8-Digit Pairing Code Flow)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockStateMap = {};
+    mockSetStateMap = {};
     mockRobotConnection = {
       status: 'disconnected',
       device: null,
@@ -407,7 +306,7 @@ describe('WhatsAppConnectScreen Component', () => {
     mockWhatsAppSession = {
       connection: null,
       pairing: null,
-      qr: { qr: '2@mock-qr-code-payload', expiresAt: new Date(Date.now() + 60000).toISOString() },
+      qr: null,
       rules: [],
       conversations: [],
       isConnecting: false,
@@ -416,99 +315,24 @@ describe('WhatsAppConnectScreen Component', () => {
     };
   });
 
-  it('passes robotSync and updates step 3 instructions when robot is connected and online', () => {
-    mockRobotConnection = {
-      status: 'connected',
-      device: {
-        id: 'dev-1',
-        hardwareId: 'BMO-1-2',
-        name: 'Joy Desk Robot',
-        status: 'ACTIVE',
-        pairedAt: null,
-        lastSeenAt: null,
-        online: true,
-        batteryPercent: 80,
-        wifiConnected: true,
-        wifiStatus: 'WiFi Active',
-        statusLabel: 'Online',
-      },
-      isHydrating: false,
-      isPairing: false,
-      isUnpairing: false,
-      error: null,
-    };
-
+  it('renders phone input step initially with PairingPhoneHero, PhoneNumberInputCard, and disabled CTA', () => {
     const element = WhatsAppConnectScreen({ testID: 'whatsapp-connect' });
     expect(element.props.testID).toBe('whatsapp-connect');
 
-    const qrBox = findComponentByTestId(element, 'whatsapp-connect-qr-box');
-    expect(qrBox).toBeDefined();
-    expect(qrBox.props.robotSync).toEqual({ online: true, name: 'Joy Desk Robot' });
+    const phoneHero = findComponentByTestId(element, 'whatsapp-connect-phone-hero');
+    expect(phoneHero).toBeDefined();
 
-    const instructions = findComponentByTestId(element, 'whatsapp-connect-qr-instructions');
+    const phoneInput = findComponentByTestId(element, 'whatsapp-connect-phone-input');
+    expect(phoneInput).toBeDefined();
+    expect(phoneInput.props.countryCode).toBe('+62');
+
+    const instructions = findComponentByTestId(element, 'whatsapp-connect-phone-instructions');
     expect(instructions).toBeDefined();
-    const steps = instructions.props.steps;
-    expect(steps).toHaveLength(3);
-    expect(steps[2].title).toBe('Scan the QR on Joy Robot');
-    expect(steps[2].description).toBe(
-      "If WhatsApp is on this phone, point your WhatsApp Linked Devices camera at your Joy Robot's screen."
-    );
-  });
+    expect(instructions.props.steps).toHaveLength(3);
 
-  it('renders standard fallback step 3 instructions when no robot is paired or offline', () => {
-    mockRobotConnection = {
-      status: 'disconnected',
-      device: null,
-      isHydrating: false,
-      isPairing: false,
-      isUnpairing: false,
-      error: null,
-    };
-
-    const element = WhatsAppConnectScreen({ testID: 'whatsapp-connect' });
-
-    const qrBox = findComponentByTestId(element, 'whatsapp-connect-qr-box');
-    expect(qrBox).toBeDefined();
-    expect(qrBox.props.robotSync).toEqual({ online: false, name: 'Joy Robot' });
-
-    const instructions = findComponentByTestId(element, 'whatsapp-connect-qr-instructions');
-    expect(instructions).toBeDefined();
-    const steps = instructions.props.steps;
-    expect(steps).toHaveLength(3);
-    expect(steps[2].title).toBe('Or scan the QR');
-    expect(steps[2].description).toBe('If WhatsApp is on another phone, scan the code above.');
-  });
-
-  it('shows requesting label when session is connecting', () => {
-    mockWhatsAppSession = {
-      ...mockWhatsAppSession,
-      isConnecting: true,
-      qr: null,
-    };
-
-    const element = WhatsAppConnectScreen({ testID: 'whatsapp-connect' });
-
-    const qrBox = findComponentByTestId(element, 'whatsapp-connect-qr-box');
-    expect(qrBox.props.waitingLabel).toBe('Requesting WhatsApp QR…');
-  });
-
-  it('renders Reload QR Code CTA button when QR is expired', () => {
-    mockWhatsAppSession = {
-      ...mockWhatsAppSession,
-      qr: {
-        qr: '2@mock-qr-code-payload',
-        expiresAt: new Date(Date.now() - 5000).toISOString(),
-      },
-    };
-
-    const element = WhatsAppConnectScreen({ testID: 'whatsapp-connect' });
-
-    const reloadButton = findComponentByTestId(element, 'whatsapp-connect-reload-qr-cta-button');
-    expect(reloadButton).toBeDefined();
-    expect(reloadButton.props.accessibilityLabel).toBe('Reload QR Code');
-
-    reloadButton.props.onPress();
-    expect(mockStartWhatsAppConnect).toHaveBeenCalled();
+    const getCodeButton = findComponentByTestId(element, 'whatsapp-connect-get-code-cta-button');
+    expect(getCodeButton).toBeDefined();
+    expect(getCodeButton.props.disabled).toBe(true);
   });
 
   it('subscribes to AppState changes and refreshes session on active', () => {
@@ -519,5 +343,111 @@ describe('WhatsAppConnectScreen Component', () => {
       mockAppStateChangeCallback('active');
       expect(mockHydrateWhatsAppSession).toHaveBeenCalled();
     }
+  });
+
+  it('renders success hero and capabilities card when status is CONNECTED', () => {
+    mockWhatsAppSession = {
+      ...mockWhatsAppSession,
+      connection: { status: 'CONNECTED' },
+    };
+
+    const element = WhatsAppConnectScreen({ testID: 'whatsapp-connect' });
+
+    const successHero = findComponentByTestId(element, 'whatsapp-connect-success-hero');
+    expect(successHero).toBeDefined();
+
+    const capabilities = findComponentByTestId(element, 'whatsapp-connect-capabilities');
+    expect(capabilities).toBeDefined();
+
+    const doneButton = findComponentByTestId(element, 'whatsapp-connect-done-cta-button');
+    expect(doneButton).toBeDefined();
+  });
+
+  it('calls startWhatsAppConnect when Get Pairing Code button is pressed', async () => {
+    const element = WhatsAppConnectScreen({ testID: 'whatsapp-connect' });
+    const phoneInput = findComponentByTestId(element, 'whatsapp-connect-phone-input');
+    phoneInput.props.onChangePhoneNumber('081234567890');
+
+    const updatedElement = WhatsAppConnectScreen({ testID: 'whatsapp-connect' });
+    const getCodeButton = findComponentByTestId(updatedElement, 'whatsapp-connect-get-code-cta-button');
+    expect(getCodeButton.props.disabled).toBe(false);
+
+    await getCodeButton.props.onPress();
+    expect(mockStartWhatsAppConnect).toHaveBeenCalledWith('+6281234567890', { forceReset: true });
+  });
+
+  it('renders pairing code step when pairing code is present in session', () => {
+    mockWhatsAppSession = {
+      ...mockWhatsAppSession,
+      pairing: {
+        code: '8K2P9XLM',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
+        status: 'PENDING',
+      },
+    };
+
+    const element = WhatsAppConnectScreen({ testID: 'whatsapp-connect' });
+    const codeHero = findComponentByTestId(element, 'whatsapp-connect-code-hero');
+    expect(codeHero).toBeDefined();
+
+    const codeBox = findComponentByTestId(element, 'whatsapp-connect-code-box');
+    expect(codeBox).toBeDefined();
+    expect(codeBox.props.code).toBe('8K2P9XLM');
+
+    const copyButton = findComponentByTestId(element, 'whatsapp-connect-copy-code-cta-button');
+    expect(copyButton).toBeDefined();
+
+    const changePhoneButton = findComponentByTestId(element, 'whatsapp-connect-change-phone-cta-button');
+    expect(changePhoneButton).toBeDefined();
+  });
+
+  it('copies pairing code to clipboard when copy button is pressed', async () => {
+    mockWhatsAppSession = {
+      ...mockWhatsAppSession,
+      pairing: {
+        code: '8K2P9XLM',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
+        status: 'PENDING',
+      },
+    };
+
+    const element = WhatsAppConnectScreen({ testID: 'whatsapp-connect' });
+    const copyButton = findComponentByTestId(element, 'whatsapp-connect-copy-code-cta-button');
+    await copyButton.props.onPress();
+
+    expect(mockSetStringAsync).toHaveBeenCalledWith('8K2P9XLM');
+  });
+
+  it('renders Request New Code button when code is expired', () => {
+    mockWhatsAppSession = {
+      ...mockWhatsAppSession,
+      pairing: {
+        code: '8K2P9XLM',
+        expiresAt: new Date(Date.now() - 5000).toISOString(),
+        status: 'PENDING',
+      },
+    };
+
+    const element = WhatsAppConnectScreen({ testID: 'whatsapp-connect' });
+    const reloadButton = findComponentByTestId(element, 'whatsapp-connect-reload-code-cta-button');
+    expect(reloadButton).toBeDefined();
+    expect(reloadButton.props.accessibilityLabel).toBe('Request New Code');
+  });
+
+  it('stops polling and returns to phone step when Change Phone Number is pressed', () => {
+    mockWhatsAppSession = {
+      ...mockWhatsAppSession,
+      pairing: {
+        code: '8K2P9XLM',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
+        status: 'PENDING',
+      },
+    };
+
+    const element = WhatsAppConnectScreen({ testID: 'whatsapp-connect' });
+    const changePhoneButton = findComponentByTestId(element, 'whatsapp-connect-change-phone-cta-button');
+    changePhoneButton.props.onPress();
+
+    expect(mockStopWhatsAppConnectPolling).toHaveBeenCalled();
   });
 });

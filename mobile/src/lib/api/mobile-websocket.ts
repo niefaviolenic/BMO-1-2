@@ -52,13 +52,6 @@ export type VoiceProcessingStatusEvent = {
   errorCode: string | null;
 };
 
-export type WifiConfigurationStatusEvent = {
-  event: 'wifi_configuration_status';
-  deviceId: string;
-  configurationId: string;
-  status: string;
-  errorCode: string | null;
-};
 
 export type ProactiveDeliveryStatusEvent = {
   event: 'proactive_delivery_status';
@@ -113,7 +106,6 @@ export type MobileInboundEvent =
   | ChatTitleUpdatedEvent
   | DeviceStatusEvent
   | VoiceProcessingStatusEvent
-  | WifiConfigurationStatusEvent
   | ProactiveDeliveryStatusEvent
   | ScheduleStatusEvent
   | IntegrationStatusEvent
@@ -143,11 +135,6 @@ export function isDeviceBindingRevokedEvent(
   event: MobileInboundEvent,
 ): event is DeviceBindingRevokedEvent {
   return event.event === 'device_binding_revoked';
-}
-export function isWifiConfigurationStatusEvent(
-  event: MobileInboundEvent
-): event is WifiConfigurationStatusEvent {
-  return event.event === 'wifi_configuration_status';
 }
 
 
