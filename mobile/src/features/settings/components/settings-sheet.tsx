@@ -273,6 +273,7 @@ export function SettingsSheet({
 
       if (Object.keys(patch).length > 0) {
         const updated = await updateProfile(patch);
+        await auth?.applyUser(updated);
         if (updated.displayName !== undefined) {
           setProfileName(updated.displayName ?? '');
         }
@@ -286,7 +287,7 @@ export function SettingsSheet({
 
       setShowEditProfile(false);
     },
-    [profileName, profileUsername],
+    [profileName, profileUsername, auth],
   );
 
   const handleLogout = useCallback(() => {
