@@ -96,7 +96,6 @@ export function EditProfilePopup({
           backgroundColor: theme.modalBackground,
           borderColor: theme.border,
           width: containerWidth,
-          height: Tokens.height,
         },
         style,
       ]}
@@ -148,36 +147,7 @@ export function EditProfilePopup({
         </View>
       </View>
 
-      <View
-        style={[styles.fieldGroup, { width: fieldWidth }]}
-        testID={`${testID}-field-username-group`}
-      >
-        <Text style={[styles.fieldLabel, { color: theme.textSecondary }]} testID={`${testID}-field-username-label`}>
-          Username
-        </Text>
-        <View
-          style={[
-            styles.inputBox,
-            {
-              backgroundColor: theme.cardBackground,
-              borderColor: theme.border,
-              width: fieldWidth,
-            },
-          ]}
-          testID={`${testID}-field-username-box`}
-        >
-          <TextInput
-            style={[styles.inputText, { color: theme.text }]}
-            value={usernameValue}
-            onChangeText={handleUsernameChange}
-            placeholder="Enter username"
-            placeholderTextColor={theme.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            testID={`${testID}-field-username-input`}
-          />
-        </View>
-      </View>
+
 
       <Text
         style={[
@@ -187,7 +157,7 @@ export function EditProfilePopup({
         ]}
         testID={errorMessage ? `${testID}-error-text` : `${testID}-helper-text`}
       >
-        {errorMessage ?? 'Your profile helps Joy personalize your experience.'}
+        {errorMessage ?? 'Your name will be used by Joy across chats and voice interactions.'}
       </Text>
 
       <View style={styles.actionsContainer}>
