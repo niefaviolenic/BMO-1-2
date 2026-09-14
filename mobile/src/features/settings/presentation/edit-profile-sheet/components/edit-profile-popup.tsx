@@ -102,16 +102,12 @@ export function EditProfilePopup({
       ]}
       testID={testID}
     >
-      <Pressable
-        onPress={onAvatarPress}
+      <View
         style={styles.avatarWrapper}
-        accessibilityRole="button"
-        accessibilityLabel="Change profile picture"
         testID={`${testID}-avatar-wrapper`}
       >
         <UserAvatar
           name={nameValue}
-          avatarUrl={avatarUri}
           size={Tokens.avatarSize}
           radius={Tokens.avatarRadius}
           fontSize={Tokens.initialsFontSize}
@@ -120,26 +116,7 @@ export function EditProfilePopup({
           testID={`${testID}-avatar`}
           accessibilityLabel={nameValue ? `${nameValue} avatar` : 'User avatar'}
         />
-        <View
-          style={[
-            styles.cameraBadge,
-            {
-              backgroundColor: theme.cardBackground,
-              borderColor: theme.border,
-              borderWidth: 1,
-            },
-          ]}
-          testID={`${testID}-camera-badge`}
-        >
-          <Image
-            source={require('@/assets/images/ui/icon-camera.svg')}
-            style={styles.cameraIcon}
-            tintColor={theme.icon}
-            contentFit="contain"
-            testID={`${testID}-camera-icon`}
-          />
-        </View>
-      </Pressable>
+      </View>
 
       <View
         style={[styles.fieldGroup, { width: fieldWidth }]}

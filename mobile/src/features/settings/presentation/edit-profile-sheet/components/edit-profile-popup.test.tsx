@@ -73,7 +73,7 @@ vi.mock('@/components/ui/user-avatar', () => ({
 import { EditProfilePopup } from './edit-profile-popup';
 
 describe('EditProfilePopup', () => {
-  it('renders UserAvatar with name and size tokens', () => {
+  it('renders UserAvatar with name and size tokens statically without camera badge', () => {
     const rendered = EditProfilePopup({
       name: 'Rangga Hadi Putra',
       username: 'ranggabiner',
@@ -83,29 +83,26 @@ describe('EditProfilePopup', () => {
     expect(rendered.props.testID).toBe('edit-popup');
 
     const children = rendered.props.children as unknown as RenderedMock[];
-    const [avatarPressable] = children;
-    expect(avatarPressable.props.testID).toBe('edit-popup-avatar-wrapper');
+    const [avatarWrapper] = children;
+    expect(avatarWrapper.props.testID).toBe('edit-popup-avatar-wrapper');
 
-    const avatarChildren = avatarPressable.props.children as unknown as [RenderedMock, RenderedMock];
-    const [avatar, cameraBadge] = avatarChildren;
-
+    const avatar = avatarWrapper.props.children as unknown as RenderedMock;
     expect(avatar.props.name).toBe('Rangga Hadi Putra');
     expect(avatar.props.testID).toBe('edit-popup-avatar');
     expect(avatar.props.size).toBe(Tokens.avatarSize);
-    expect(cameraBadge.props.testID).toBe('edit-popup-camera-badge');
   });
 
-  it('passes avatarUri to UserAvatar when provided', () => {
+  it('renders initials UserAvatar without avatarUrl prop', () => {
     const rendered = EditProfilePopup({
       name: 'Rangga Hadi Putra',
-      avatarUri: 'file:///cache/new-photo.jpg',
       testID: 'edit-popup',
     }) as unknown as RenderedMock;
 
     const children = rendered.props.children as unknown as RenderedMock[];
-    const [avatarPressable] = children;
-    const [avatar] = avatarPressable.props.children as unknown as [RenderedMock, RenderedMock];
+    const [avatarWrapper] = children;
+    const avatar = avatarWrapper.props.children as unknown as RenderedMock;
 
-    expect(avatar.props.avatarUrl).toBe('file:///cache/new-photo.jpg');
+    expect(avatar.props.name).toBe('Rangga Hadi Putra');
+    expect(avatar.props.avatarUrl).toBeUndefined();
   });
 });

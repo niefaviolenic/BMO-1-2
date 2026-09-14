@@ -16,9 +16,8 @@ import { AnimatedDropdownOverlay } from '@/components/ui/animated-dropdown-overl
 import { ModalBottomSheet } from '@/components/ui/modal-bottom-sheet';
 import { SettingsTokens } from '@/constants/theme';
 import { useOptionalAuthSession } from '@/features/auth/presentation/auth-session-provider';
-import { updateProfile, uploadAvatar } from '@/features/settings/data/profile-api';
+import { updateProfile } from '@/features/settings/data/profile-api';
 import {
-  isLocalAvatarUri,
   normalizeUsername,
   USERNAME_PATTERN,
 } from '@/features/settings/domain/account/profile';
@@ -253,12 +252,7 @@ export function SettingsSheet({
       const normalizedUser = normalizeUsername(rawUsername);
       const isNameChanged = trimmedName !== profileName.trim();
       const isUsernameChanged = Boolean(rawUsername && normalizedUser !== profileUsername);
-      const isAvatarChanged =
-        Boolean(payload.avatarUri) &&
-        payload.avatarUri !== profileAvatarUri &&
-        isLocalAvatarUri(payload.avatarUri);
-
-      const hasChanges = isNameChanged || isUsernameChanged || isAvatarChanged;
+      const hasChanges = isNameChanged || isUsernameChanged;
       if (!hasChanges) {
         setShowEditProfile(false);
         return;
@@ -275,10 +269,7 @@ export function SettingsSheet({
         patch.username = normalizedUser;
       }
 
-      if (isAvatarChanged && payload.avatarUri) {
-        const uploadedAvatarUrl = await uploadAvatar({ uri: payload.avatarUri });
-        setProfileAvatarUri(uploadedAvatarUrl);
-      }
+
 
       if (Object.keys(patch).length > 0) {
         const updated = await updateProfile(patch);
@@ -295,7 +286,7 @@ export function SettingsSheet({
 
       setShowEditProfile(false);
     },
-    [profileName, profileUsername, profileAvatarUri],
+    [profileName, profileUsername],
   );
 
   const handleLogout = useCallback(() => {

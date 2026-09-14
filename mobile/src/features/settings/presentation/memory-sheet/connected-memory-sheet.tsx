@@ -3,10 +3,13 @@ import { Alert } from 'react-native';
 
 import { useAuthSession } from '@/features/auth/presentation/auth-session-provider';
 import {
+  deleteMemoryRecord,
+  fetchMemoriesList,
   fetchMemoryProfileFields,
   fetchMemorySettings,
   saveMemoryProfileFields,
   updateMemorySettings,
+  type MemoryItemDto,
 } from '@/features/settings/data/memory-settings-api';
 import { mapAccountApiError } from '@/features/settings/domain/account/profile';
 import type { MemorySettings } from '@/features/settings/domain/memory/types';
@@ -39,6 +42,8 @@ export function ConnectedMemorySheet({
 }: ConnectedMemorySheetProps) {
   const { user, applyUser } = useAuthSession();
   const [initialValues, setInitialValues] = useState<Partial<MemorySettings> | undefined>();
+  const [memories, setMemories] = useState<MemoryItemDto[]>([]);
+  const [isLoadingMemories, setIsLoadingMemories] = useState(false);
 
   useEffect(() => {
     if (!isVisible || !user) {
@@ -67,6 +72,19 @@ export function ConnectedMemorySheet({
         }
       });
 
+    setIsLoadingMemories(true);
+    void fetchMemoriesList()
+      .then((list) => {
+        if (!cancelled) {
+          setMemories(list);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingMemories(false);
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -104,6 +122,11 @@ export function ConnectedMemorySheet({
     }
   };
 
+  const handleDeleteMemory = async (id: string) => {
+    await deleteMemoryRecord(id);
+    setMemories((prev) => prev.filter((item) => item.id !== id));
+  };
+
   return (
     <MemorySheet
       isVisible={isVisible}
@@ -115,6 +138,9 @@ export function ConnectedMemorySheet({
       onMemorySummaryPress={onMemorySummaryPress}
       onLearnMorePress={onLearnMorePress}
       onCustomInstructionsPress={onCustomInstructionsPress}
+      memories={memories}
+      isLoadingMemories={isLoadingMemories}
+      onDeleteMemory={handleDeleteMemory}
       style={style}
       testID={testID}
     />

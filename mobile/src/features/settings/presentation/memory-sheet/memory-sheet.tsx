@@ -18,10 +18,12 @@ import {
 } from '@/features/settings/data/memory/dummy-memory';
 import type { MemorySettings } from '@/features/settings/domain/memory/types';
 
+import type { MemoryItemDto } from '@/features/settings/data/memory-settings-api';
 import {
   EnableMemorySection,
   MemorySummaryRow,
   MemoryTextField,
+  WhatJoyRemembersSection,
 } from './components';
 
 const sheetTokens = SettingsTokens.sheet;
@@ -35,6 +37,9 @@ export type MemorySheetProps = {
   onLearnMorePress?: () => void;
   onCustomInstructionsPress?: () => void;
   initialValues?: Partial<MemorySettings>;
+  memories?: MemoryItemDto[];
+  isLoadingMemories?: boolean;
+  onDeleteMemory?: (id: string) => Promise<void>;
   variant?: 'modal' | 'overlay';
   overlayZIndex?: number;
   style?: StyleProp<ViewStyle>;
@@ -49,6 +54,9 @@ export function MemorySheet({
   onLearnMorePress,
   onCustomInstructionsPress,
   initialValues,
+  memories = [],
+  isLoadingMemories = false,
+  onDeleteMemory,
   variant = 'overlay',
   overlayZIndex = SettingsTokens.sheetLayer.memory,
   style,
@@ -161,6 +169,13 @@ export function MemorySheet({
           }
           placeholder={MEMORY_FIELD_PLACEHOLDERS.moreAboutYou}
           testID={`${testID}-more-about-you`}
+        />
+
+        <WhatJoyRemembersSection
+          memories={memories}
+          isLoading={isLoadingMemories}
+          onDeleteMemory={onDeleteMemory}
+          testID={`${testID}-what-joy-remembers`}
         />
       </View>
     </ModalBottomSheet>

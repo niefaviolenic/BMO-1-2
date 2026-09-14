@@ -1,4 +1,5 @@
 import { apiRequest } from '@/lib/api';
+import { createUuid } from '@/features/chat/data/uuid';
 
 import { updateProfile } from '@/features/settings/data/profile-api';
 import type { MemorySettings } from '@/features/settings/domain/memory/types';
@@ -53,4 +54,36 @@ export async function saveMemoryProfileFields(
 
   const user = await updateProfile({ displayName: trimmedNickname });
   return user.displayName ?? trimmedNickname;
+}
+
+export type MemoryItemDto = {
+  id: string;
+  topic: string;
+  category: string;
+  content: string;
+  importance: number;
+  source: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ListMemoriesResponse = {
+  memories: MemoryItemDto[];
+  nextCursor: string | null;
+};
+
+export async function fetchMemoriesList(): Promise<MemoryItemDto[]> {
+  const payload = await apiRequest<ListMemoriesResponse>('/memories?limit=50');
+  return payload.memories ?? [];
+}
+
+export async function deleteMemoryRecord(id: string): Promise<void> {
+  const idempotencyKey = createUuid();
+  await apiRequest<void>(`/memories/${id}`, {
+    method: 'DELETE',
+    headers: {
+      'Idempotency-Key': idempotencyKey,
+    },
+    body: { idempotencyKey },
+  });
 }

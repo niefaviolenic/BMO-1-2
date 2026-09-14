@@ -1,4 +1,3 @@
-import * as ImagePicker from 'expo-image-picker';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -27,8 +26,6 @@ export type EditProfileSavePayload = {
   name: string;
   username: string;
   avatarUri?: string;
-  avatarMimeType?: string;
-  avatarFileName?: string;
 };
 
 export type EditProfileModalProps = {
@@ -71,11 +68,6 @@ export function EditProfileModal({
   const insets = useSafeAreaInsets();
   const [draftName, setDraftName] = useState(name);
   const [draftUsername, setDraftUsername] = useState(username);
-  const [draftAvatarUri, setDraftAvatarUri] = useState<string | undefined>(
-    avatarUri,
-  );
-  const [draftAvatarMimeType, setDraftAvatarMimeType] = useState<string | undefined>();
-  const [draftAvatarFileName, setDraftAvatarFileName] = useState<string | undefined>();
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(visible);
@@ -168,32 +160,10 @@ export function EditProfileModal({
     }
     setDraftName(name);
     setDraftUsername(username);
-    setDraftAvatarUri(avatarUri);
-    setDraftAvatarMimeType(undefined);
-    setDraftAvatarFileName(undefined);
     setErrorMessage(null);
     setIsSaving(false);
   }, [visible, name, username, avatarUri]);
 
-  const handleAvatarPress = useCallback(async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: false,
-      quality: 0.7,
-      allowsMultipleSelection: false,
-      preferredAssetRepresentationMode:
-        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
-    });
-
-    if (result.canceled || !result.assets?.[0]?.uri) {
-      return;
-    }
-
-    const asset = result.assets[0];
-    setDraftAvatarUri(asset.uri);
-    setDraftAvatarMimeType(asset.mimeType);
-    setDraftAvatarFileName(asset.fileName ?? undefined);
-  }, []);
   const handleRequestClose = useCallback(() => {
     Keyboard.dismiss();
     if (isClosingRef.current) {
@@ -230,9 +200,6 @@ export function EditProfileModal({
       await onSave?.({
         name: draftName.trim(),
         username: draftUsername.trim(),
-        avatarUri: draftAvatarUri,
-        avatarMimeType: draftAvatarMimeType,
-        avatarFileName: draftAvatarFileName,
       });
     } catch (error) {
       setErrorMessage(mapAccountApiError(error));
@@ -240,9 +207,6 @@ export function EditProfileModal({
       setIsSaving(false);
     }
   }, [
-    draftAvatarFileName,
-    draftAvatarMimeType,
-    draftAvatarUri,
     draftName,
     draftUsername,
     isSaving,
@@ -252,12 +216,12 @@ export function EditProfileModal({
   const popupProps: EditProfilePopupProps = {
     name: draftName,
     username: draftUsername,
-    avatarUri: draftAvatarUri,
+
     onNameChange: setDraftName,
     onUsernameChange: setDraftUsername,
     errorMessage,
     isSaving,
-    onAvatarPress: handleAvatarPress,
+
     onSave: handleSave,
     onCancel: handleRequestClose,
     style,
