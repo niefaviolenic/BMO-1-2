@@ -29,7 +29,7 @@ let keyboardListeners: Record<string, (() => void)[]> = {};
 const mockKeyboardRemove = vi.fn();
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react');
+  const actual = await vi.importActual<Record<string, unknown>>('react');
   return {
     ...actual,
     useRef: vi.fn((initial?: unknown) => {
@@ -42,6 +42,10 @@ vi.mock('react', async () => {
         },
       };
     }),
+    useState: vi.fn((initial: unknown) => [
+      typeof initial === 'function' ? (initial as () => unknown)() : initial,
+      vi.fn(),
+    ]),
     useCallback: vi.fn((fn: (...args: unknown[]) => unknown) => fn),
     useEffect: vi.fn((effect: () => void | (() => void)) => {
       capturedEffects.push(effect);
@@ -60,6 +64,16 @@ vi.mock('react-native', () => {
   const MockView = (props: unknown) => ({ type: 'View', props });
 
   return {
+    Animated: {
+      Value: vi.fn(function (initial: number) {
+        return {
+          setValue: vi.fn(),
+          interpolate: vi.fn(() => 0),
+        };
+      }),
+      timing: vi.fn(() => ({ start: (cb?: () => void) => cb?.() })),
+      View: (props: unknown) => ({ type: 'Animated.View', props }),
+    },
     Platform: {
       OS: 'ios',
       select: vi.fn((obj: Record<string, unknown>) => obj.ios),

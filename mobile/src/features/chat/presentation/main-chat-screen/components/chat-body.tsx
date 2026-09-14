@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatedJoyCharacter } from '@/features/chat/components/animated-joy-character';
 import { JoyThinkingIndicator } from '@/features/chat/components/joy-thinking-indicator';
 import {
+  Animated,
   Keyboard,
   Platform,
   Pressable,
@@ -64,10 +65,11 @@ export function ChatBody({
   const theme = useTheme();
   const scrollViewRef = useRef<ScrollView>(null);
   const isAtBottomRef = useRef(true);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const characterTranslateY = useRef(new Animated.Value(0)).current;
   const hasMessages = messages.length > 0;
   const lastMessage = messages[messages.length - 1];
   const showThinking = isThinking && lastMessage?.sender !== 'assistant';
-
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
     const threshold = 40;
@@ -83,15 +85,35 @@ export function ChatBody({
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const sub = Keyboard.addListener(showEvent, () => {
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, () => {
+      setIsKeyboardVisible(true);
+      Animated.timing(characterTranslateY, {
+        toValue: -48,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
+
       if (isAtBottomRef.current) {
         scrollViewRef.current?.scrollToEnd({ animated: true });
       }
     });
+
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setIsKeyboardVisible(false);
+      Animated.timing(characterTranslateY, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
+    });
+
     return () => {
-      sub.remove();
+      showSub.remove();
+      hideSub.remove();
     };
-  }, []);
+  }, [characterTranslateY]);
 
   useEffect(() => {
     if (!hasMessages) return;
@@ -184,41 +206,52 @@ export function ChatBody({
     <Pressable
       style={[
         styles.emptyContainer,
-        { paddingBottom: Math.max(composerHeight - 4, 16) },
+        {
+          paddingTop: headerHeight + 12,
+          paddingBottom: Math.max(composerHeight - 4, 16),
+        },
         style,
       ]}
       onPress={Keyboard.dismiss}
       accessible={false}
       testID={`${testID}-empty-view`}
     >
-      {/* Center Character Spacer & Avatar */}
-      <View style={styles.centerHero} pointerEvents="none">
-        <View style={styles.joyAvatarWrapper} testID={`${testID}-joy-character`}>
+      {/* Character area cleanly occupying upper space */}
+      <View style={styles.characterArea} pointerEvents="none">
+        <Animated.View
+          style={[
+            styles.joyAvatarWrapper,
+            { transform: [{ translateY: characterTranslateY }] },
+          ]}
+          testID={`${testID}-joy-character`}
+        >
           <AnimatedJoyCharacter size={72} testID={`${testID}-joy-character`} />
-        </View>
+        </Animated.View>
       </View>
 
-      {/* Prompts at bottom above composer */}
-      <View style={styles.promptsContainer} testID={`${testID}-prompts-container`}>
-        <PromptSuggestionItem
-          label="Brainstorm ideas"
-          icon={require('@/assets/images/chat/sparkle-icon.svg')}
-          onPress={() => onPromptSelect?.('Brainstorm ideas')}
-          testID={`${testID}-prompt-brainstorm`}
-        />
-        <PromptSuggestionItem
-          label="Explain a concept"
-          icon={require('@/assets/images/chat/icon-book-open.svg')}
-          onPress={() => onPromptSelect?.('Explain a concept')}
-          testID={`${testID}-prompt-explain`}
-        />
-        <PromptSuggestionItem
-          label="Look something up"
-          icon={require('@/assets/images/chat/icon-globe.svg')}
-          onPress={() => onPromptSelect?.('Look something up')}
-          testID={`${testID}-prompt-lookup`}
-        />
-      </View>
+      {/* Prompts at bottom - hidden while typing/keyboard is open */}
+      {!isKeyboardVisible ? (
+        <View style={styles.promptsContainer} testID={`${testID}-prompts-container`}>
+          <PromptSuggestionItem
+            label="Brainstorm ideas"
+            icon={require('@/assets/images/chat/sparkle-icon.svg')}
+            onPress={() => onPromptSelect?.('Brainstorm ideas')}
+            testID={`${testID}-prompt-brainstorm`}
+          />
+          <PromptSuggestionItem
+            label="Explain a concept"
+            icon={require('@/assets/images/chat/icon-book-open.svg')}
+            onPress={() => onPromptSelect?.('Explain a concept')}
+            testID={`${testID}-prompt-explain`}
+          />
+          <PromptSuggestionItem
+            label="Look something up"
+            icon={require('@/assets/images/chat/icon-globe.svg')}
+            onPress={() => onPromptSelect?.('Look something up')}
+            testID={`${testID}-prompt-lookup`}
+          />
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -244,11 +277,17 @@ const styles = StyleSheet.create({
    alignItems: 'center',
    paddingBottom: 0,
  },
- centerHero: {
-   ...StyleSheet.absoluteFill,
-   justifyContent: 'center',
-   alignItems: 'center',
- },
+  characterArea: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  centerHero: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   joyAvatarWrapper: {
     width: 72,
     height: 72,
