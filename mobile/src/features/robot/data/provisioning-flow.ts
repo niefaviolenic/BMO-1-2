@@ -140,8 +140,9 @@ export class JoyProvisioningManager {
 
     const timeoutMs = options?.timeoutMs ?? 10000;
     this.scanTimer = setTimeout(() => {
-      if (this.state.step === 'scanning' && this.state.discoveredJoys.length === 0) {
-        this.updateState({ scanTimeoutReached: true });
+      if (this.state.step === 'scanning') {
+        this.stopScanning();
+        this.updateState({ scanTimeoutReached: true, isScanning: false });
       }
     }, timeoutMs);
 
@@ -169,6 +170,7 @@ export class JoyProvisioningManager {
   }
 
   async restartScanning(options?: { timeoutMs?: number }): Promise<void> {
+    this.stopScanning();
     return this.startScanning(options);
   }
 

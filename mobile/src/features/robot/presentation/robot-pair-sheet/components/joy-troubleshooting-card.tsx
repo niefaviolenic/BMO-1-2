@@ -103,9 +103,8 @@ export function JoyTroubleshootingCard({
             pressed && { opacity: 0.8 },
           ]}
           onPress={onRescan}
-          disabled={isScanning}
           accessibilityRole="button"
-          accessibilityLabel="Scan again for nearby Joy beacons"
+          accessibilityLabel={isScanning ? 'Refreshing scan...' : 'Scan again for nearby Joy beacons'}
           testID={`${testID}-rescan-btn`}
         >
           <RefreshCw
@@ -114,7 +113,7 @@ export function JoyTroubleshootingCard({
             style={isScanning ? styles.rotatingIcon : undefined}
           />
           <Text style={[styles.rescanButtonText, { color: theme.buttonPrimaryText }]}>
-            {isScanning ? 'Scanning...' : 'Scan Again'}
+            {isScanning ? 'Scanning... (Tap to refresh)' : 'Scan Again'}
           </Text>
         </Pressable>
       </View>
