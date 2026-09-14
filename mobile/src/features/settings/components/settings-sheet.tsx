@@ -404,10 +404,7 @@ export function SettingsSheet({
 
           <SettingsAccountSection
             email={resolvedEmail}
-            subscription={subscription}
             onEmailPress={onEmailPress}
-            onSubscriptionPress={onSubscriptionPress}
-            onUpgradePress={onUpgradePress}
             testID={`${testID}-account`}
           />
 

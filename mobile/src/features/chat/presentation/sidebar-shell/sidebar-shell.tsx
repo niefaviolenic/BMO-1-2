@@ -28,7 +28,6 @@ import { ConnectedMemorySheet } from '@/features/settings/presentation/memory-sh
 import { ConnectedMemorySummarySheet } from '@/features/settings/presentation/memory-summary-sheet';
 import { ConnectedPersonalizationSheet } from '@/features/settings/presentation/personalization-sheet';
 import { ConnectedReportAppIssueSheet } from '@/features/settings/presentation/report-app-issue-sheet';
-import { UpgradeSheet } from '@/features/settings/presentation/upgrade-sheet';
 import {
   SidebarShellContext,
   type SidebarRouteId,
@@ -87,7 +86,6 @@ export function SidebarShell({ children }: SidebarShellProps) {
   const [showPersonalizationSheet, setShowPersonalizationSheet] = useState(false);
   const [showAboutSheet, setShowAboutSheet] = useState(false);
   const [showReportAppIssueSheet, setShowReportAppIssueSheet] = useState(false);
-  const [showUpgradeSheet, setShowUpgradeSheet] = useState(false);
   const translateX = useRef(new Animated.Value(0)).current;
   const borderRadius = useRef(new Animated.Value(0)).current;
   const contentOpacity = useRef(new Animated.Value(1)).current;
@@ -566,13 +564,11 @@ export function SidebarShell({ children }: SidebarShellProps) {
             setShowMemorySummarySheet(false);
             setShowAboutSheet(false);
             setShowReportAppIssueSheet(false);
-            setShowUpgradeSheet(false);
           }}
           onPersonalizationPress={() => setShowPersonalizationSheet(true)}
           onMemoryPress={() => setShowMemorySheet(true)}
           onAboutPress={() => setShowAboutSheet(true)}
           onReportPress={() => setShowReportAppIssueSheet(true)}
-          onUpgradePress={() => setShowUpgradeSheet(true)}
           onPluginsPress={() => {
             setShowSettingsSheet(false);
             navigate('plugins');
@@ -614,11 +610,6 @@ export function SidebarShell({ children }: SidebarShellProps) {
           testID="main-chat-screen-report-app-issue-sheet"
         />
 
-        <UpgradeSheet
-          isVisible={showUpgradeSheet}
-          onClose={() => setShowUpgradeSheet(false)}
-          testID="main-chat-screen-upgrade-sheet"
-        />
       </View>
     </SidebarShellContext.Provider>
   );

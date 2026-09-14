@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -304,6 +305,13 @@ const styles = StyleSheet.create({
     fontSize: Tokens.typography.save.fontSize,
     fontWeight: Tokens.typography.save.fontWeight,
     color: Tokens.colors.saveText,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+    ...Platform.select({
+      android: {
+        top: -1,
+      },
+    }),
   },
   cancelButton: {
     width: Tokens.cancelButtonWidth,
@@ -315,6 +323,13 @@ const styles = StyleSheet.create({
     fontSize: Tokens.typography.cancel.fontSize,
     fontWeight: Tokens.typography.cancel.fontWeight,
     color: Tokens.colors.cancelText,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+    ...Platform.select({
+      android: {
+        top: -1,
+      },
+    }),
   },
   buttonPressed: {
     opacity: 0.75,

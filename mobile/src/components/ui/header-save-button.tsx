@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Platform,
   StyleSheet,
   Text,
   type StyleProp,
@@ -93,6 +94,8 @@ const styles = StyleSheet.create({
     minWidth: HeaderTokens.saveButton.minWidth,
     paddingHorizontal: HeaderTokens.saveButton.paddingHorizontal,
     paddingVertical: HeaderTokens.saveButton.paddingVertical,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   disabled: {
     opacity: 0.4,
@@ -101,6 +104,13 @@ const styles = StyleSheet.create({
     fontSize: HeaderTokens.saveButton.fontSize,
     fontWeight: HeaderTokens.saveButton.fontWeight,
     textAlign: 'center',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+    ...Platform.select({
+      android: {
+        top: -1.5,
+      },
+    }),
   },
   labelWhite: {
     color: HeaderTokens.saveButton.textWhite,

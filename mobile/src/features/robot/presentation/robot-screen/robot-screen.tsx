@@ -2,10 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
 import {
-  ArrowUpRight,
   Bluetooth,
   Ellipsis,
-  ShoppingBag,
 } from 'lucide-react-native';
 import {
   Alert,
@@ -198,27 +196,7 @@ export function RobotScreen({
                 testID={`${testID}-wifi-card`}
               />
 
-              <Text style={[styles.sectionTitle, { color: theme.textMuted, marginTop: 12 }]}>Joy Store</Text>
-              <RobotOptionCard
-                title="I Don't Have a Joy Robot Yet"
-                description="Explore physical Joy models & stock"
-                leftIcon={
-                  <ShoppingBag
-                    size={20}
-                    color={theme.icon}
-                    strokeWidth={1.75}
-                  />
-                }
-                trailingIcon={
-                  <ArrowUpRight
-                    size={16}
-                    color={theme.textMuted}
-                    strokeWidth={1.5}
-                  />
-                }
-                style={{ width: sectionWidth }}
-                testID={`${testID}-buy-robot-card`}
-              />
+
             </View>
           </>
         ) : (
@@ -244,26 +222,7 @@ export function RobotScreen({
                 style={{ width: sectionWidth }}
                 testID={`${testID}-have-robot-card`}
               />
-              <RobotOptionCard
-                title="I Don't Have a Joy Robot Yet"
-                description="Explore physical Joy models & stock"
-                leftIcon={
-                  <ShoppingBag
-                    size={20}
-                    color={theme.icon}
-                    strokeWidth={1.75}
-                  />
-                }
-                trailingIcon={
-                  <ArrowUpRight
-                    size={16}
-                    color={theme.textMuted}
-                    strokeWidth={1.5}
-                  />
-                }
-                style={{ width: sectionWidth }}
-                testID={`${testID}-buy-robot-card`}
-              />
+
             </View>
           </>
         )}

@@ -1,4 +1,4 @@
-import { Mail, Sparkles, SquarePlus } from 'lucide-react-native';
+import { Mail } from 'lucide-react-native';
 import React from 'react';
 import {
   Pressable,
@@ -8,7 +8,6 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-
 import { useTheme } from '@/hooks/use-theme';
 import { SettingsTokens } from '@/constants/theme';
 
@@ -82,58 +81,7 @@ export function SettingsAccountSection({
           </Text>
         </Pressable>
 
-        <View style={[styles.divider, { backgroundColor: theme.divider }]} />
 
-        <Pressable
-          onPress={onSubscriptionPress}
-          disabled={!onSubscriptionPress}
-          accessibilityRole={onSubscriptionPress ? 'button' : undefined}
-          accessibilityLabel={`Subscription: ${subscription}`}
-          testID={`${testID}-row-subscription`}
-          style={({ pressed }) => [
-            styles.row,
-            onSubscriptionPress && pressed && [styles.rowPressed, { backgroundColor: theme.cardPressed }],
-          ]}
-        >
-          <SquarePlus
-            size={tokens.iconSize}
-            color={theme.icon}
-            strokeWidth={tokens.iconStrokeWidth}
-          />
-          <Text style={[styles.label, { color: theme.text }]} numberOfLines={1}>
-            Subscription
-          </Text>
-          <Text
-            style={[styles.value, { color: theme.textSecondary }]}
-            numberOfLines={1}
-            testID={`${testID}-subscription-value`}
-          >
-            {subscription}
-          </Text>
-        </Pressable>
-
-        <View style={[styles.divider, { backgroundColor: theme.divider }]} />
-
-        <Pressable
-          onPress={onUpgradePress}
-          disabled={!onUpgradePress}
-          accessibilityRole={onUpgradePress ? 'button' : undefined}
-          accessibilityLabel={upgradeLabel}
-          testID={`${testID}-row-upgrade`}
-          style={({ pressed }) => [
-            styles.row,
-            onUpgradePress && pressed && [styles.rowPressed, { backgroundColor: theme.cardPressed }],
-          ]}
-        >
-          <Sparkles
-            size={tokens.iconSize}
-            color={accentColor}
-            strokeWidth={tokens.iconStrokeWidth}
-          />
-          <Text style={[styles.upgradeLabel, { color: accentColor }]} numberOfLines={1}>
-            {upgradeLabel}
-          </Text>
-        </Pressable>
       </View>
     </View>
   );
