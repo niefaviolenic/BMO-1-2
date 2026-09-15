@@ -86,10 +86,6 @@ export function BirthdayScreen({
                 <Text style={[styles.buttonText, { color: theme.background }]}>Continue</Text>
               </Pressable>
             </Animated.View>
-
-            <Text style={[styles.footnote, { color: theme.textMuted }]} testID={`${testID}-footnote`}>
-              Made with love for Devira 💕
-            </Text>
           </View>
         </View>
       </ScrollView>
@@ -136,9 +132,5 @@ const styles = StyleSheet.create({
     fontWeight: WelcomeTokens.typography.buttonText.fontWeight,
     lineHeight: WelcomeTokens.typography.buttonText.lineHeight,
   },
-  footnote: {
-    fontSize: 13,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
+
 });
