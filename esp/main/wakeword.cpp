@@ -27,9 +27,10 @@ static const char *TAG = "WAKE";
 // Ubah ini kalau wiring mic kamu beda.
 //--------------------------------------------------
 
-#define WAKEWORD_I2S_BCLK GPIO_NUM_5
-#define WAKEWORD_I2S_WS   GPIO_NUM_4
-#define WAKEWORD_I2S_DIN  GPIO_NUM_6
+#define WAKEWORD_I2S_BCLK GPIO_NUM_39
+#define WAKEWORD_I2S_WS   GPIO_NUM_40
+#define WAKEWORD_I2S_DIN  GPIO_NUM_41
+#define WAKEWORD_I2S_PORT I2S_NUM_1
 
 //--------------------------------------------------
 
@@ -434,7 +435,7 @@ static esp_err_t wakeword_i2s_init(
 
     i2s_chan_config_t channel_config =
         I2S_CHANNEL_DEFAULT_CONFIG(
-            I2S_NUM_AUTO,
+            WAKEWORD_I2S_PORT,
             I2S_ROLE_MASTER);
 
     ESP_RETURN_ON_ERROR(

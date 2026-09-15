@@ -7,13 +7,11 @@
 #include <string.h>
 
 #include "driver/gpio.h"
-#include "driver/spi_master.h"
 
 #include "esp_err.h"
 #include "esp_heap_caps.h"
-#include "esp_lcd_ili9341.h"
+#include "esp_lcd_io_i80.h"
 #include "esp_lcd_panel_io.h"
-#include "esp_lcd_panel_ops.h"
 #include "esp_log.h"
 
 #include "freertos/FreeRTOS.h"
@@ -22,19 +20,23 @@
 
 static const char *TAG = "DISPLAY";
 
-#define LCD_HOST SPI2_HOST
-
 //--------------------------------------------------
-// PIN TFT ILI9341
+// 3.5/3.6-inch UNO TFT: ST7793, 8-bit Intel 8080 bus
 //--------------------------------------------------
 
-#define LCD_PIN_MOSI GPIO_NUM_11
-#define LCD_PIN_MISO GPIO_NUM_13
-#define LCD_PIN_SCLK GPIO_NUM_12
-
-#define LCD_PIN_CS   GPIO_NUM_10
-#define LCD_PIN_DC   GPIO_NUM_9
-#define LCD_PIN_RST  GPIO_NUM_8
+#define LCD_PIN_D0   GPIO_NUM_12
+#define LCD_PIN_D1   GPIO_NUM_13
+#define LCD_PIN_D2   GPIO_NUM_18
+#define LCD_PIN_D3   GPIO_NUM_3
+#define LCD_PIN_D4   GPIO_NUM_46
+#define LCD_PIN_D5   GPIO_NUM_9
+#define LCD_PIN_D6   GPIO_NUM_10
+#define LCD_PIN_D7   GPIO_NUM_11
+#define LCD_PIN_RD   GPIO_NUM_15
+#define LCD_PIN_WR   GPIO_NUM_7
+#define LCD_PIN_RS   GPIO_NUM_6
+#define LCD_PIN_CS   GPIO_NUM_5
+#define LCD_PIN_RST  GPIO_NUM_4
 
 // Backlight masih langsung ke 3V3, jadi tidak dikontrol software.
 #define LCD_PIN_BL   (-1)
@@ -44,20 +46,19 @@ static const char *TAG = "DISPLAY";
 #define LCD_H_RES 320
 #define LCD_V_RES 240
 
-#define LCD_SWAP_XY  true
-#define LCD_MIRROR_X true
-#define LCD_MIRROR_Y false
+#define LCD_PANEL_H_RES 400
+#define LCD_PANEL_V_RES 240
+#define LCD_PIXEL_CLOCK_HZ (2 * 1000 * 1000)
 
-#define LCD_PIXEL_CLOCK_HZ (5 * 1000 * 1000)
-
-#define LCD_CMD_BITS 8
+#define LCD_CMD_BITS 16
 #define LCD_PARAM_BITS 8
 
-#define LCD_DRAW_LINES 20
+#define LCD_DRAW_LINES 8
 
 //--------------------------------------------------
 
-static esp_lcd_panel_handle_t panel_handle = NULL;
+static esp_lcd_i80_bus_handle_t lcd_bus_handle = NULL;
+static esp_lcd_panel_io_handle_t lcd_io_handle = NULL;
 static uint16_t *draw_buffers[2] = {NULL, NULL};
 static uint16_t *frame_buffer = NULL;
 
@@ -213,35 +214,122 @@ static void unlock_display()
 
 //--------------------------------------------------
 
+static void st7793_write_register(
+    uint16_t command,
+    uint16_t value)
+{
+    const uint8_t data[] = {
+        (uint8_t)(value >> 8),
+        (uint8_t)value};
+
+    ESP_ERROR_CHECK(
+        esp_lcd_panel_io_tx_param(
+            lcd_io_handle,
+            command,
+            data,
+            sizeof(data)));
+}
+
+//--------------------------------------------------
+
+static void lcd_write_bitmap(
+    int x0,
+    int y0,
+    int x1,
+    int y1,
+    const uint16_t *pixels)
+{
+    // MCUFRIEND_kbv's ST7793 rotation=1 mapping.  The controller's
+    // native RAM is 240x400; after rotation, logical x is 0..399 and
+    // logical y is 0..239.
+    st7793_write_register(0x0201, 0);
+    st7793_write_register(0x0200, 0);
+    st7793_write_register(0x0212, (uint16_t)x0);
+    st7793_write_register(0x0210, (uint16_t)y0);
+    st7793_write_register(0x0213, (uint16_t)(x1 - 1));
+    st7793_write_register(0x0211, (uint16_t)(y1 - 1));
+
+    const size_t pixel_count =
+        (size_t)(x1 - x0) * (size_t)(y1 - y0);
+
+    // In ST7793 8-bit 8080 mode, RGB565 is sent as high byte then low byte.
+    // The panel-IO color-byte swap performs that ordering for uint16_t data.
+    ESP_ERROR_CHECK(
+        esp_lcd_panel_io_tx_color(
+            lcd_io_handle,
+            0x0202,
+            pixels,
+            pixel_count * sizeof(uint16_t)));
+}
+
+//--------------------------------------------------
+
+static void lcd_fill_physical_rect(
+    int x0,
+    int y0,
+    int x1,
+    int y1,
+    uint16_t color)
+{
+    const int width = x1 - x0;
+    if(width <= 0 || y1 <= y0 || draw_buffers[0] == NULL)
+        return;
+
+    for(int row = y0; row < y1; row += LCD_DRAW_LINES)
+    {
+        const int rows = (y1 - row > LCD_DRAW_LINES)
+            ? LCD_DRAW_LINES
+            : y1 - row;
+        const int pixel_count = width * rows;
+
+        for(int index = 0; index < pixel_count; ++index)
+            draw_buffers[0][index] = color;
+
+        lcd_write_bitmap(
+            x0,
+            row,
+            x1,
+            row + rows,
+            draw_buffers[0]);
+    }
+}
+
+//--------------------------------------------------
+
 static void flush_framebuffer_locked()
 {
-    if(!display_ready || panel_handle == NULL)
+    if(!display_ready || lcd_io_handle == NULL)
         return;
 
     if(frame_buffer != NULL && draw_buffers[0] != NULL && draw_buffers[1] != NULL)
     {
         int buf_idx = 0;
-        for(int row = 0; row < LCD_V_RES; row += LCD_DRAW_LINES)
+        for(int panel_row = 0; panel_row < LCD_PANEL_V_RES; panel_row += LCD_DRAW_LINES)
         {
-            int rows = LCD_V_RES - row;
+            int rows = LCD_PANEL_V_RES - panel_row;
             if(rows > LCD_DRAW_LINES)
                 rows = LCD_DRAW_LINES;
 
             uint16_t *current_draw_buffer = draw_buffers[buf_idx];
+            for(int row = 0; row < rows; ++row)
+            {
+                const int source_y =
+                    (panel_row + row) * LCD_V_RES / LCD_PANEL_V_RES;
+                for(int column = 0; column < LCD_PANEL_H_RES; ++column)
+                {
+                    const int source_x =
+                        column * LCD_H_RES / LCD_PANEL_H_RES;
+                    current_draw_buffer[row * LCD_PANEL_H_RES + column] =
+                        frame_buffer[source_y * LCD_H_RES + source_x];
+                }
+            }
 
-            memcpy(
-                current_draw_buffer,
-                &frame_buffer[row * LCD_H_RES],
-                (size_t)LCD_H_RES * rows * sizeof(uint16_t));
-
-            ESP_ERROR_CHECK(
-                esp_lcd_panel_draw_bitmap(
-                    panel_handle,
-                    0,
-                    row,
-                    LCD_H_RES,
-                    row + rows,
-                    current_draw_buffer));
+            lcd_write_bitmap(
+                0,
+                panel_row,
+                LCD_PANEL_H_RES,
+                panel_row + rows,
+                current_draw_buffer);
 
             buf_idx = 1 - buf_idx;
         }
@@ -287,32 +375,18 @@ static void fill_rect(
     if(draw_buffers[0] == NULL)
         return;
 
-    int width = x1 - x0;
-    int height = y1 - y0;
-
-    for(int row = 0; row < height; row += LCD_DRAW_LINES)
-    {
-        int rows = height - row;
-
-        if(rows > LCD_DRAW_LINES)
-            rows = LCD_DRAW_LINES;
-
-        int pixels = width * rows;
-
-        for(int i = 0; i < pixels; i++)
-        {
-            draw_buffers[0][i] = color;
-        }
-
-        ESP_ERROR_CHECK(
-            esp_lcd_panel_draw_bitmap(
-                panel_handle,
-                x0,
-                y0 + row,
-                x1,
-                y0 + row + rows,
-                draw_buffers[0]));
-    }
+    const int panel_x0 = x0 * LCD_PANEL_H_RES / LCD_H_RES;
+    const int panel_y0 = y0 * LCD_PANEL_V_RES / LCD_V_RES;
+    const int panel_x1 =
+        (x1 * LCD_PANEL_H_RES + LCD_H_RES - 1) / LCD_H_RES;
+    const int panel_y1 =
+        (y1 * LCD_PANEL_V_RES + LCD_V_RES - 1) / LCD_V_RES;
+    lcd_fill_physical_rect(
+        panel_x0,
+        panel_y0,
+        panel_x1,
+        panel_y1,
+        color);
 }
 
 //--------------------------------------------------
@@ -566,10 +640,7 @@ static void display_wake()
     if(display_on)
         return;
 
-    ESP_ERROR_CHECK(
-        esp_lcd_panel_disp_on_off(
-            panel_handle,
-            true));
+    st7793_write_register(0x0007, 0x0100);
 
     vTaskDelay(
         pdMS_TO_TICKS(50));
@@ -1175,7 +1246,7 @@ static void secure_clear_qr_code_locked()
 
 void display_init()
 {
-    ESP_LOGI(TAG, "Initialize ILI9341 landscape");
+    ESP_LOGI(TAG, "Initialize ST7793 240x400 8-bit TFT");
 
     display_mutex =
         xSemaphoreCreateMutex();
@@ -1186,89 +1257,148 @@ void display_init()
         return;
     }
 
-    spi_bus_config_t buscfg = {};
+    gpio_config_t rd_config = {};
+    rd_config.pin_bit_mask = 1ULL << LCD_PIN_RD;
+    rd_config.mode = GPIO_MODE_OUTPUT;
+    rd_config.pull_up_en = GPIO_PULLUP_DISABLE;
+    rd_config.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    rd_config.intr_type = GPIO_INTR_DISABLE;
+    ESP_ERROR_CHECK(gpio_config(&rd_config));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RD, 1));
 
-    buscfg.sclk_io_num = LCD_PIN_SCLK;
-    buscfg.mosi_io_num = LCD_PIN_MOSI;
-    buscfg.miso_io_num = LCD_PIN_MISO;
-    buscfg.quadwp_io_num = -1;
-    buscfg.quadhd_io_num = -1;
+    gpio_config_t reset_config = {};
+    reset_config.pin_bit_mask = 1ULL << LCD_PIN_RST;
+    reset_config.mode = GPIO_MODE_OUTPUT;
+    reset_config.pull_up_en = GPIO_PULLUP_DISABLE;
+    reset_config.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    reset_config.intr_type = GPIO_INTR_DISABLE;
+    ESP_ERROR_CHECK(gpio_config(&reset_config));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RST, 1));
 
-    buscfg.max_transfer_sz =
-        LCD_H_RES *
-        LCD_DRAW_LINES *
-        sizeof(uint16_t);
+    esp_lcd_i80_bus_config_t bus_config = {};
+    bus_config.dc_gpio_num = LCD_PIN_RS;
+    bus_config.wr_gpio_num = LCD_PIN_WR;
+    bus_config.clk_src = LCD_CLK_SRC_DEFAULT;
+    bus_config.data_gpio_nums[0] = LCD_PIN_D0;
+    bus_config.data_gpio_nums[1] = LCD_PIN_D1;
+    bus_config.data_gpio_nums[2] = LCD_PIN_D2;
+    bus_config.data_gpio_nums[3] = LCD_PIN_D3;
+    bus_config.data_gpio_nums[4] = LCD_PIN_D4;
+    bus_config.data_gpio_nums[5] = LCD_PIN_D5;
+    bus_config.data_gpio_nums[6] = LCD_PIN_D6;
+    bus_config.data_gpio_nums[7] = LCD_PIN_D7;
+    bus_config.bus_width = 8;
+    bus_config.max_transfer_bytes =
+        LCD_PANEL_H_RES * LCD_DRAW_LINES * sizeof(uint16_t);
+    bus_config.dma_burst_size = 64;
 
     ESP_ERROR_CHECK(
-        spi_bus_initialize(
-            LCD_HOST,
-            &buscfg,
-            SPI_DMA_CH_AUTO));
+        esp_lcd_new_i80_bus(
+            &bus_config,
+            &lcd_bus_handle));
 
-    esp_lcd_panel_io_handle_t io_handle = NULL;
-
-    esp_lcd_panel_io_spi_config_t io_config = {};
-
+    esp_lcd_panel_io_i80_config_t io_config = {};
     io_config.cs_gpio_num = LCD_PIN_CS;
-    io_config.dc_gpio_num = LCD_PIN_DC;
-    io_config.spi_mode = 0;
     io_config.pclk_hz = LCD_PIXEL_CLOCK_HZ;
     io_config.trans_queue_depth = 4;
+    // ST7793's MCU interface uses 16-bit register indexes even when the
+    // physical data bus is 8-bit.  Parameters remain two 8-bit transfers.
     io_config.lcd_cmd_bits = LCD_CMD_BITS;
     io_config.lcd_param_bits = LCD_PARAM_BITS;
+    io_config.dc_levels.dc_idle_level = 0;
+    io_config.dc_levels.dc_cmd_level = 0;
+    io_config.dc_levels.dc_dummy_level = 0;
+    io_config.dc_levels.dc_data_level = 1;
+    io_config.flags.swap_color_bytes = 1;
 
     ESP_ERROR_CHECK(
-        esp_lcd_new_panel_io_spi(
-            LCD_HOST,
+        esp_lcd_new_panel_io_i80(
+            lcd_bus_handle,
             &io_config,
-            &io_handle));
+            &lcd_io_handle));
 
-    esp_lcd_panel_dev_config_t panel_config = {};
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RST, 0));
+    vTaskDelay(pdMS_TO_TICKS(20));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RST, 1));
+    vTaskDelay(pdMS_TO_TICKS(200));
 
-    panel_config.reset_gpio_num = LCD_PIN_RST;
-    panel_config.bits_per_pixel = 16;
-    panel_config.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_BGR;
+    // ST7793/R61509V register sequence used by MCUFRIEND_kbv for the
+    // 240x400 controller.  The command values are 16-bit register indexes;
+    // each value below is transmitted MSB first over the 8-bit bus.
+    struct St7793InitStep {
+        uint16_t command;
+        uint16_t value;
+    };
 
-    ESP_ERROR_CHECK(
-        esp_lcd_new_panel_ili9341(
-            io_handle,
-            &panel_config,
-            &panel_handle));
+    static const St7793InitStep init_sequence[] = {
+        {0x0000, 0x0000}, {0x0000, 0x0000},
+        {0x0000, 0x0000}, {0x0000, 0x0000},
+        {0xFFFF, 15},
+        {0x0400, 0x6200},
+        {0x0008, 0x0808},
+        {0x0300, 0x0C00}, {0x0301, 0x5A0B},
+        {0x0302, 0x0906}, {0x0303, 0x1017},
+        {0x0304, 0x2300}, {0x0305, 0x1700},
+        {0x0306, 0x6309}, {0x0307, 0x0C09},
+        {0x0308, 0x100C}, {0x0309, 0x2232},
+        {0x0010, 0x0016},
+        {0x0011, 0x0101},
+        {0x0012, 0x0000},
+        {0x0013, 0x0001},
+        {0x0100, 0x0330},
+        {0x0101, 0x0237},
+        {0x0103, 0x0D00},
+        {0x0280, 0x6100},
+        {0x0102, 0xC1B0},
+        {0xFFFE, 50},
+        {0x0001, 0x0100},
+        {0x0002, 0x0100},
+        {0x0003, 0x1030},
+        {0x0009, 0x0001},
+        {0x000C, 0x0000},
+        {0x0090, 0x8000},
+        {0x000F, 0x0000},
+        {0x0210, 0x0000},
+        {0x0211, 0x00EF},
+        {0x0212, 0x0000},
+        {0x0213, 0x018F},
+        {0x0500, 0x0000},
+        {0x0501, 0x0000},
+        {0x0502, 0x005F},
+        {0x0401, 0x0001},
+        {0x0404, 0x0000},
+        {0xFFFE, 50},
+        {0x0007, 0x0100},
+        {0xFFFE, 50},
+    };
 
-    ESP_ERROR_CHECK(
-        esp_lcd_panel_reset(
-            panel_handle));
+    for(const St7793InitStep &step : init_sequence)
+    {
+        if(step.command == 0xFFFF || step.command == 0xFFFE)
+        {
+            vTaskDelay(pdMS_TO_TICKS(step.value));
+        }
+        else
+        {
+            st7793_write_register(step.command, step.value);
+        }
+    }
 
-    ESP_ERROR_CHECK(
-        esp_lcd_panel_init(
-            panel_handle));
-
-    ESP_ERROR_CHECK(
-        esp_lcd_panel_invert_color(
-            panel_handle,
-            false));
-
-    ESP_ERROR_CHECK(
-        esp_lcd_panel_swap_xy(
-            panel_handle,
-            LCD_SWAP_XY));
-
-    ESP_ERROR_CHECK(
-        esp_lcd_panel_mirror(
-            panel_handle,
-            LCD_MIRROR_X,
-            LCD_MIRROR_Y));
+    // MCUFRIEND_kbv rotation(1): landscape 400x240, BGR, normal scan.
+    st7793_write_register(0x0001, 0x0000);
+    st7793_write_register(0x0003, 0x3008);
+    st7793_write_register(0x0401, 0x0003);
 
     draw_buffers[0] =
         (uint16_t*)heap_caps_malloc(
-            LCD_H_RES *
+            LCD_PANEL_H_RES *
             LCD_DRAW_LINES *
             sizeof(uint16_t),
             MALLOC_CAP_DMA);
 
     draw_buffers[1] =
         (uint16_t*)heap_caps_malloc(
-            LCD_H_RES *
+            LCD_PANEL_H_RES *
             LCD_DRAW_LINES *
             sizeof(uint16_t),
             MALLOC_CAP_DMA);
@@ -1312,15 +1442,13 @@ void display_init()
     }
 
     display_ready = true;
-
-    ESP_ERROR_CHECK(
-        esp_lcd_panel_disp_on_off(
-            panel_handle,
-            true));
-
     display_on = true;
 
-    ESP_LOGI(TAG, "ILI9341 Ready");
+    ESP_LOGI(TAG, "ST7793 parallel TFT ready, logical=%dx%d panel=%dx%d",
+        LCD_H_RES,
+        LCD_V_RES,
+        LCD_PANEL_H_RES,
+        LCD_PANEL_V_RES);
 }
 
 //--------------------------------------------------

@@ -15,13 +15,14 @@
 //--------------------------------------------------
 
 #define TOUCH_PIN      GPIO_NUM_14
-#define BTN_VOL_UP    GPIO_NUM_15
+#define BTN_VOL_UP    GPIO_NUM_21
 #define BTN_VOL_DOWN  GPIO_NUM_16
 
 #define VOLUME_STEP 5
 #define BUTTON_REPEAT_US 180000LL
 #define BUTTON_DEBOUNCE_US 30000LL
 #define TOUCH_DEBOUNCE_US 30000LL
+#define TOUCH_WAKE_HOLD_US 700000LL
 
 static const char *TAG="BUTTON";
 
@@ -41,6 +42,8 @@ static TouchLifecycleState touch_state =
 static bool touch_candidate_level = false;
 static bool touch_stable_level = false;
 static int64_t touch_candidate_since_us = 0;
+static int64_t touch_press_started_us = 0;
+static bool touch_action_fired = false;
 static int64_t last_touch_diag_us = 0;
 
 static const char *touch_lifecycle_name(TouchLifecycleState state)
@@ -223,49 +226,95 @@ void button_update()
             if(touch_state == TouchLifecycleState::TOUCH_ARMED)
             {
                 touch_state = TouchLifecycleState::TOUCH_CONSUMED;
+                touch_press_started_us = now;
+                touch_action_fired = false;
                 ESP_LOGI(
                     TAG,
                     "Touch lifecycle: %s",
                     touch_lifecycle_name(touch_state));
-
-                if(getState() == JoyState::IDLE)
-                {
-                    if(display_pairing_code_is_visible() || display_qr_code_is_visible() || pairing_get_snapshot().phase != PairingPhase::NONE)
-                    {
-                        ESP_LOGW(TAG, "Touch rejected: robot is in pairing mode or QR display mode");
-                    }
-                    else
-                    {
-                        const JoyState state_before = getState();
-
-                        // Single tap touch trigger: waking up Joy (alternative to wake word)
-                        audio_triggerWakeAck();
-                        wakeword_task();
-
-                        ESP_LOGI(
-                            TAG,
-                            "Touch accepted: Joy state before=%s - waking up to RECORDING",
-                            joy_state_name(state_before));
-                    }
-                }
-                else
-                {
-                    ESP_LOGW(
-                        TAG,
-                        "Touch rejected: state=%s (not IDLE)",
-                        joy_state_name(getState()));
-                }
             }
         }
         else
         {
+            // A short tap selects the next idle face. A long press is handled
+            // below as the physical alternative to the acoustic wake word.
+            if(touch_state == TouchLifecycleState::TOUCH_CONSUMED &&
+               !touch_action_fired &&
+               touch_press_started_us > 0 &&
+               now - touch_press_started_us < TOUCH_WAKE_HOLD_US &&
+               getState() == JoyState::IDLE)
+            {
+                if(display_pairing_code_is_visible() || display_qr_code_is_visible() || pairing_get_snapshot().phase != PairingPhase::NONE)
+                {
+                    ESP_LOGW(TAG, "Touch expression rejected: robot is in pairing mode or QR display mode");
+                }
+                else
+                {
+                    const JoyState state_before = getState();
+                    const Face face_before = display_get_idle_face();
+                    const Face face_after = display_next_touch_face();
+
+                    audio_setVolume(SPEAKER_DEFAULT_VOLUME);
+                    audio_playExpressionAudio((int)face_after);
+
+                    ESP_LOGI(
+                        TAG,
+                        "Touch accepted: Joy state before=%s expression face_before=%d face_after=%d audio=%d",
+                        joy_state_name(state_before),
+                        (int)face_before,
+                        (int)face_after,
+                        1);
+                }
+            }
+
             // Only a stable LOW release re-arms the physical input. This is
             // also the boot-high lockout exit path.
+            touch_press_started_us = 0;
+            touch_action_fired = false;
             touch_state = TouchLifecycleState::TOUCH_ARMED;
             ESP_LOGI(
                 TAG,
                 "Touch lifecycle: %s",
-                touch_lifecycle_name(touch_state));
+            touch_lifecycle_name(touch_state));
+        }
+    }
+
+    // Long press remains an independent touch-to-wake path while a short tap
+    // is reserved for the ten coded LCD expressions and their audio clips.
+    if(touch_stable_level &&
+       touch_state == TouchLifecycleState::TOUCH_CONSUMED &&
+       !touch_action_fired &&
+       touch_press_started_us > 0 &&
+       now - touch_press_started_us >= TOUCH_WAKE_HOLD_US)
+    {
+        touch_action_fired = true;
+
+        if(getState() == JoyState::IDLE)
+        {
+            if(display_pairing_code_is_visible() || display_qr_code_is_visible() || pairing_get_snapshot().phase != PairingPhase::NONE)
+            {
+                ESP_LOGW(TAG, "Touch wake rejected: robot is in pairing mode or QR display mode");
+            }
+            else
+            {
+                const JoyState state_before = getState();
+
+                audio_triggerWakeAck();
+                const bool recording_started = wakeword_task();
+
+                ESP_LOGI(
+                    TAG,
+                    "Touch wake: state_before=%s accepted=%d",
+                    joy_state_name(state_before),
+                    recording_started ? 1 : 0);
+            }
+        }
+        else
+        {
+            ESP_LOGW(
+                TAG,
+                "Touch wake rejected: state=%s (not IDLE)",
+                joy_state_name(getState()));
         }
     }
 }

@@ -59,16 +59,16 @@ sequenceDiagram
 - **Microcontroller**: ESP32-S3-WROOM-1 / ESP32-S3 DevKitC-1 (N16R8 — 16MB Quad SPI Flash, 8MB Octal PSRAM).
 - **Microphone**: INMP441 Omnidirectional MEMS Microphone (I2S Input).
 - **Speaker / DAC Amp**: MAX98357A I2S 3.2W Class-D Mono Amplifier.
-- **Display**: 2.4" / 2.8" SPI TFT LCD (ILI9341 / ST7789 compatible, resolusi 320x240 / 240x240).
+- **Display**: TFT UNO 3.5" parallel 8-bit (ILI9486 assumed, 480x320 landscape).
 - **Sensors & Inputs**: Capacitive Touch Sensor (TTP223 / Direct Touch) dan Tactile Push Buttons (Volume Up/Down).
 
 ### B. Pin Mapping (GPIO Layout)
 
 | Peripheral | Fungsi Pin Peripheral | Pin ESP32-S3 (GPIO) | Keterangan |
 |---|---|---|---|
-| **INMP441 (I2S Mic)** | SCK / BCLK | `GPIO 5` | I2S Serial Clock |
-| | WS / LRCLK | `GPIO 4` | I2S Word Select (Left/Right) |
-| | SD / DOUT | `GPIO 6` | I2S Serial Data In ke ESP |
+| **INMP441 (I2S Mic)** | SCK / BCLK | `GPIO 39` | I2S Serial Clock |
+| | WS / LRCLK | `GPIO 40` | I2S Word Select (Left/Right) |
+| | SD / DOUT | `GPIO 41` | I2S Serial Data In ke ESP |
 | | L/R | `GND` | Mode Left Channel (Mono) |
 | | VDD / GND | `3.3V` / `GND` | Power Supply |
 | **MAX98357A (I2S Amp)** | BCLK | `GPIO 1` | I2S Bit Clock Out |
@@ -76,15 +76,12 @@ sequenceDiagram
 | | DIN | `GPIO 42` | I2S Data Out ke Amp |
 | | GAIN / SD_MODE | `GND` / Float | Default Gain (12dB / 100% Vol scaling) |
 | | VIN / GND | `5V` (atau `3.3V`) / `GND` | Power Supply |
-| **SPI TFT LCD (ILI9341)** | MOSI / SDA | `GPIO 11` | SPI Master Data Out |
-| | MISO / SDO | `GPIO 13` | SPI Data In (Optional) |
-| | SCLK / SCK | `GPIO 12` | SPI Clock |
-| | CS | `GPIO 10` | Chip Select |
-| | DC / RS | `GPIO 9` | Data / Command Select |
-| | RST | `GPIO 8` | Hardware Reset |
-| | BL / LED | `3.3V` | Backlight Hardwired |
+| **TFT UNO 3.5" (8-bit)** | LCD D0–D7 | `GPIO 12, 13, 18, 3, 46, 9, 10, 11` | Berurutan D0 sampai D7 |
+| | CS / RS / WR / RST | `GPIO 5 / 6 / 7 / 4` | Bus I80; RS berfungsi sebagai D/C |
+| | RD | `GPIO 15` | Output HIGH; display hanya ditulis |
+| | Power / Backlight | `5V, 3.3V, GND` | Ikuti label dan manual modul; jangan menyuplai sinyal GPIO dengan 5V |
 | **Touch & Buttons** | Touch Sensor (Head/Face) | `GPIO 14` | Trigger Voice / Ganti Ekspresi |
-| | Vol Up Button | `GPIO 15` | Volume Up (+5%) |
+| | Vol Up Button | `GPIO 21` | Volume Up (+5%) |
 | | Vol Down Button | `GPIO 16` | Volume Down (-5%) |
 
 ---
@@ -134,7 +131,7 @@ sequenceDiagram
 - **Playback Watchdog (`playback_watchdog.cpp/.h`)**: Melacak progress pemutaran audio secara thread-safe menggunakan atomics (`http_bytes_received`, `mp3_frames_decoded`, `pcm_frames_written`). Jika tidak ada progres selama `kPlaybackStallUs = 5.000.000 µs` (5 detik), watchdog secara otomatis me-latch stall state dan membatalkan stream yang macet guna membebaskan resource I2S/DMA.
 
 ### D. QR Code Display Engine & WhatsApp Bridge (`qrcodegen`)
-- **QR Display Protocol**: Mendukung render kode QR dinamis pada LCD SPI 320x240 (`display.cpp/.h` & `qrcodegen.c/.h`) untuk pairing WhatsApp Web / Baileys bridge atau on-screen onboarding:
+- **QR Display Protocol**: Mendukung render kode QR dinamis pada TFT paralel 8-bit 480x320 (`display.cpp/.h` & `qrcodegen.c/.h`) untuk pairing WhatsApp Web / Baileys bridge atau on-screen onboarding:
   - `display_qr` (inbound WS): Berisi string `qr` dan ISO timestamp `expires_at`. Firmware meng-generate matrix QR code secara realtime dan merendernya secara centered dengan background putih dan border kontras pada layar TFT.
   - `clear_qr` (inbound WS): Menghapus overlay QR code seketika setelah pairing berhasil atau dibatalkan, mengembalikan display ke animasi ekspresi `JoyState::IDLE`.
   - **Touch & Wakeword Guarding**: Selama mode QR aktif (`DisplayMode::QR_CODE`), sentuhan dan wake word di-guard agar tidak mengganggu proses scan kamera pengguna.
@@ -215,7 +212,7 @@ Firmware mengelola state tersinkronisasi antara FreeRTOS Task, LCD Display, dan 
    ```json
    {"event":"display_qr", "qr":"2@abc...xyz,123...", "expires_at":"2026-08-27T12:00:00.000Z"}
    ```
-2. **Render LCD**: ESP32 meng-generate visual QR code melalui library `qrcodegen` dan menampilkannya di tengah layar LCD ILI9341 320x240.
+2. **Render LCD**: ESP32 meng-generate visual QR code melalui library `qrcodegen` dan menampilkannya di tengah TFT 3.5 inci.
 3. **Pembersihan Layar**: Begitu user selesai men-scan QR via WhatsApp Linked Devices atau sesi kedaluwarsa, backend mengirim event `clear_qr`:
    ```json
    {"event":"clear_qr"}
@@ -305,7 +302,7 @@ OK (100% Passing across all 14 test suites)
     │   ├── api.cpp / api.h             # HTTPS upload, WSS client, HTTP MP3 download
     │   ├── audio.cpp / audio.h         # MAX98357A I2S driver, wake ack cue & audio generator
     │   ├── button.cpp / button.h       # Touch & volume buttons driver
-    │   ├── display.cpp / display.h     # ILI9341 TFT display UI & expression renderer
+    │   ├── display.cpp / display.h     # 8-bit I80 TFT display UI & expression renderer
     │   ├── network.cpp / network.h     # FreeRTOS network event synchronization
     │   ├── pairing.cpp / pairing.h     # Device pairing controller state machine
     │   ├── playback.cpp / playback.h   # Shared playback task & arbitration

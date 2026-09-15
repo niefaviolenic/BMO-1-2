@@ -20,6 +20,7 @@ static const char *TAG = "AUDIO";
 #define SPEAKER_I2S_BCLK GPIO_NUM_1
 #define SPEAKER_I2S_WS   GPIO_NUM_2
 #define SPEAKER_I2S_DIN  GPIO_NUM_42
+#define SPEAKER_I2S_PORT I2S_NUM_0
 
 //--------------------------------------------------
 
@@ -27,6 +28,8 @@ static const char *TAG = "AUDIO";
 #ifndef SPEAKER_DEFAULT_VOLUME
 #define SPEAKER_DEFAULT_VOLUME 100
 #endif
+#define SPEAKER_PREAMP_NUMERATOR 1
+#define SPEAKER_PREAMP_DENOMINATOR 1
 #define SPEAKER_CHUNK_FRAMES 256
 #define SPEAKER_OUTPUT_CHUNK_FRAMES 64
 
@@ -180,8 +183,11 @@ static int16_t speaker_scale_sample(
     int16_t sample,
     int safe_volume)
 {
-    // Digital pre-amp gain multiplier (1.6x = ~+4.1dB)
-    int32_t boosted = (int32_t)sample * 16 / 10;
+    // Keep the digital path at unity gain. The previous 1.6x boost clipped
+    // normal TTS peaks and made the MAX98357A sound distorted at full volume.
+    int32_t boosted =
+        ((int32_t)sample * SPEAKER_PREAMP_NUMERATOR) /
+        SPEAKER_PREAMP_DENOMINATOR;
     int32_t scaled = (boosted * safe_volume) / 100;
     return speaker_soft_clip(scaled);
 }
@@ -330,7 +336,7 @@ void audio_init()
 
     i2s_chan_config_t channel_config =
         I2S_CHANNEL_DEFAULT_CONFIG(
-            I2S_NUM_AUTO,
+            SPEAKER_I2S_PORT,
             I2S_ROLE_MASTER);
     channel_config.auto_clear_after_cb = true;
     channel_config.auto_clear_before_cb = true;
