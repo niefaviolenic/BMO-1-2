@@ -5,6 +5,7 @@ import * as WebBrowser from 'expo-web-browser';
 
 import { Colors, Spacing } from '@/constants/theme';
 import { useAuthSession } from '@/features/auth/presentation';
+import { processedExchangeCodes } from '@/features/auth/data/google-oauth';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -12,7 +13,7 @@ WebBrowser.maybeCompleteAuthSession();
 export default function AuthCallbackRoute() {
   const router = useRouter();
   const params = useLocalSearchParams<{ code?: string; error?: string }>();
-  const { loginGoogle } = useAuthSession();
+  const { loginGoogle, isAuthenticated } = useAuthSession();
   const colorScheme = useColorScheme();
   const colors = colorScheme === 'dark' ? Colors.dark : Colors.light;
 
@@ -20,6 +21,11 @@ export default function AuthCallbackRoute() {
   const handledRef = useRef(false);
 
   useEffect(() => {
+    if (isAuthenticated) {
+      router.replace('/birthday' as unknown as Parameters<typeof router.replace>[0]);
+      return;
+    }
+
     if (handledRef.current) return;
 
     let isMounted = true;
@@ -37,15 +43,26 @@ export default function AuthCallbackRoute() {
     } else if (params.code) {
       handledRef.current = true;
       const code = Array.isArray(params.code) ? params.code[0] : params.code;
+
+      if (processedExchangeCodes.has(code)) {
+        router.replace('/birthday' as unknown as Parameters<typeof router.replace>[0]);
+        return;
+      }
+      processedExchangeCodes.add(code);
+
       (async () => {
         try {
           await loginGoogle({ exchangeCode: code });
           if (isMounted) {
-            router.replace('/chat');
+            router.replace('/birthday' as unknown as Parameters<typeof router.replace>[0]);
           }
         } catch (err) {
           console.error('[AuthCallback] error:', err);
           if (isMounted) {
+            if (isAuthenticated) {
+              router.replace('/birthday' as unknown as Parameters<typeof router.replace>[0]);
+              return;
+            }
             const message = err instanceof Error ? err.message : 'Failed to complete sign in';
             setErrorMsg(message);
             timer = setTimeout(() => {
@@ -68,7 +85,7 @@ export default function AuthCallbackRoute() {
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [params.code, params.error, loginGoogle, router]);
+  }, [params.code, params.error, loginGoogle, router, isAuthenticated]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

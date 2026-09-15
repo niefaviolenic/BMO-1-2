@@ -19,6 +19,7 @@ export type GoogleAuthPayload = {
   idToken?: string;
   accessToken?: string;
 };
+export const processedExchangeCodes = new Set<string>();
 
 export function buildGoogleAuthStartUrl(returnUrl: string): string {
   const params = new URLSearchParams({

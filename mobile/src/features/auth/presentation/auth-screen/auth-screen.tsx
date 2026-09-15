@@ -12,7 +12,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthTypingHeader } from '@/features/auth/components/auth-typing-header';
 import { CountryPickerContent } from '@/features/auth/components/country-picker-modal';
 import { useStepFadeTransition } from '@/hooks/use-step-fade-transition';
-import { promptGoogleAuth } from '@/features/auth/data/google-oauth';
+import { processedExchangeCodes, promptGoogleAuth } from '@/features/auth/data/google-oauth';
 import { isApiError, isAuthenticationFailed } from '@/lib/api';
 
 import { useAuthSession } from '../auth-session-provider';
@@ -150,6 +150,13 @@ export function AuthScreen({
     try {
       onGooglePress?.();
       const tokens = await promptGoogleAuth();
+      if (tokens.exchangeCode) {
+        if (processedExchangeCodes.has(tokens.exchangeCode)) {
+          handleCloseSheet();
+          return;
+        }
+        processedExchangeCodes.add(tokens.exchangeCode);
+      }
       await loginGoogle(tokens);
       handleCloseSheet();
     } catch (error) {
