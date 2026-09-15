@@ -154,11 +154,19 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
       setUser(persisted.user);
       setSession(persisted.session);
 
+      const isFresh = isAccessTokenFresh(persisted.session);
+      if (isFresh) {
+        setStatus('ready');
+      }
+
       try {
-        if (!isAccessTokenFresh(persisted.session)) {
+        if (!isFresh) {
           const nextToken = await refreshAccessToken();
           if (!nextToken) {
             return;
+          }
+          if (!cancelled) {
+            setStatus('ready');
           }
         }
 
@@ -185,7 +193,7 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
           } catch {
             await clearAuth();
           }
-        } else {
+        } else if (!isFresh) {
           await clearAuth();
         }
       } finally {

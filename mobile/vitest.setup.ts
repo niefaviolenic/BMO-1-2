@@ -1,3 +1,20 @@
+import Module from 'module';
+
+type NodeModuleWithPrototype = {
+  prototype: {
+    require: (id: string) => unknown;
+  };
+};
+const NodeModule = Module as unknown as NodeModuleWithPrototype;
+const moduleProto = NodeModule.prototype;
+const originalRequire = moduleProto.require;
+moduleProto.require = function (this: unknown, id: string): unknown {
+  if (typeof id === 'string' && (id.endsWith('.svg') || id.endsWith('.png') || id.endsWith('.jpg'))) {
+    return 1;
+  }
+  return originalRequire.call(this, id);
+};
+
 declare const vi: { mock: (path: string, factory: () => unknown) => void; fn: (impl?: unknown) => unknown };
 
 if (!process.env.EXPO_OS) {

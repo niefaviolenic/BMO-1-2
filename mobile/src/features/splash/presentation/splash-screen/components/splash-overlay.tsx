@@ -8,12 +8,14 @@ import { SplashTokens } from '@/constants/theme';
 import { SplashScreen } from '@/features/splash/presentation/splash-screen/splash-screen';
 export type SplashOverlayProps = {
   onComplete?: () => void;
+  isReady?: boolean;
 };
 
 let hasCompletedInitialSplash = false;
 
-export function SplashOverlay({ onComplete }: SplashOverlayProps) {
+export function SplashOverlay({ onComplete, isReady = true }: SplashOverlayProps) {
   const [visible, setVisible] = useState(!hasCompletedInitialSplash);
+  const [minDurationPassed, setMinDurationPassed] = useState(false);
   const opacity = useRef(new Animated.Value(hasCompletedInitialSplash ? 0 : 1)).current;
   const completed = useRef(hasCompletedInitialSplash);
   const onCompleteRef = useRef(onComplete);
@@ -31,20 +33,38 @@ export function SplashOverlay({ onComplete }: SplashOverlayProps) {
     void SplashScreenApi.hideAsync().catch(() => undefined);
 
     const timer = setTimeout(() => {
-      Animated.timing(opacity, {
-        duration: SplashTokens.motion.fadeDuration,
-        toValue: 0,
-        useNativeDriver: true,
-      }).start(() => {
-        finish();
-      });
-      setTimeout(finish, SplashTokens.motion.fadeDuration + 100);
+      setMinDurationPassed(true);
     }, SplashTokens.motion.minimumVisibleDuration);
+
+    // Safety fallback: ensure splash never stays stuck longer than 3 seconds
+    const safetyTimer = setTimeout(() => {
+      setMinDurationPassed(true);
+    }, 3000);
 
     return () => {
       clearTimeout(timer);
+      clearTimeout(safetyTimer);
     };
-  }, [finish, opacity]);
+  }, []);
+
+  useEffect(() => {
+    if (!visible || completed.current || !minDurationPassed || !isReady) {
+      return;
+    }
+
+    Animated.timing(opacity, {
+      duration: SplashTokens.motion.fadeDuration,
+      toValue: 0,
+      useNativeDriver: true,
+    }).start(() => {
+      finish();
+    });
+
+    const fallback = setTimeout(finish, SplashTokens.motion.fadeDuration + 100);
+    return () => {
+      clearTimeout(fallback);
+    };
+  }, [finish, isReady, minDurationPassed, opacity, visible]);
 
   const colorScheme = useColorScheme();
 

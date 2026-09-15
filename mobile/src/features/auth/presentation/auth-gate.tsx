@@ -3,7 +3,13 @@ import { useEffect } from 'react';
 
 import { useAuthSession } from './auth-session-provider';
 
-const PUBLIC_SEGMENTS = new Set(['splash', 'showcase', 'plugin-detail', 'whatsapp-connect']);
+const PUBLIC_SEGMENTS: Record<string, true> = {
+  splash: true,
+  showcase: true,
+  'plugin-detail': true,
+  'whatsapp-connect': true,
+  birthday: true,
+};
 
 export function AuthGate() {
   const { status, isAuthenticated } = useAuthSession();
@@ -18,7 +24,7 @@ export function AuthGate() {
     }
 
     const isPublicPluginDetail = rootSegment === 'plugins' && segments.length > 1;
-    if (rootSegment && (PUBLIC_SEGMENTS.has(rootSegment) || isPublicPluginDetail)) {
+    if (rootSegment && (PUBLIC_SEGMENTS[rootSegment] || isPublicPluginDetail)) {
       return;
     }
     const inMain = rootSegment === '(main)' || rootSegment === 'chat' || rootSegment === 'plugins' || rootSegment === 'robot' || rootSegment === 'schedule';
@@ -26,7 +32,7 @@ export function AuthGate() {
     const inWelcome = rootSegment == null;
 
     if (isAuthenticated && (inWelcome || inAuth)) {
-      router.replace('/chat');
+      router.replace('/birthday' as unknown as Parameters<typeof router.replace>[0]);
       return;
     }
 

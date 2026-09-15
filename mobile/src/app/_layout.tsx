@@ -22,6 +22,11 @@ function NotificationLifecycle() {
   useNotifications(user?.id);
   return null;
 }
+function RootSplashOverlay() {
+  const { status } = useAuthSession();
+  return <SplashOverlay isReady={status === 'ready'} />;
+}
+
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -67,9 +72,10 @@ export default function RootLayout() {
               }}
             />
             <Stack.Screen name="whatsapp-connect" />
+            <Stack.Screen name="birthday" options={{ animation: 'fade' }} />
             <Stack.Screen name="showcase" />
           </Stack>
-          {isSplashPreview ? null : <SplashOverlay />}
+          {isSplashPreview ? null : <RootSplashOverlay />}
         </AuthSessionProvider>
       </ThemeProvider>
     </GestureHandlerRootView>

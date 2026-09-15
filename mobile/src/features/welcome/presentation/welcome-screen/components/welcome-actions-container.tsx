@@ -19,19 +19,18 @@ export function WelcomeActionsContainer({
   const scale = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = useCallback(() => {
-    Animated.spring(scale, {
-      toValue: 0.97,
+    Animated.timing(scale, {
+      toValue: 0.95,
+      duration: 80,
       useNativeDriver: true,
-      speed: 20,
-      bounciness: 4,
     }).start();
   }, [scale]);
   const handlePressOut = useCallback(() => {
     Animated.spring(scale, {
       toValue: 1,
+      speed: 24,
+      bounciness: 6,
       useNativeDriver: true,
-      speed: 20,
-      bounciness: 4,
     }).start();
   }, [scale]);
 
@@ -117,7 +116,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   buttonPressed: {
-    opacity: 0.9,
+    opacity: 0.78,
   },
   buttonText: {
     color: WelcomeTokens.colors.buttonText,
