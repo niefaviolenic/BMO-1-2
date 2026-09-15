@@ -9,5 +9,5 @@ export const EMPTY_MEMORY_SETTINGS: MemorySettings = {
 
 export const MEMORY_FIELD_PLACEHOLDERS = {
   occupation: 'Engineer, student, etc.',
-  moreAboutYou: 'Interests, values, or preferences to keep in mind',
+  moreAboutYou: 'Interests, values, or preferences...',
 } as const;

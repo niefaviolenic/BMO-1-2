@@ -113,6 +113,7 @@ const styles = StyleSheet.create({
     color: SettingsTokens.occupationCard.textColor,
     paddingVertical: 0,
     paddingHorizontal: 0,
+    includeFontPadding: false,
   },
   pressed: {
     opacity: 0.7,

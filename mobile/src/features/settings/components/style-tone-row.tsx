@@ -100,13 +100,13 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     maxWidth: SettingsTokens.styleToneRow.width,
-    height: SettingsTokens.styleToneRow.height,
+    minHeight: 52,
     backgroundColor: SettingsTokens.colors.background,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SettingsTokens.styleToneRow.paddingHorizontal,
-    paddingVertical: SettingsTokens.styleToneRow.paddingVertical,
+    paddingVertical: 12,
   },
   pressed: {
     opacity: 0.7,
@@ -116,7 +116,8 @@ const styles = StyleSheet.create({
     fontSize: SettingsTokens.styleToneRow.labelFontSize,
     fontWeight: '400',
     color: SettingsTokens.colors.textPrimary,
-    lineHeight: 18,
+    lineHeight: 22,
+    includeFontPadding: false,
   },
   valueSelector: {
     flexDirection: 'row',
@@ -128,7 +129,8 @@ const styles = StyleSheet.create({
     fontSize: SettingsTokens.styleToneRow.valueFontSize,
     fontWeight: '400',
     color: SettingsTokens.colors.textSecondary,
-    lineHeight: 18,
+    lineHeight: 22,
+    includeFontPadding: false,
   },
   chevronIcon: {
     width: SettingsTokens.styleToneRow.iconSize,

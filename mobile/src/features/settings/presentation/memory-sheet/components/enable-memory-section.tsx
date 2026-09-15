@@ -22,8 +22,8 @@ export type EnableMemorySectionProps = {
   testID?: string;
 };
 
-const CAPTION_PREFIX =
-  'Let Joy personalize your experience based on your chats, files, and connected apps. ';
+const CAPTION =
+  'Joy remembers details from your chats to personalize responses.';
 
 export function EnableMemorySection({
   value = true,
@@ -58,14 +58,7 @@ export function EnableMemorySection({
           style={[styles.caption, { color: theme.textSecondary }]}
           testID={`${testID}-caption`}
         >
-          {CAPTION_PREFIX}
-          <Text
-            style={[styles.link, { color: theme.linkPrimary }]}
-            onPress={onLearnMorePress}
-            testID={`${testID}-learn-more`}
-          >
-            Learn more
-          </Text>
+          {CAPTION}
         </Text>
       </View>
     </View>
@@ -102,9 +95,5 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: tokens.captionColor,
   },
-  link: {
-    fontSize: tokens.captionFontSize,
-    fontWeight: '400',
-    color: tokens.captionLinkColor,
-  },
+
 });

@@ -85,6 +85,8 @@ const styles = StyleSheet.create({
     fontSize: SettingsTokens.styleToneRow.labelFontSize,
     fontWeight: '400',
     color: SettingsTokens.colors.textPrimary,
+    lineHeight: 22,
+    includeFontPadding: false,
   },
   captionFrame: {
     width: '100%',
@@ -94,5 +96,7 @@ const styles = StyleSheet.create({
     fontSize: tokens.captionFontSize,
     fontWeight: '400',
     color: tokens.captionColor,
+    lineHeight: 20,
+    includeFontPadding: false,
   },
 });
