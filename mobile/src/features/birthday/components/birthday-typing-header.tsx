@@ -4,12 +4,11 @@ import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '@/hooks/use-theme';
 
-const PREFIX = 'Happy Birthday ';
 const PHRASE = 'Happy Birthday Devira';
 const TYPING_SPEED = 110;
-const DELETING_SPEED = 70;
-const PAUSE_AT_END = 2400;
-const PAUSE_AT_START = 500;
+const DELETING_SPEED = 50;
+const PAUSE_AT_END = 2600;
+const PAUSE_AT_START = 600;
 
 export type BirthdayTypingHeaderProps = {
   delayMs?: number;
@@ -94,11 +93,11 @@ export function BirthdayTypingHeader({
       timer = setTimeout(() => {
         setIsDeleting(true);
       }, PAUSE_AT_END);
-    } else if (isDeleting && displayText.length > PREFIX.length) {
+    } else if (isDeleting && displayText.length > 0) {
       timer = setTimeout(() => {
         setDisplayText(PHRASE.slice(0, displayText.length - 1));
       }, DELETING_SPEED);
-    } else if (isDeleting && displayText.length === PREFIX.length) {
+    } else if (isDeleting && displayText.length === 0) {
       timer = setTimeout(() => {
         setIsDeleting(false);
       }, PAUSE_AT_START);
