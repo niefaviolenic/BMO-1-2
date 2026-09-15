@@ -6,6 +6,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Colors, Spacing } from '@/constants/theme';
 import { useAuthSession } from '@/features/auth/presentation';
 import { processedExchangeCodes } from '@/features/auth/data/google-oauth';
+import { shouldShowBirthdayOnboarding } from '@/features/birthday/data/birthday-store';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -13,16 +14,18 @@ WebBrowser.maybeCompleteAuthSession();
 export default function AuthCallbackRoute() {
   const router = useRouter();
   const params = useLocalSearchParams<{ code?: string; error?: string }>();
-  const { loginGoogle, isAuthenticated } = useAuthSession();
+  const { loginGoogle, isAuthenticated, user } = useAuthSession();
   const colorScheme = useColorScheme();
   const colors = colorScheme === 'dark' ? Colors.dark : Colors.light;
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const handledRef = useRef(false);
 
+  const targetRoute = shouldShowBirthdayOnboarding(user?.email) ? '/birthday' : '/chat';
+
   useEffect(() => {
     if (isAuthenticated) {
-      router.replace('/birthday' as unknown as Parameters<typeof router.replace>[0]);
+      router.replace(targetRoute as unknown as Parameters<typeof router.replace>[0]);
       return;
     }
 
@@ -45,7 +48,7 @@ export default function AuthCallbackRoute() {
       const code = Array.isArray(params.code) ? params.code[0] : params.code;
 
       if (processedExchangeCodes.has(code)) {
-        router.replace('/birthday' as unknown as Parameters<typeof router.replace>[0]);
+        router.replace(targetRoute as unknown as Parameters<typeof router.replace>[0]);
         return;
       }
       processedExchangeCodes.add(code);
@@ -54,13 +57,13 @@ export default function AuthCallbackRoute() {
         try {
           await loginGoogle({ exchangeCode: code });
           if (isMounted) {
-            router.replace('/birthday' as unknown as Parameters<typeof router.replace>[0]);
+            router.replace(targetRoute as unknown as Parameters<typeof router.replace>[0]);
           }
         } catch (err) {
           console.error('[AuthCallback] error:', err);
           if (isMounted) {
             if (isAuthenticated) {
-              router.replace('/birthday' as unknown as Parameters<typeof router.replace>[0]);
+              router.replace(targetRoute as unknown as Parameters<typeof router.replace>[0]);
               return;
             }
             const message = err instanceof Error ? err.message : 'Failed to complete sign in';
@@ -85,7 +88,7 @@ export default function AuthCallbackRoute() {
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [params.code, params.error, loginGoogle, router, isAuthenticated]);
+  }, [params.code, params.error, loginGoogle, router, isAuthenticated, targetRoute]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

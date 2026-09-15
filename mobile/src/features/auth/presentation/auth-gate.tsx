@@ -2,6 +2,10 @@ import { useRootNavigationState, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 
 import { useAuthSession } from './auth-session-provider';
+import {
+  hydrateBirthdayClaim,
+  shouldShowBirthdayOnboarding,
+} from '@/features/birthday/data/birthday-store';
 
 const PUBLIC_SEGMENTS: Record<string, true> = {
   splash: true,
@@ -12,11 +16,16 @@ const PUBLIC_SEGMENTS: Record<string, true> = {
 };
 
 export function AuthGate() {
-  const { status, isAuthenticated } = useAuthSession();
+  const { status, isAuthenticated, user } = useAuthSession();
   const router = useRouter();
   const segments = useSegments();
   const navigationState = useRootNavigationState();
   const rootSegment = segments[0];
+  useEffect(() => {
+    if (user?.email) {
+      void hydrateBirthdayClaim(user.email);
+    }
+  }, [user?.email]);
 
   useEffect(() => {
     if (!navigationState?.key || status !== 'ready') {
@@ -32,7 +41,11 @@ export function AuthGate() {
     const inWelcome = rootSegment == null;
 
     if (isAuthenticated && (inWelcome || inAuth)) {
-      router.replace('/birthday' as unknown as Parameters<typeof router.replace>[0]);
+      if (shouldShowBirthdayOnboarding(user?.email)) {
+        router.replace('/birthday' as unknown as Parameters<typeof router.replace>[0]);
+      } else {
+        router.replace('/chat');
+      }
       return;
     }
 
