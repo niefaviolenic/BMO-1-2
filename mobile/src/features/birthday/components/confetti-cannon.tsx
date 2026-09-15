@@ -99,7 +99,7 @@ export function ConfettiCannon({ testID = 'confetti-cannon' }: ConfettiCannonPro
   const originX = width / 2;
 
   return (
-    <View style={styles.container} pointerEvents="none" testID={testID}>
+    <View style={[styles.container, { pointerEvents: 'none' }]} testID={testID}>
       {particles.map((p, idx) => {
         const anim = animValues[idx];
 

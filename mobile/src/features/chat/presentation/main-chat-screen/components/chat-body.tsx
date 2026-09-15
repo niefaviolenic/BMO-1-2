@@ -217,7 +217,7 @@ export function ChatBody({
       testID={`${testID}-empty-view`}
     >
       {/* Character area cleanly occupying upper space */}
-      <View style={styles.characterArea} pointerEvents="none">
+      <View style={[styles.characterArea, { pointerEvents: 'none' }]}>
         <Animated.View
           style={[
             styles.joyAvatarWrapper,

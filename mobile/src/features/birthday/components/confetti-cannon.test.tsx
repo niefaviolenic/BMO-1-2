@@ -61,7 +61,10 @@ describe('ConfettiCannon', () => {
   it('renders correctly with pointerEvents none', () => {
     const element = ConfettiCannon({ testID: 'test-confetti' });
     expect(element.props.testID).toBe('test-confetti');
-    expect(element.props.pointerEvents).toBe('none');
+    const styleProp = Array.isArray(element.props.style)
+      ? Object.assign({}, ...element.props.style)
+      : element.props.style;
+    expect(styleProp.pointerEvents).toBe('none');
     expect(element.props.children).toBeDefined();
     expect(Array.isArray(element.props.children)).toBe(true);
     expect(element.props.children.length).toBeGreaterThan(0);
