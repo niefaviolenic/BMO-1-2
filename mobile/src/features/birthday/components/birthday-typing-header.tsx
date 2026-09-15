@@ -5,15 +5,11 @@ import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/hooks/use-theme';
 
 const PREFIX = 'Happy Birthday ';
-const PHRASES = [
-  'Happy Birthday Devira',
-  'Happy Birthday Devira 🎉',
-  'Happy Birthday Devira 💖',
-];
+const PHRASE = 'Happy Birthday Devira';
 const TYPING_SPEED = 110;
-const DELETING_SPEED = 60;
-const PAUSE_AT_END = 1800;
-const PAUSE_AT_START = 400;
+const DELETING_SPEED = 70;
+const PAUSE_AT_END = 2400;
+const PAUSE_AT_START = 500;
 
 export type BirthdayTypingHeaderProps = {
   delayMs?: number;
@@ -27,7 +23,6 @@ export function BirthdayTypingHeader({
   const theme = useTheme();
   const [hasStarted, setHasStarted] = useState(false);
   const [isTypingStarted, setIsTypingStarted] = useState(false);
-  const [phraseIndex, setPhraseIndex] = useState(0);
   const [displayText, setDisplayText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -77,6 +72,7 @@ export function BirthdayTypingHeader({
         }),
       ]),
     );
+
     pulse.start();
 
     return () => {
@@ -84,40 +80,43 @@ export function BirthdayTypingHeader({
     };
   }, [pulseAnim]);
 
-  const currentPhrase = PHRASES[phraseIndex];
-
-  // Typewriter effect
+  // Typewriter effect (no emojis, cleanly types and pauses)
   useEffect(() => {
     if (!isTypingStarted) return;
 
     let timer: ReturnType<typeof setTimeout> | undefined;
-    if (!isDeleting && displayText.length < currentPhrase.length) {
+
+    if (!isDeleting && displayText.length < PHRASE.length) {
       timer = setTimeout(() => {
-        setDisplayText(currentPhrase.slice(0, displayText.length + 1));
+        setDisplayText(PHRASE.slice(0, displayText.length + 1));
       }, TYPING_SPEED);
-    } else if (!isDeleting && displayText.length === currentPhrase.length) {
+    } else if (!isDeleting && displayText.length === PHRASE.length) {
       timer = setTimeout(() => {
         setIsDeleting(true);
       }, PAUSE_AT_END);
     } else if (isDeleting && displayText.length > PREFIX.length) {
       timer = setTimeout(() => {
-        setDisplayText(currentPhrase.slice(0, displayText.length - 1));
+        setDisplayText(PHRASE.slice(0, displayText.length - 1));
       }, DELETING_SPEED);
     } else if (isDeleting && displayText.length === PREFIX.length) {
       timer = setTimeout(() => {
-        setPhraseIndex((prev) => (prev + 1) % PHRASES.length);
         setIsDeleting(false);
       }, PAUSE_AT_START);
     }
 
     return () => clearTimeout(timer);
-  }, [isTypingStarted, displayText, isDeleting, currentPhrase]);
+  }, [isTypingStarted, displayText, isDeleting]);
 
   const combinedScale = Animated.multiply(scaleAnim, pulseAnim);
 
   return (
     <View style={styles.container} testID={testID}>
-      <Text style={[styles.text, { color: theme.textTitle }]} testID={`${testID}-text`}>
+      <Text
+        style={[styles.text, { color: theme.textTitle }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        testID={`${testID}-text`}
+      >
         {displayText}
       </Text>
       <Animated.View
@@ -146,25 +145,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flexWrap: 'wrap',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     gap: 8,
   },
   text: {
-    fontSize: 32,
+    fontSize: 26,
     fontWeight: '700',
-    lineHeight: 40,
-    letterSpacing: -0.8,
+    lineHeight: 34,
+    letterSpacing: -0.6,
     textAlign: 'center',
   },
   dotContainer: {
-    width: 22,
-    height: 22,
+    width: 20,
+    height: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
   dot: {
-    width: 22,
-    height: 22,
+    width: 20,
+    height: 20,
   },
 });
