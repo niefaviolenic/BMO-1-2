@@ -3,7 +3,6 @@ import React, { useCallback, useRef } from 'react';
 import {
   Animated,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -13,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import { WelcomeTokens } from '@/constants/theme';
-import { BirthdayContent } from '../components/birthday-content';
+import { BirthdayTypingHeader } from '../components/birthday-typing-header';
 import { ConfettiCannon } from '../components/confetti-cannon';
 
 export type BirthdayScreenProps = {
@@ -48,47 +47,38 @@ export function BirthdayScreen({
     }).start();
   }, [scale]);
 
-  const paddingTop = Math.max(insets.top + 32, 64);
   const paddingBottom = Math.max(insets.bottom + 16, 34);
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]} testID={testID}>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <ConfettiCannon testID={`${testID}-confetti`} />
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          {
-            paddingTop,
-            paddingBottom,
-          },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.mainLayout}>
-          <BirthdayContent testID={`${testID}-content`} />
 
-          <View style={styles.actionsContainer} testID={`${testID}-actions`}>
-            <Animated.View style={[{ transform: [{ scale }] }, styles.buttonWrapper]}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.button,
-                  { backgroundColor: theme.text },
-                  pressed && styles.buttonPressed,
-                ]}
-                onPress={onContinue}
-                onPressIn={handlePressIn}
-                onPressOut={handlePressOut}
-                accessibilityRole="button"
-                accessibilityLabel="Continue"
-                testID={`${testID}-continue-button`}
-              >
-                <Text style={[styles.buttonText, { color: theme.background }]}>Continue</Text>
-              </Pressable>
-            </Animated.View>
-          </View>
-        </View>
-      </ScrollView>
+      {/* Centered typing header */}
+      <View style={styles.centerContainer} testID={`${testID}-center-container`}>
+        <BirthdayTypingHeader testID={`${testID}-typing-header`} />
+      </View>
+
+      {/* Bottom action button */}
+      <View style={[styles.bottomContainer, { paddingBottom }]} testID={`${testID}-actions`}>
+        <Animated.View style={[{ transform: [{ scale }] }, styles.buttonWrapper]}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.button,
+              { backgroundColor: theme.text },
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={onContinue}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            accessibilityRole="button"
+            accessibilityLabel="Continue"
+            testID={`${testID}-continue-button`}
+          >
+            <Text style={[styles.buttonText, { color: theme.background }]}>Continue</Text>
+          </Pressable>
+        </Animated.View>
+      </View>
     </View>
   );
 }
@@ -98,19 +88,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: WelcomeTokens.colors.background,
   },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: WelcomeTokens.spacing.horizontalPadding,
-  },
-  mainLayout: {
+  centerContainer: {
     flex: 1,
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
-  actionsContainer: {
-    gap: 16,
-    alignSelf: 'stretch',
-    marginTop: 32,
+  bottomContainer: {
+    width: '100%',
+    paddingHorizontal: WelcomeTokens.spacing.horizontalPadding,
   },
   buttonWrapper: {
     alignSelf: 'stretch',
@@ -132,5 +118,4 @@ const styles = StyleSheet.create({
     fontWeight: WelcomeTokens.typography.buttonText.fontWeight,
     lineHeight: WelcomeTokens.typography.buttonText.lineHeight,
   },
-
 });

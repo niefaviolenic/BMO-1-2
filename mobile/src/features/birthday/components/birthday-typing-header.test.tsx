@@ -13,22 +13,9 @@ vi.mock('react', async () => {
   };
 });
 
-vi.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ top: 47, bottom: 34, left: 0, right: 0 }),
-}));
-
-vi.mock('@/hooks/use-color-scheme', () => ({
-  useColorScheme: () => 'light',
-}));
-
 vi.mock('@/hooks/use-theme', () => ({
   useTheme: () => ({
-    background: '#FFFFFF',
-    text: '#0D0D0D',
     textTitle: '#0F1729',
-    textSecondary: '#60646C',
-    textMuted: '#808794',
-    icon: '#0F1729',
   }),
 }));
 
@@ -43,51 +30,37 @@ vi.mock('react-native', () => {
   }
 
   return {
-    Platform: { OS: 'ios', select: (obj: Record<string, unknown>) => obj.ios },
     StyleSheet: {
       create: <T extends Record<string, unknown>>(styles: T) => styles,
-      absoluteFill: {},
     },
-    useWindowDimensions: vi.fn(() => ({ width: 390, height: 844 })),
     Animated: {
       Value: MockAnimatedValue,
       spring: vi.fn(() => ({ start: vi.fn() })),
       timing: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
       sequence: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
-      parallel: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
       loop: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
       multiply: vi.fn(() => ({})),
-      delay: vi.fn(() => ({})),
       View: (props: unknown) => ({ type: 'Animated.View', props }),
     },
     Easing: {
-      bezier: vi.fn(),
       inOut: vi.fn(),
       ease: {},
     },
-    ScrollView: (props: unknown) => ({ type: 'ScrollView', props }),
-    Pressable: (props: unknown) => ({ type: 'Pressable', props }),
     Text: (props: unknown) => ({ type: 'Text', props }),
     View: (props: unknown) => ({ type: 'View', props }),
   };
 });
 
-vi.mock('expo-status-bar', () => ({
-  StatusBar: (props: unknown) => ({ type: 'StatusBar', props }),
-}));
-
 vi.mock('expo-image', () => ({
   Image: (props: unknown) => ({ type: 'Image', props }),
 }));
 
-import { BirthdayScreen } from './birthday-screen';
+import { BirthdayTypingHeader } from './birthday-typing-header';
 
-describe('BirthdayScreen', () => {
-  it('renders correctly with centered typing header and continue button', () => {
-    const handleContinue = vi.fn();
-    const element = BirthdayScreen({ onContinue: handleContinue, testID: 'test-birthday' });
-
-    expect(element.props.testID).toBe('test-birthday');
+describe('BirthdayTypingHeader', () => {
+  it('renders correctly with text and animated dot container', () => {
+    const element = BirthdayTypingHeader({ testID: 'test-typing-header' });
+    expect(element.props.testID).toBe('test-typing-header');
     expect(element.props.children).toBeDefined();
   });
 });
