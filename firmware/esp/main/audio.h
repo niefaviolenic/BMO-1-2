@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "esp_err.h"
-#define SPEAKER_DEFAULT_VOLUME 100
+#define SPEAKER_DEFAULT_VOLUME 50
 
 void audio_init();
 

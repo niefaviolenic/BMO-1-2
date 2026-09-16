@@ -124,6 +124,7 @@ static int speech_samples = 0;
 static int leading_silence_samples = 0;
 static bool recording_speech_detected = false;
 static RecordingStatus recording_status = RecordingStatus::IDLE;
+static volatile bool s_finish_recording_requested = false;
 static TickType_t recording_started_tick = 0;
 static TickType_t recording_last_sample_tick = 0;
 static TickType_t recording_last_diag_tick = 0;
@@ -668,6 +669,13 @@ static void wakeword_listener_task(
         else if (current_state == JoyState::RECORDING &&
                  get_recording_status() == RecordingStatus::ACTIVE)
         {
+            if (s_finish_recording_requested)
+            {
+                s_finish_recording_requested = false;
+                ESP_LOGI(TAG, "Manual finish requested via button press");
+                finalize_recording("button_manual_finish");
+                continue;
+            }
             // Calculate absolute peak amplitude for silence detection
             int peak = sample_peak(sample_buffer, wakeword_chunk_size);
             bool buffer_unavailable = false;
@@ -1002,6 +1010,7 @@ bool wakeword_task()
 
 bool start_recording()
 {
+    s_finish_recording_requested = false;
     if (record_buffer == NULL)
     {
         // Try allocating in PSRAM (SPIRAM) first, fallback to standard malloc
@@ -1082,6 +1091,11 @@ void abort_recording(const char *reason)
     fail_recording(
         RecordingStatus::ABORTED,
         reason != NULL ? reason : "aborted");
+}
+
+void request_finish_recording()
+{
+    s_finish_recording_requested = true;
 }
 
 int16_t *get_record_buffer()

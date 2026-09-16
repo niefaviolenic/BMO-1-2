@@ -1,0 +1,93 @@
+{
+  "generatedAt": "2026-09-16T09:36:27.547Z",
+  "width": 320,
+  "height": 240,
+  "profile": "core",
+  "colorOrder": "bgr",
+  "assets": [
+    {
+      "assetId": 1,
+      "filename": "Asset 1.svg",
+      "sha256": "49129191f82e35623d6b174de293c7c405d010b6aba70b01dad5d0c519d7579e",
+      "runs": 2346,
+      "bytes": 9384
+    },
+    {
+      "assetId": 2,
+      "filename": "Asset 2.svg",
+      "sha256": "429c1bcfaae7cca4379c9d0fc9c21d55c1e426b984ab5aea3c3f31a6cb4813e3",
+      "runs": 1560,
+      "bytes": 6240
+    },
+    {
+      "assetId": 3,
+      "filename": "Asset 3.svg",
+      "sha256": "b803b34f74f23f05ff1d7b9c3f21bc04eea7240e4e56326ef8f79383c47745a2",
+      "runs": 613,
+      "bytes": 2452
+    },
+    {
+      "assetId": 4,
+      "filename": "Asset 4.svg",
+      "sha256": "ae6bfbf43a4843dbd884acd389270bbdaa2262ebeac5d1fb6bcef5c04a60cb6c",
+      "runs": 2077,
+      "bytes": 8308
+    },
+    {
+      "assetId": 5,
+      "filename": "Asset 5.svg",
+      "sha256": "883d3bcc4aa5a30d1a0166215010737238bee3b3b4d39854f4198948a7999427",
+      "runs": 819,
+      "bytes": 3276
+    },
+    {
+      "assetId": 6,
+      "filename": "Asset 6.svg",
+      "sha256": "6e61e816e497e781c2e5376e1b3174af7a421b0f68a988bfef49a76615103e59",
+      "runs": 8031,
+      "bytes": 32124
+    },
+    {
+      "assetId": 7,
+      "filename": "Asset 7.svg",
+      "sha256": "5d28f29d440edf039876d5613bac8b4c60b9aebdde904d87a83394cdc814b22d",
+      "runs": 1373,
+      "bytes": 5492
+    },
+    {
+      "assetId": 8,
+      "filename": "Asset 8.svg",
+      "sha256": "4d5aaad4e50f51c7464f8a883aca59cb9b363d55de49462de85b438fa9ff516c",
+      "runs": 616,
+      "bytes": 2464
+    },
+    {
+      "assetId": 9,
+      "filename": "Asset 9.svg",
+      "sha256": "1a12871c47a6cf0812c3e7de011d0169eaf49fd7bdbc12ca9e4f11cdcf5b064e",
+      "runs": 615,
+      "bytes": 2460
+    },
+    {
+      "assetId": 10,
+      "filename": "Asset 10.svg",
+      "sha256": "23caba43a058f4432628ab68c947f5b1589ab259a71a857df8256a3f2f9158bc",
+      "runs": 784,
+      "bytes": 3136
+    },
+    {
+      "assetId": 11,
+      "filename": "Asset 11.svg",
+      "sha256": "e4e430a92bb084f05ae9b1ed5e3944cd9944115a7a3811ea5af56bb276caa8ca",
+      "runs": 2284,
+      "bytes": 9136
+    },
+    {
+      "assetId": 14,
+      "filename": "Asset 14.svg",
+      "sha256": "3eeb8bed02b4392536bed95bbb93014b3831684d23c23c284fb8fe0367cdd25f",
+      "runs": 1444,
+      "bytes": 5776
+    }
+  ]
+}

@@ -131,13 +131,16 @@ static void joy_state_machine_task(void *pvParameters)
 
             case JoyState::RECORDING: {
                 ESP_LOGI(TAG, "Entering RECORDING state");
-                if(!start_recording())
+                if (!is_recording() && get_recording_status() != RecordingStatus::COMPLETED)
                 {
-                    ESP_LOGE(
-                        TAG,
-                        "Recording start failed; upload skipped");
-                    setState(JoyState::IDLE);
-                    break;
+                    if(!start_recording())
+                    {
+                        ESP_LOGE(
+                            TAG,
+                            "Recording start failed; upload skipped");
+                        setState(JoyState::IDLE);
+                        break;
+                    }
                 }
 
                 TickType_t recording_wait_start = xTaskGetTickCount();

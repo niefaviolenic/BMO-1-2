@@ -6,6 +6,10 @@
 #include "joy_ble_provisioning.h"
 #include "joy_identity.h"
 #include "state.h"
+#include "board_config.h"
+#include "button_policy.h"
+#include "wakeword.h"
+extern "C" void api_spotify_queue_action(int action_type);
 #include "driver/gpio.h"
 #if __has_include("driver/touch_sensor_legacy.h")
 #include "driver/touch_sensor_legacy.h"
@@ -52,6 +56,7 @@ static DebouncedButtonState volume_down_state = {};
 static bool expression_button_candidate_pressed = false;
 static bool expression_button_stable_pressed = false;
 static int64_t expression_button_candidate_since_us = 0;
+static ButtonPolicy s_button_policy;
 enum class TouchLifecycleState
 {
     TOUCH_ARMED,
@@ -303,6 +308,8 @@ void button_init()
         "Expression button ready: pin=%d active_low=1 initial_pressed=%d",
         BTN_EXPRESSION,
         expression_button_pressed ? 1 : 0);
+
+    s_button_policy.reset();
 }
 
 //--------------------------------------------------
@@ -322,6 +329,79 @@ void button_update()
                  gpio_get_level(BTN_VOL_DOWN),
                  (unsigned long)native_touch_raw);
     }
+    // Dedicated button policy handling for assigned 7 inputs
+    bool btn_voice_down = BOARD_PIN_IS_ASSIGNED(PIN_BTN_VOICE) ? (gpio_get_level((gpio_num_t)PIN_BTN_VOICE) == 0) : false;
+    bool btn_pair_down = BOARD_PIN_IS_ASSIGNED(PIN_BTN_PAIR) ? (gpio_get_level((gpio_num_t)PIN_BTN_PAIR) == 0) : false;
+    bool btn_expr_down = BOARD_PIN_IS_ASSIGNED(PIN_BTN_EXPRESSION) ? (gpio_get_level((gpio_num_t)PIN_BTN_EXPRESSION) == 0) : false;
+    bool btn_vol_up_down = BOARD_PIN_IS_ASSIGNED(PIN_BTN_VOL_UP) ? (gpio_get_level((gpio_num_t)PIN_BTN_VOL_UP) == 0) : false;
+    bool btn_vol_dn_down = BOARD_PIN_IS_ASSIGNED(PIN_BTN_VOL_DOWN) ? (gpio_get_level((gpio_num_t)PIN_BTN_VOL_DOWN) == 0) : false;
+    bool btn_spot_next_down = BOARD_PIN_IS_ASSIGNED(PIN_BTN_SPOTIFY_NEXT) ? (gpio_get_level((gpio_num_t)PIN_BTN_SPOTIFY_NEXT) == 0) : false;
+    bool btn_spot_prev_down = BOARD_PIN_IS_ASSIGNED(PIN_BTN_SPOTIFY_PREV) ? (gpio_get_level((gpio_num_t)PIN_BTN_SPOTIFY_PREV) == 0) : false;
+    bool touch_pad_down = read_touch_level();
+
+    SystemInteractionState sys_interaction = SystemInteractionState::IDLE;
+    JoyState cur_joy_state = getState();
+    if (cur_joy_state == JoyState::RECORDING) sys_interaction = SystemInteractionState::RECORDING;
+    else if (cur_joy_state == JoyState::THINKING) sys_interaction = SystemInteractionState::THINKING;
+    else if (cur_joy_state == JoyState::SPEAKING) sys_interaction = SystemInteractionState::SPEAKING;
+    else if (joy_ble_get_state() == JoyBleState::BOOTSTRAP_ADVERTISING) sys_interaction = SystemInteractionState::PAIRING_DISCOVERING;
+    else if (joy_ble_get_state() == JoyBleState::PHYSICAL_CONFIRM_PENDING) sys_interaction = SystemInteractionState::PAIRING_ARMED_PROOF;
+    else if (joy_ble_get_state() == JoyBleState::FINALIZING_WITH_BACKEND) sys_interaction = SystemInteractionState::PAIRING_FINALIZING;
+
+    s_button_policy.update_raw(
+        btn_voice_down,
+        btn_pair_down,
+        btn_expr_down,
+        btn_vol_up_down,
+        btn_vol_dn_down,
+        btn_spot_next_down,
+        btn_spot_prev_down,
+        touch_pad_down,
+        now,
+        sys_interaction);
+
+    while (s_button_policy.get_pending_action_count() > 0) {
+        ButtonAction action = s_button_policy.pop_action();
+        switch (action) {
+            case ButtonAction::VOICE_START:
+                if (getState() == JoyState::IDLE) {
+                    audio_triggerWakeAck();
+                    start_recording();
+                    setState(JoyState::RECORDING);
+                }
+                break;
+            case ButtonAction::VOICE_STOP:
+                request_finish_recording();
+                break;
+            case ButtonAction::BLE_OPEN_DISCOVERY:
+                joy_ble_start_pairing_window();
+                break;
+            case ButtonAction::BLE_PHYSICAL_CONFIRM:
+                joy_ble_on_physical_hold_2s();
+                break;
+            case ButtonAction::EXPRESSION_ASSET_11:
+                display_set_idle_face(FACE_CUTE);
+                break;
+            case ButtonAction::TOUCH_ASSET_6:
+                display_set_idle_face(FACE_HAPPY);
+                break;
+            case ButtonAction::VOLUME_UP:
+                audio_setVolume(audio_getVolume() + VOLUME_STEP);
+                break;
+            case ButtonAction::VOLUME_DOWN:
+                audio_setVolume(audio_getVolume() - VOLUME_STEP);
+                break;
+            case ButtonAction::SPOTIFY_NEXT:
+                api_spotify_queue_action(1);
+                break;
+            case ButtonAction::SPOTIFY_PREV:
+                api_spotify_queue_action(2);
+                break;
+            default:
+                break;
+        }
+    }
+
 
     enum class BtnKind { NONE, EXPR, BOOT, VOL_UP, VOL_DOWN };
     static BtnKind s_debounced_btn = BtnKind::NONE;

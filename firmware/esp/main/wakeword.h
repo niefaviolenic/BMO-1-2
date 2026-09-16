@@ -37,6 +37,7 @@ bool start_recording();
 bool is_recording();
 RecordingStatus get_recording_status();
 void abort_recording(const char *reason);
+void request_finish_recording();
 int16_t *get_record_buffer();
 size_t get_record_size();
 
