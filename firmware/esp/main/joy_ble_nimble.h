@@ -14,7 +14,7 @@ void joy_ble_nimble_stop(void);
 bool joy_ble_nimble_is_connected(void);
 void joy_ble_nimble_notify_proof(const char *confirm_nonce, const char *proof);
 void joy_ble_nimble_notify_commit(const char *commit_nonce, const char *commit_proof, const char *status);
-
+void joy_ble_nimble_notify_wifi_scan(const char *json_str);
 #ifdef __cplusplus
 }
 #endif

@@ -110,6 +110,12 @@ bool playback_start_proactive_ready(const ProactiveAudioReady& ready,
                                    int64_t now_us);
 void playback_cancel_proactive(const ProactiveCancel& cancel,
                                int64_t now_us);
+bool playback_get_proactive_details(
+    char *delivery_id, size_t deliv_len,
+    char *attempt_id, size_t att_len,
+    char *lease_id, size_t lease_len,
+    char *audio_receipt, size_t rcpt_len);
+
 
 void playback_init();
 

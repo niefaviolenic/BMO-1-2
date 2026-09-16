@@ -52,6 +52,7 @@ export type Schedule = {
   recurrence: ScheduleRecurrence;
   nextRunAt: string | null;
   timezone: string;
+  targetDeviceId?: string | null;
   exactTime?: string | null;
   formattedTime?: string;
 };

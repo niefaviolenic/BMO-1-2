@@ -14,6 +14,7 @@ import {
   CHR_PROOF_UUID,
   CHR_SECURE_START_UUID,
   CHR_COMMIT_UUID,
+  CHR_WIFI_SCAN_UUID,
 } from '@/lib/ble/ble-transport';
 import { encryptSessionEnvelope } from '@/lib/ble/scheme2-crypto';
 function delay(ms: number): Promise<void> {
@@ -214,12 +215,16 @@ export class JoyProvisioningManager {
         ref: string;
         nonce: string;
         epoch: number;
+        transport_version?: number;
       }>(CHR_IDENTITY_UUID);
 
       if (!idInfo || !idInfo.hw_id || !idInfo.nonce) {
         throw new Error('Invalid or incomplete hardware identity received from robot via BLE');
       }
 
+      if (idInfo.transport_version !== 2) {
+        throw new Error('Pembaruan firmware diperlukan: perangkat tidak mendukung BLE transport v2');
+      }
       joy.hardwareId = idInfo.hw_id;
       joy.provisioningRef = idInfo.ref || joy.provisioningRef;
       joy.setupNonce = idInfo.nonce;
@@ -245,20 +250,44 @@ export class JoyProvisioningManager {
         challenge: prepareRes.challenge,
       });
 
-      // 5. Monitor physical confirmation notification on GATT Char 3
+      let physicalConfirmed = false;
+      const onProofReceived = async (data: { confirm_nonce: string; proof: string }) => {
+        if (physicalConfirmed) return;
+        if (data && data.confirm_nonce && data.proof) {
+          physicalConfirmed = true;
+          if (this.proofSubscriptionCleanup) {
+            this.proofSubscriptionCleanup();
+            this.proofSubscriptionCleanup = null;
+          }
+          await this.onPhysicalConfirmationReceived({
+            confirmation_nonce: data.confirm_nonce,
+            proof: data.proof,
+          });
+        }
+      };
+
       this.proofSubscriptionCleanup = bleClient.monitorJson<{
         confirm_nonce: string;
         proof: string;
-      }>(CHR_PROOF_UUID, async (data) => {
-        if (this.proofSubscriptionCleanup) {
-          this.proofSubscriptionCleanup();
-          this.proofSubscriptionCleanup = null;
-        }
-        await this.onPhysicalConfirmationReceived({
-          confirmation_nonce: data.confirm_nonce,
-          proof: data.proof,
-        });
+      }>(CHR_PROOF_UUID, (data) => {
+        void onProofReceived(data);
       });
+
+      // Also poll FE04 every 250ms until deadline (up to 60s)
+      const proofPollStart = Date.now();
+      const pollProofTimer = setInterval(async () => {
+        if (physicalConfirmed || this.state.step !== 'waiting_physical_confirm' || Date.now() - proofPollStart > 60_000) {
+          clearInterval(pollProofTimer);
+          return;
+        }
+        try {
+          const proofRes = await bleClient.readJson<{ confirm_nonce?: string; proof?: string }>(CHR_PROOF_UUID);
+          if (proofRes && proofRes.confirm_nonce && proofRes.proof) {
+            clearInterval(pollProofTimer);
+            void onProofReceived({ confirm_nonce: proofRes.confirm_nonce, proof: proofRes.proof });
+          }
+        } catch {}
+      }, 250);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to prepare provisioning with device';
       this.updateState({ error: msg, step: 'error' });
@@ -295,9 +324,10 @@ export class JoyProvisioningManager {
       this.updateState({
         confirmData: confirmRes,
         step: 'entering_wifi_password',
-        isWifiScanning: false,
+        isWifiScanning: true,
         error: null,
       });
+      void this.requestDeviceWifiScan();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Physical confirmation failed';
       this.updateState({ error: msg, step: 'error' });
@@ -305,17 +335,88 @@ export class JoyProvisioningManager {
     }
   }
 
-  requestDeviceWifiScan(): void {
+  async requestDeviceWifiScan(): Promise<void> {
     this.updateState({
-      step: 'entering_wifi_password',
-      isWifiScanning: false,
+      isWifiScanning: true,
       error: null,
-      discoveredNetworks: [],
     });
+
+    try {
+      const scanId = Math.floor(Date.now() / 1000);
+      try {
+        await bleClient.writeJson(CHR_WIFI_SCAN_UUID, { op: 'scan', scan_id: scanId });
+      } catch {}
+
+      const deadline = Date.now() + 15_000;
+      let scanDone = false;
+      let totalPages = 0;
+      let networks: DiscoveredWifiNetwork[] = [];
+
+      while (Date.now() < deadline && !scanDone) {
+        await delay(250);
+        try {
+          const res = await bleClient.readJson<{
+            scan_id?: number;
+            status?: string;
+            index?: number;
+            total?: number;
+            network?: DiscoveredWifiNetwork | null;
+            networks?: DiscoveredWifiNetwork[];
+            error_code?: string | null;
+          }>(CHR_WIFI_SCAN_UUID);
+
+          if (Array.isArray(res?.networks)) {
+            networks = res.networks;
+            scanDone = true;
+            break;
+          }
+
+          if (res?.status === 'READY') {
+            totalPages = res.total ?? 0;
+            scanDone = true;
+            break;
+          }
+
+          if (res?.status === 'ERROR') {
+            throw new Error(res.error_code ?? 'Scan failed on robot');
+          }
+        } catch {}
+      }
+
+      if (scanDone && totalPages > 0 && networks.length === 0) {
+        for (let i = 0; i < totalPages; i++) {
+          try {
+            await bleClient.writeJson(CHR_WIFI_SCAN_UUID, { op: 'page', scan_id: scanId, index: i });
+            const pageRes = await bleClient.readJson<{ network?: DiscoveredWifiNetwork | null }>(CHR_WIFI_SCAN_UUID);
+            if (pageRes?.network && pageRes.network.ssid) {
+              networks.push(pageRes.network);
+            }
+          } catch {}
+        }
+      }
+
+      this.setDiscoveredWifiNetworks(networks);
+    } catch (scanErr) {
+      console.warn('[BLE] Wi-Fi scan request error/timeout:', scanErr);
+      this.updateState({
+        isWifiScanning: false,
+        step: 'entering_wifi_password',
+      });
+    }
   }
+
   setDiscoveredWifiNetworks(networks: DiscoveredWifiNetwork[]): void {
+    const currentSelected = this.state.selectedNetwork;
+    const selected =
+      currentSelected && networks.some((n) => n.ssid === currentSelected.ssid)
+        ? currentSelected
+        : networks.length > 0
+        ? networks[0]
+        : null;
+
     this.updateState({
       discoveredNetworks: networks,
+      selectedNetwork: selected,
       isWifiScanning: false,
       step: 'entering_wifi_password',
     });

@@ -3,15 +3,19 @@
 
 #include <stdbool.h>
 
-// Inisialisasi koneksi WebSocket & HTTP
-void api_init();
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-// Menangani upload rekaman lokal dan memproses event WS/HTTP secara blocking
-void api_upload_audio_and_process();
+void api_init(void);
+void api_upload_audio_and_process(void);
+bool api_ws_is_connected(void);
+bool api_ws_is_authenticated(void);
+bool api_ws_authentication_is_blocked(void);
+void api_ws_reset_authentication_blocked(void);
 
-// Mendapatkan status koneksi WebSocket
-bool api_ws_is_connected();
-bool api_ws_is_authenticated();
-bool api_ws_authentication_is_blocked();
+#ifdef __cplusplus
+}
+#endif
 
 #endif

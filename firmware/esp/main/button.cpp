@@ -411,8 +411,8 @@ void button_update()
                      joy_ble_is_active() ? "BLE_ACTIVE" : "IDLE");
         }
 
-        // 2-second hold for physical confirmation (Step 2 of pairing, ONLY for expression button GPIO17):
-        if (s_held_btn == BtnKind::EXPR &&
+        // 2-second hold for physical confirmation (Step 2 of pairing, EXPR or BOOT):
+        if ((s_held_btn == BtnKind::EXPR || s_held_btn == BtnKind::BOOT) &&
             joy_ble_get_state() == JoyBleState::PHYSICAL_CONFIRM_PENDING &&
             hold_us >= 2000000LL && !s_hold_2s_triggered) {
             s_hold_2s_triggered = true;
@@ -422,8 +422,8 @@ void button_update()
             ESP_LOGI(TAG, "=======================================================");
         }
 
-        // 5-second hold for BLE pairing window reset / unpair (ONLY for expression button GPIO17):
-        if (s_held_btn == BtnKind::EXPR && !s_hold_2s_triggered &&
+        // 5-second hold for BLE pairing window reset / unpair (EXPR or BOOT):
+        if ((s_held_btn == BtnKind::EXPR || s_held_btn == BtnKind::BOOT) && !s_hold_2s_triggered &&
             hold_us >= 5000000LL && !s_hold_5s_triggered) {
             s_hold_5s_triggered = true;
             const joy_runtime_creds_t *runtime = joy_runtime_get();

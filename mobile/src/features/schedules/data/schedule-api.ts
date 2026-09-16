@@ -25,7 +25,7 @@ export type CreateScheduleInput = {
   repeatDay?: string;
   days?: string[];
   deliveryTargets?: Array<'MOBILE' | 'DEVICE'>;
-  deviceId?: string;
+  deviceId?: string | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -64,6 +64,12 @@ function asSchedule(value: unknown): Schedule {
     status: status as Schedule['status'],
     statusLabel: statusLabel as Schedule['statusLabel'],
     version: typeof value.version === 'number' ? value.version : 1,
+    targetDeviceId:
+      typeof value.targetDeviceId === 'string'
+        ? value.targetDeviceId
+        : typeof value.deviceId === 'string'
+          ? value.deviceId
+          : null,
     nextRunAt:
       typeof value.nextRunAt === 'string'
         ? value.nextRunAt
@@ -103,16 +109,6 @@ export async function createSchedule(input: CreateScheduleInput): Promise<Schedu
   return asSchedule(payload.schedule);
 }
 
-export async function createDailyMobileSchedule(prompt: string): Promise<Schedule> {
-  return createSchedule({
-    prompt,
-    frequency: 'Daily',
-    every: 1,
-    timeOfDay: 'Morning',
-    deliveryTargets: ['MOBILE'],
-  });
-}
-
 export async function pauseSchedule(
   scheduleId: string,
   version: number,
@@ -128,7 +124,6 @@ export async function resumeSchedule(
   scheduleId: string,
   version: number,
 ): Promise<Schedule> {
-  const payload = await apiRequest<ScheduleResponse>(`/schedules/${scheduleId}/resume`, {
     method: 'POST',
     body: { version },
   });
@@ -152,6 +147,8 @@ export type UpdateScheduleBody = {
   date?: string;
   repeatDay?: string;
   days?: string[];
+  deliveryTargets?: Array<'MOBILE' | 'DEVICE'>;
+  deviceId?: string | null;
 };
 
 export async function updateSchedule(

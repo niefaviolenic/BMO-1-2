@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "boot_diagnostics.cpp" "network.cpp" "state.cpp" "api.cpp" "playback.cpp" "playback_watchdog.cpp" "voice_capture_reservation.cpp" "wifi.cpp" "button.cpp" "wakeword.cpp" "audio.cpp" "display.cpp" "pairing.cpp" "qrcodegen.c" "joy_identity.cpp" "joy_crypto.cpp" "joy_crypto_envelope.cpp" "joy_ble_provisioning.cpp" "joy_ble_nimble.cpp" "main.cpp"
+    SRCS "boot_diagnostics.cpp" "network.cpp" "state.cpp" "api.cpp" "playback.cpp" "playback_watchdog.cpp" "voice_capture_reservation.cpp" "wifi.cpp" "button.cpp" "wakeword.cpp" "audio.cpp" "display.cpp" "pairing.cpp" "qrcodegen.c" "joy_identity.cpp" "joy_crypto.cpp" "joy_crypto_envelope.cpp" "joy_ble_provisioning.cpp" "joy_ble_nimble.cpp" "ble_framing.cpp" "main.cpp"
     INCLUDE_DIRS "."
     EMBED_FILES
         "audio_wav/01.wav"

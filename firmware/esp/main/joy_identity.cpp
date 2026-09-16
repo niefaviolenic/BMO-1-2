@@ -184,23 +184,29 @@ esp_err_t joy_runtime_save_pending_claim(const char *reservation_id, const char 
 
 esp_err_t joy_runtime_save_token(const char *runtime_device_token)
 {
-    if (!runtime_device_token) return ESP_ERR_INVALID_ARG;
-    strncpy(s_runtime.runtime_device_token, runtime_device_token, sizeof(s_runtime.runtime_device_token) - 1);
-    s_runtime.runtime_device_token[sizeof(s_runtime.runtime_device_token) - 1] = '\0';
-    s_runtime.is_provisioned = true;
-    s_runtime.pending_finalize = false;
+    if (!runtime_device_token || strlen(runtime_device_token) < 16) return ESP_ERR_INVALID_ARG;
 
     nvs_handle_t handle;
     esp_err_t err = nvs_open("joy_runtime", NVS_READWRITE, &handle);
     if (err != ESP_OK) return err;
 
-    nvs_set_str(handle, "dev_token", s_runtime.runtime_device_token);
-    nvs_erase_key(handle, "res_id");
-    nvs_erase_key(handle, "claim_tok");
-    nvs_commit(handle);
+    err = nvs_set_str(handle, "dev_token", runtime_device_token);
+    if (err != ESP_OK) {
+        nvs_close(handle);
+        return err;
+    }
+    (void)nvs_erase_key(handle, "res_id");
+    (void)nvs_erase_key(handle, "claim_tok");
+    err = nvs_commit(handle);
     nvs_close(handle);
+    if (err != ESP_OK) return err;
 
-    ESP_LOGI(TAG, "Saved runtime device token; provisioning complete");
+    strncpy(s_runtime.runtime_device_token, runtime_device_token, sizeof(s_runtime.runtime_device_token) - 1);
+    s_runtime.runtime_device_token[sizeof(s_runtime.runtime_device_token) - 1] = '\0';
+    s_runtime.is_provisioned = true;
+    s_runtime.pending_finalize = false;
+
+    ESP_LOGI(TAG, "Saved runtime device token durably to NVS; provisioning complete");
     return ESP_OK;
 }
 

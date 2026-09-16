@@ -24,6 +24,7 @@ vi.mock('@/lib/ble/ble-transport', () => ({
           ref: 'A7F2K9M3',
           nonce: 'Q2W8N4P7RX',
           epoch: 0,
+          transport_version: 2,
         };
       }
       if (charUuid.includes('fe06')) {
@@ -31,6 +32,15 @@ vi.mock('@/lib/ble/ble-transport', () => ({
           commit_nonce: 'ICEiIyQlJicoKSorLC0uLw',
           commit_proof: 'EdJA1I8-SE9OJnB29egnVyAAVr1PfLvcaVzmzEpewbA',
           status: 'CONNECTING',
+        };
+      }
+      if (charUuid.includes('fe07')) {
+        return {
+          status: 'ok',
+          networks: [
+            { ssid: 'Home-WiFi-2.4G', rssi: -40, security: 'WPA2' },
+            { ssid: 'Neighbor-WiFi', rssi: -80, security: 'WPA2' },
+          ],
         };
       }
       return {};
@@ -44,8 +54,8 @@ vi.mock('@/lib/ble/ble-transport', () => ({
   CHR_PROOF_UUID: '0000fe04-6a6f-7961-692d-62696e657231',
   CHR_SECURE_START_UUID: '0000fe05-6a6f-7961-692d-62696e657231',
   CHR_COMMIT_UUID: '0000fe06-6a6f-7961-692d-62696e657231',
+  CHR_WIFI_SCAN_UUID: '0000fe07-6a6f-7961-692d-62696e657231',
 }));
-
 vi.mock('./device-api', () => ({
   prepareProvisioning: vi.fn().mockResolvedValue({
     session_id: '11111111-2222-4333-8444-555555555555',
@@ -85,6 +95,12 @@ describe('JoyProvisioningManager (Real BLE v4 Implementation)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getProvisioningStatus).mockResolvedValue({
+      status: 'FINALIZED_PENDING_RUNTIME_ACK',
+      hardware_id: 'joy_11111111-2222-4333-8444-555555555555',
+      device_id: 'dev_01',
+      updated_at: '2026-08-30T12:05:00.000Z',
+    });
     manager = new JoyProvisioningManager();
   });
 
@@ -94,6 +110,30 @@ describe('JoyProvisioningManager (Real BLE v4 Implementation)', () => {
     manager.reset();
     expect(bleClient.disconnect).toHaveBeenCalled();
   });
+  it('rejects connection if device does not support BLE transport v2', async () => {
+    const mockJoy: DiscoveredJoy = {
+      id: 'ble-peripheral-legacy',
+      name: 'JOY-OLD',
+      provisioningRef: 'OLD',
+      hardwareId: '',
+      setupNonce: '',
+      resetEpoch: 0,
+      rssi: -60,
+    };
+
+    vi.mocked(bleClient.readJson).mockResolvedValueOnce({
+      hw_id: 'joy-legacy',
+      ref: 'OLD',
+      nonce: 'NONCE',
+      epoch: 0,
+      transport_version: 1,
+    });
+
+    await expect(manager.selectJoy(mockJoy)).rejects.toThrow(
+      'Pembaruan firmware diperlukan',
+    );
+  });
+
 
   it('progresses through complete BLE v4 handshake and commit', async () => {
     const mockJoy: DiscoveredJoy = {
@@ -266,5 +306,43 @@ describe('JoyProvisioningManager (Real BLE v4 Implementation)', () => {
       'Provisioning session was cancelled'
     );
     expect(manager.getState().step).toBe('error');
+  });
+
+  it('requests wifi scan from BMO over BLE and populates discoveredNetworks', async () => {
+    await manager.requestDeviceWifiScan();
+    expect(bleClient.readJson).toHaveBeenCalledWith('0000fe07-6a6f-7961-692d-62696e657231');
+    expect(manager.getState().discoveredNetworks.length).toBe(2);
+    expect(manager.getState().selectedNetwork?.ssid).toBe('Home-WiFi-2.4G');
+    expect(manager.getState().isWifiScanning).toBe(false);
+  });
+
+  it('successfully submits OPEN wifi credentials with empty string password', async () => {
+    const mockJoy: DiscoveredJoy = {
+      id: 'ble-peripheral-02',
+      name: 'JOY-OPEN',
+      provisioningRef: 'B1C2',
+      hardwareId: '',
+      setupNonce: '',
+      resetEpoch: 0,
+      rssi: -60,
+    };
+
+    await manager.selectJoy(mockJoy);
+    await manager.onPhysicalConfirmationReceived({
+      confirmation_nonce: 'EBESExQVFhcYGRobHB0eHw',
+      proof: 'TOmZUKCRvTvowaPBCBMM1ndVLR4GTcwrOXbdydNsdwg',
+    });
+
+    const openNetwork: DiscoveredWifiNetwork = {
+      ssid: 'Public-Open-WiFi',
+      rssi: -35,
+      security: 'OPEN',
+    };
+    manager.setDiscoveredWifiNetworks([openNetwork]);
+    manager.selectWifiNetwork(openNetwork);
+
+    await manager.submitWifiCredentials('');
+    expect(bleClient.writeJson).toHaveBeenCalled();
+    expect(manager.getState().step).toBe('success');
   });
 });

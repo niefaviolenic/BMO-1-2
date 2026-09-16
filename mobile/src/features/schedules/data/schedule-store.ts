@@ -1,5 +1,5 @@
 import { isApiError, subscribeMobileWebSocket, type MobileInboundEvent } from '@/lib/api';
-
+import { getRobotConnection } from '@/features/robot/data/robot-connection-store';
 import {
   isVisibleSchedule,
   type Schedule,
@@ -7,7 +7,6 @@ import {
 
 import {
   cancelSchedule as cancelScheduleRequest,
-  createDailyMobileSchedule,
   createSchedule as createScheduleRequest,
   listSchedules,
   pauseSchedule as pauseScheduleRequest,
@@ -148,7 +147,16 @@ export async function createScheduleFromPrompt(prompt: string): Promise<void> {
   if (!trimmed) {
     return;
   }
-  await addNewSchedule({ prompt: trimmed });
+  const robot = getRobotConnection();
+  const targetDevice = robot.device ?? robot.devices[0] ?? null;
+  const deliveryTargets: Array<'MOBILE' | 'DEVICE'> = targetDevice ? ['MOBILE', 'DEVICE'] : ['MOBILE'];
+  const deviceId = targetDevice ? targetDevice.id : undefined;
+
+  await addNewSchedule({
+    prompt: trimmed,
+    deliveryTargets,
+    ...(deviceId ? { deviceId } : {}),
+  });
 }
 
 export async function pauseScheduleById(id: string): Promise<void> {

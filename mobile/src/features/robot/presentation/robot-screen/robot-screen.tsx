@@ -177,9 +177,9 @@ export function RobotScreen({
               title={`${connection.device?.name ?? 'Joy Robot'} Connected!`}
               status="Online"
               batteryLevel={
-                connection.device?.batteryPercent !== null && connection.device?.batteryPercent !== undefined
+                typeof connection.device?.batteryPercent === 'number'
                   ? `${connection.device.batteryPercent}%`
-                  : '85%'
+                  : '—'
               }
               showStatusBadge={false}
               style={{ width: sectionWidth }}

@@ -66,7 +66,7 @@ class BlePairingAndUnpairContractTest(unittest.TestCase):
         ble_src = BLE_PROV_FILE.read_text(encoding="utf-8")
 
         # Starting pairing window triggers BLE UI + activation audio
-        self.assertIn("display_show_ble_pairing(300)", ble_src)
+        self.assertIn("display_show_ble_pairing(60)", ble_src)
         self.assertIn("audio_playBleActivated()", ble_src)
 
         # Polling updates countdown

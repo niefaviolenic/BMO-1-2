@@ -2200,12 +2200,12 @@ bool display_show_ble_pairing(int remaining_seconds)
     if(!lock_display(pdMS_TO_TICKS(1000)))
         return false;
 
+    current_display_mode = DisplayMode::IDLE;
     ble_pairing_active = true;
     ble_pairing_remaining_sec = remaining_seconds;
 
-    if(display_ready && current_display_mode == DisplayMode::IDLE)
+    if(display_ready)
         draw_ble_pairing_overlay_locked();
-
     unlock_display();
     return true;
 }
@@ -2215,7 +2215,8 @@ void display_update_ble_countdown(int remaining_seconds)
     if(!lock_display(pdMS_TO_TICKS(100)))
         return;
 
-    if(display_ready && display_on && ble_pairing_active && current_display_mode == DisplayMode::IDLE)
+    current_display_mode = DisplayMode::IDLE;
+    if(display_ready && display_on && ble_pairing_active)
     {
         ble_pairing_remaining_sec = remaining_seconds;
         draw_ble_pairing_overlay_locked();

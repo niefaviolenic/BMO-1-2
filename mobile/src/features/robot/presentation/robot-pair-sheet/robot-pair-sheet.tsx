@@ -70,6 +70,8 @@ export function RobotPairSheet({
   const [wifiPassword, setWifiPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isManualInput, setIsManualInput] = useState(false);
+
   useEffect(() => {
     return provisioningManager.subscribe((next) => {
       setSession(next);
@@ -98,11 +100,13 @@ export function RobotPairSheet({
       setWifiSsid('');
       setWifiPassword('');
       setShowPassword(false);
+      setIsManualInput(false);
       setCurrentStep('scan');
       resetSlide?.('scan');
       void provisioningManager.startScanning();
     } else {
       provisioningManager.reset();
+      setIsManualInput(false);
       setCurrentStep('scan');
       resetSlide?.('scan');
     }
@@ -122,7 +126,9 @@ export function RobotPairSheet({
     if (!targetSsid) return;
     setIsSubmitting(true);
     try {
-      await provisioningManager.submitWifiCredentials(wifiPassword, targetSsid);
+      const isSelectedOpen = !manualSsid && session.selectedNetwork?.security === 'OPEN';
+      const passwordToSend = isSelectedOpen ? '' : wifiPassword;
+      await provisioningManager.submitWifiCredentials(passwordToSend, targetSsid);
     } finally {
       setIsSubmitting(false);
     }
@@ -132,7 +138,8 @@ export function RobotPairSheet({
   };
 
   const handleRefreshWifi = () => {
-    provisioningManager.requestDeviceWifiScan();
+    setIsManualInput(false);
+    void provisioningManager.requestDeviceWifiScan();
   };
 
   const handleClearError = () => {
@@ -351,8 +358,167 @@ export function RobotPairSheet({
                   style={styles.fullWidth}
                 />
 
-                {session.discoveredNetworks.length === 0 ? (
+                {session.isWifiScanning ? (
+                  <View
+                    style={[
+                      styles.emptyCard,
+                      {
+                        borderColor: theme.border,
+                        backgroundColor: theme.cardBackground,
+                        paddingVertical: 24,
+                        gap: 12,
+                      },
+                    ]}
+                    testID={`${testID}-wifi-scanning-indicator`}
+                  >
+                    <ActivityIndicator size="small" color={theme.linkPrimary} />
+                    <Text style={[styles.emptyText, { color: theme.text, fontWeight: '600' }]}>
+                      Scanning nearby 2.4 GHz networks...
+                    </Text>
+                    <Text style={[styles.emptyText, { color: theme.textSecondary, textAlign: 'center', paddingHorizontal: 20 }]}>
+                      Joy is discovering available Wi-Fi networks around you.
+                    </Text>
+                  </View>
+                ) : session.discoveredNetworks.length > 0 && !isManualInput ? (
                   <View style={styles.wifiContainer}>
+                    <View style={styles.wifiHeaderRow}>
+                      <Text style={[styles.wifiListTitle, { color: theme.textSecondary }]}>
+                        Available Networks ({session.discoveredNetworks.length})
+                      </Text>
+                      <Pressable
+                        style={styles.refreshWifiButton}
+                        onPress={handleRefreshWifi}
+                        accessibilityRole="button"
+                        testID={`${testID}-refresh-wifi-btn`}
+                      >
+                        <RefreshCw size={12} color={theme.linkPrimary} />
+                        <Text style={[styles.refreshWifiText, { color: theme.linkPrimary }]}>
+                          Refresh
+                        </Text>
+                      </Pressable>
+                    </View>
+
+                    {session.discoveredNetworks.map((net) => (
+                      <WifiNetworkItem
+                        key={net.ssid}
+                        network={net}
+                        isSelected={session.selectedNetwork?.ssid === net.ssid}
+                        onSelect={(n) => provisioningManager.selectWifiNetwork(n)}
+                        testID={`${testID}-wifi-item-${net.ssid}`}
+                      />
+                    ))}
+
+                    {session.selectedNetwork ? (
+                      <View
+                        style={[
+                          styles.passwordBox,
+                          {
+                            borderColor: theme.border,
+                            backgroundColor: theme.cardBackground,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.inputLabel, { color: theme.text }]}>
+                          {session.selectedNetwork.security === 'OPEN'
+                            ? `Connect to ${session.selectedNetwork.ssid}`
+                            : `Password for ${session.selectedNetwork.ssid}`}
+                        </Text>
+                        {session.selectedNetwork.security === 'OPEN' ? (
+                          <View
+                            style={[
+                              styles.openNetworkBadge,
+                              {
+                                backgroundColor: theme.cardBackgroundSubtle ?? theme.cardBackground,
+                                borderColor: theme.border,
+                              },
+                            ]}
+                            testID={`${testID}-wifi-open-badge`}
+                          >
+                            <Text style={[styles.openNetworkText, { color: theme.textSecondary }]}>
+                              Jaringan terbuka (tanpa kata sandi)
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={styles.inputWrapper}>
+                            <TextInput
+                              style={[
+                                styles.textInput,
+                                {
+                                  color: theme.text,
+                                  borderColor: theme.border,
+                                  backgroundColor: theme.cardBackgroundSubtle ?? theme.cardBackground,
+                                },
+                              ]}
+                              placeholder="Enter Wi-Fi password"
+                              placeholderTextColor={theme.textMuted}
+                              secureTextEntry={!showPassword}
+                              value={wifiPassword}
+                              onChangeText={setWifiPassword}
+                              autoCapitalize="none"
+                              autoCorrect={false}
+                              testID={`${testID}-wifi-password-input`}
+                            />
+                            <Pressable
+                              style={styles.eyeButton}
+                              onPress={() => setShowPassword((prev) => !prev)}
+                              accessibilityRole="button"
+                              accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                              testID={`${testID}-toggle-password-visibility`}
+                            >
+                              {showPassword ? (
+                                <EyeOff size={18} color={theme.textSecondary} />
+                              ) : (
+                                <Eye size={18} color={theme.textSecondary} />
+                              )}
+                            </Pressable>
+                          </View>
+                        )}
+
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.connectButton,
+                            { backgroundColor: theme.buttonPrimaryBackground },
+                            pressed && { opacity: 0.8 },
+                          ]}
+                          onPress={() => handleSubmitWifi()}
+                          disabled={isSubmitting}
+                          accessibilityRole="button"
+                          testID={`${testID}-wifi-connect-btn`}
+                        >
+                          {isSubmitting ? (
+                            <ActivityIndicator size="small" color={theme.buttonPrimaryText} />
+                          ) : (
+                            <Text style={[styles.connectButtonText, { color: theme.buttonPrimaryText }]}>
+                              Connect Joy
+                            </Text>
+                          )}
+                        </Pressable>
+                      </View>
+                    ) : null}
+
+                    <Pressable
+                      style={styles.toggleManualButton}
+                      onPress={() => setIsManualInput(true)}
+                      testID={`${testID}-toggle-manual-wifi-btn`}
+                    >
+                      <Text style={[styles.toggleManualText, { color: theme.textSecondary }]}>
+                        Network not listed? Enter manually
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={styles.wifiContainer}>
+                    {session.discoveredNetworks.length > 0 ? (
+                      <Pressable
+                        style={[styles.toggleManualButton, { alignSelf: 'flex-start' }]}
+                        onPress={() => setIsManualInput(false)}
+                        testID={`${testID}-back-to-wifi-list-btn`}
+                      >
+                        <Text style={[styles.toggleManualText, { color: theme.linkPrimary }]}>
+                          ← Back to available networks
+                        </Text>
+                      </Pressable>
+                    ) : null}
                     <View
                       style={[
                         styles.passwordBox,
@@ -362,9 +528,22 @@ export function RobotPairSheet({
                         },
                       ]}
                     >
-                      <Text style={[styles.inputLabel, { color: theme.text }]}>
-                        Wi-Fi Network Credentials
-                      </Text>
+                      <View style={styles.wifiHeaderRow}>
+                        <Text style={[styles.inputLabel, { color: theme.text }]}>
+                          Wi-Fi Network Credentials
+                        </Text>
+                        <Pressable
+                          style={styles.refreshWifiButton}
+                          onPress={handleRefreshWifi}
+                          accessibilityRole="button"
+                          testID={`${testID}-manual-refresh-wifi-btn`}
+                        >
+                          <RefreshCw size={12} color={theme.linkPrimary} />
+                          <Text style={[styles.refreshWifiText, { color: theme.linkPrimary }]}>
+                            Scan again
+                          </Text>
+                        </Pressable>
+                      </View>
                       <TextInput
                         style={[
                           styles.textInput,
@@ -442,104 +621,6 @@ export function RobotPairSheet({
                         )}
                       </Pressable>
                     </View>
-                  </View>
-                ) : (
-                  <View style={styles.wifiContainer}>
-                    <View style={styles.wifiHeaderRow}>
-                      <Text style={[styles.wifiListTitle, { color: theme.textSecondary }]}>
-                        Available Networks ({session.discoveredNetworks.length})
-                      </Text>
-                      <Pressable
-                        style={styles.refreshWifiButton}
-                        onPress={handleRefreshWifi}
-                        accessibilityRole="button"
-                        testID={`${testID}-refresh-wifi-btn`}
-                      >
-                        <RefreshCw size={12} color={theme.linkPrimary} />
-                        <Text style={[styles.refreshWifiText, { color: theme.linkPrimary }]}>
-                          Refresh
-                        </Text>
-                      </Pressable>
-                    </View>
-
-                    {session.discoveredNetworks.map((net) => (
-                      <WifiNetworkItem
-                        key={net.ssid}
-                        network={net}
-                        isSelected={session.selectedNetwork?.ssid === net.ssid}
-                        onSelect={(n) => provisioningManager.selectWifiNetwork(n)}
-                        testID={`${testID}-wifi-item-${net.ssid}`}
-                      />
-                    ))}
-
-                    {session.selectedNetwork ? (
-                      <View
-                        style={[
-                          styles.passwordBox,
-                          {
-                            borderColor: theme.border,
-                            backgroundColor: theme.cardBackground,
-                          },
-                        ]}
-                      >
-                        <Text style={[styles.inputLabel, { color: theme.text }]}>
-                          Password for {session.selectedNetwork.ssid}
-                        </Text>
-                        <View style={styles.inputWrapper}>
-                          <TextInput
-                            style={[
-                              styles.textInput,
-                              {
-                                color: theme.text,
-                                borderColor: theme.border,
-                                backgroundColor: theme.cardBackgroundSubtle ?? theme.cardBackground,
-                              },
-                            ]}
-                            placeholder="Enter Wi-Fi password"
-                            placeholderTextColor={theme.textMuted}
-                            secureTextEntry={!showPassword}
-                            value={wifiPassword}
-                            onChangeText={setWifiPassword}
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                            testID={`${testID}-wifi-password-input`}
-                          />
-                          <Pressable
-                            style={styles.eyeButton}
-                            onPress={() => setShowPassword((prev) => !prev)}
-                            accessibilityRole="button"
-                            accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-                            testID={`${testID}-toggle-password-visibility`}
-                          >
-                            {showPassword ? (
-                              <EyeOff size={18} color={theme.textSecondary} />
-                            ) : (
-                              <Eye size={18} color={theme.textSecondary} />
-                            )}
-                          </Pressable>
-                        </View>
-
-                        <Pressable
-                          style={({ pressed }) => [
-                            styles.connectButton,
-                            { backgroundColor: theme.buttonPrimaryBackground },
-                            pressed && { opacity: 0.8 },
-                          ]}
-                          onPress={() => handleSubmitWifi()}
-                          disabled={isSubmitting}
-                          accessibilityRole="button"
-                          testID={`${testID}-wifi-connect-btn`}
-                        >
-                          {isSubmitting ? (
-                            <ActivityIndicator size="small" color={theme.buttonPrimaryText} />
-                          ) : (
-                            <Text style={[styles.connectButtonText, { color: theme.buttonPrimaryText }]}>
-                              Connect Joy
-                            </Text>
-                          )}
-                        </Pressable>
-                      </View>
-                    ) : null}
                   </View>
                 )}
               </View>
@@ -703,6 +784,27 @@ const styles = StyleSheet.create({
   connectButtonText: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  toggleManualButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+  },
+  toggleManualText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  openNetworkBadge: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  openNetworkText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   doneBar: {
     position: 'absolute',

@@ -363,6 +363,13 @@ static esp_err_t speaker_write_silence(
     return ESP_OK;
 }
 
+esp_err_t audio_drainSpeakerTail(void)
+{
+    // DMA configuration uses 6 descriptors of 240 frames each.
+    // Flushing (6 + 1) * 240 = 1680 frames (~105ms at 16kHz) ensures queued audio is played completely.
+    return speaker_write_silence(110);
+}
+
 //--------------------------------------------------
 
 static bool audio_play_embedded_wav_clip_cancellable(

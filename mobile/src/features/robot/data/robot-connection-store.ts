@@ -79,7 +79,7 @@ function handleRealtimeEvent(event: MobileInboundEvent): void {
     if (dev.id !== event.deviceId) return dev;
     return toRobotDeviceInfo(dev, {
       online: event.online,
-      batteryPercent: typeof event.battery?.percent === 'number' ? event.battery.percent : dev.batteryPercent,
+      batteryPercent: typeof event.battery?.percent === 'number' ? event.battery.percent : (event.battery !== undefined ? null : dev.batteryPercent),
       wifiConnected: typeof event.wifi?.connected === 'boolean' ? event.wifi.connected : dev.wifiConnected,
     });
   });
@@ -88,7 +88,7 @@ function handleRealtimeEvent(event: MobileInboundEvent): void {
   const updatedCurrent = current?.id === event.deviceId
     ? toRobotDeviceInfo(current, {
         online: event.online,
-        batteryPercent: typeof event.battery?.percent === 'number' ? event.battery.percent : current.batteryPercent,
+        batteryPercent: typeof event.battery?.percent === 'number' ? event.battery.percent : (event.battery !== undefined ? null : current.batteryPercent),
         wifiConnected: typeof event.wifi?.connected === 'boolean' ? event.wifi.connected : current.wifiConnected,
       })
     : current;

@@ -13,6 +13,7 @@
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 #include "cJSON.h"
+#include "ble_framing.h"
 
 #include <cstring>
 #include <cstdio>
@@ -33,9 +34,13 @@ static const ble_uuid128_t gatt_svr_chr_secure_start_uuid =
     BLE_UUID128_INIT(0x31, 0x72, 0x65, 0x6e, 0x69, 0x62, 0x2d, 0x69, 0x61, 0x79, 0x6f, 0x6a, 0x05, 0xfe, 0x00, 0x00);
 static const ble_uuid128_t gatt_svr_chr_commit_uuid =
     BLE_UUID128_INIT(0x31, 0x72, 0x65, 0x6e, 0x69, 0x62, 0x2d, 0x69, 0x61, 0x79, 0x6f, 0x6a, 0x06, 0xfe, 0x00, 0x00);
+static const ble_uuid128_t gatt_svr_chr_wifi_scan_uuid =
+    BLE_UUID128_INIT(0x31, 0x72, 0x65, 0x6e, 0x69, 0x62, 0x2d, 0x69, 0x61, 0x79, 0x6f, 0x6a, 0x07, 0xfe, 0x00, 0x00);
+static ble_frame_assembler_t s_frame_assembler;
 
 static uint16_t s_proof_val_handle = 0;
 static uint16_t s_commit_val_handle = 0;
+static uint16_t s_wifi_scan_val_handle = 0;
 static uint16_t s_conn_handle = BLE_HS_CONN_HANDLE_NONE;
 static bool s_nimble_started = false;
 static uint8_t s_own_addr_type = 0;
@@ -50,6 +55,8 @@ static int gatt_svr_chr_access_secure_start(uint16_t conn_handle, uint16_t attr_
                                            struct ble_gatt_access_ctxt *ctxt, void *arg);
 static int gatt_svr_chr_access_commit(uint16_t conn_handle, uint16_t attr_handle,
                                      struct ble_gatt_access_ctxt *ctxt, void *arg);
+static int gatt_svr_chr_access_wifi_scan(uint16_t conn_handle, uint16_t attr_handle,
+                                        struct ble_gatt_access_ctxt *ctxt, void *arg);
 
 static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
     {
@@ -108,6 +115,16 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
                 .cpfd = NULL,
             },
             {
+                .uuid = &gatt_svr_chr_wifi_scan_uuid.u,
+                .access_cb = gatt_svr_chr_access_wifi_scan,
+                .arg = NULL,
+                .descriptors = NULL,
+                .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_NOTIFY,
+                .min_key_size = 0,
+                .val_handle = &s_wifi_scan_val_handle,
+                .cpfd = NULL,
+            },
+            {
                 .uuid = NULL,
                 .access_cb = NULL,
                 .arg = NULL,
@@ -143,6 +160,7 @@ static int gatt_svr_chr_access_identity(uint16_t conn_handle, uint16_t attr_hand
     cJSON_AddStringToObject(root, "nonce", nonce ? nonce : "");
     cJSON_AddNumberToObject(root, "epoch", id->reset_epoch);
 
+    cJSON_AddNumberToObject(root, "transport_version", 2);
     char *json_str = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
 
@@ -160,14 +178,24 @@ static int gatt_svr_chr_access_challenge(uint16_t conn_handle, uint16_t attr_han
     if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) return BLE_ATT_ERR_UNLIKELY;
 
     uint16_t len = OS_MBUF_PKTLEN(ctxt->om);
-    char *buf = (char *)malloc(len + 1);
+    uint8_t *buf = (uint8_t *)malloc(len);
     if (!buf) return BLE_ATT_ERR_INSUFFICIENT_RES;
 
     os_mbuf_copydata(ctxt->om, 0, len, buf);
-    buf[len] = '\0';
 
-    cJSON *root = cJSON_Parse(buf);
+    ble_framing_result_t res = ble_frame_assembler_feed(
+        &s_frame_assembler, 0xFE03, buf, len, esp_timer_get_time());
     free(buf);
+
+    if (res == BLE_FRAMING_NEED_MORE) {
+        return 0;
+    }
+    if (res != BLE_FRAMING_COMPLETE) {
+        return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+    }
+
+    const char *json_msg = ble_frame_assembler_get_message(&s_frame_assembler);
+    cJSON *root = cJSON_Parse(json_msg);
     if (!root) return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
 
     cJSON *session_node = cJSON_GetObjectItem(root, "session_id");
@@ -216,14 +244,24 @@ static int gatt_svr_chr_access_secure_start(uint16_t conn_handle, uint16_t attr_
     if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) return BLE_ATT_ERR_UNLIKELY;
 
     uint16_t len = OS_MBUF_PKTLEN(ctxt->om);
-    char *buf = (char *)malloc(len + 1);
+    uint8_t *buf = (uint8_t *)malloc(len);
     if (!buf) return BLE_ATT_ERR_INSUFFICIENT_RES;
 
     os_mbuf_copydata(ctxt->om, 0, len, buf);
-    buf[len] = '\0';
 
-    cJSON *root = cJSON_Parse(buf);
+    ble_framing_result_t res = ble_frame_assembler_feed(
+        &s_frame_assembler, 0xFE05, buf, len, esp_timer_get_time());
     free(buf);
+
+    if (res == BLE_FRAMING_NEED_MORE) {
+        return 0;
+    }
+    if (res != BLE_FRAMING_COMPLETE) {
+        return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+    }
+
+    const char *json_msg = ble_frame_assembler_get_message(&s_frame_assembler);
+    cJSON *root = cJSON_Parse(json_msg);
     if (!root) return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
 
     cJSON *iv_node = cJSON_GetObjectItem(root, "iv");
@@ -377,6 +415,69 @@ static int gatt_svr_chr_access_commit(uint16_t conn_handle, uint16_t attr_handle
     return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
 }
 
+static int gatt_svr_chr_access_wifi_scan(uint16_t conn_handle, uint16_t attr_handle,
+                                        struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
+    if (ctxt->op == BLE_GATT_ACCESS_OP_READ_CHR) {
+        char *json_str = wifi_paged_scan_get_page_json(0);
+        if (!json_str) {
+            json_str = wifi_scan_nearby_aps_json();
+        }
+        if (!json_str) return BLE_ATT_ERR_INSUFFICIENT_RES;
+
+        int rc = os_mbuf_append(ctxt->om, json_str, strlen(json_str));
+        free(json_str);
+        return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+    } else if (ctxt->op == BLE_GATT_ACCESS_OP_WRITE_CHR) {
+        uint16_t len = OS_MBUF_PKTLEN(ctxt->om);
+        uint8_t *buf = (uint8_t *)malloc(len);
+        if (!buf) return BLE_ATT_ERR_INSUFFICIENT_RES;
+
+        os_mbuf_copydata(ctxt->om, 0, len, buf);
+
+        ble_framing_result_t res = ble_frame_assembler_feed(
+            &s_frame_assembler, 0xFE07, buf, len, esp_timer_get_time());
+        free(buf);
+
+        if (res == BLE_FRAMING_NEED_MORE) {
+            return 0;
+        }
+        if (res != BLE_FRAMING_COMPLETE) {
+            return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+        }
+
+        const char *json_msg = ble_frame_assembler_get_message(&s_frame_assembler);
+        cJSON *root = cJSON_Parse(json_msg);
+        if (!root) return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+
+        cJSON *op_node = cJSON_GetObjectItem(root, "op");
+        cJSON *scan_id_node = cJSON_GetObjectItem(root, "scan_id");
+        if (op_node && cJSON_IsString(op_node) && scan_id_node && cJSON_IsNumber(scan_id_node)) {
+            uint32_t scan_id = (uint32_t)scan_id_node->valuedouble;
+            if (strcmp(op_node->valuestring, "scan") == 0) {
+                wifi_paged_scan_schedule(scan_id);
+            } else if (strcmp(op_node->valuestring, "page") == 0) {
+                cJSON *idx_node = cJSON_GetObjectItem(root, "index");
+                uint16_t page_idx = idx_node && cJSON_IsNumber(idx_node) ? (uint16_t)idx_node->valuedouble : 0;
+                wifi_paged_scan_select_page(scan_id, page_idx);
+            }
+        }
+        cJSON_Delete(root);
+        return 0;
+    }
+    return BLE_ATT_ERR_UNLIKELY;
+}
+
+void joy_ble_nimble_notify_wifi_scan(const char *json_str)
+{
+    if (s_conn_handle == BLE_HS_CONN_HANDLE_NONE || s_wifi_scan_val_handle == 0 || !json_str) return;
+
+    struct os_mbuf *om = ble_hs_mbuf_from_flat(json_str, strlen(json_str));
+    if (!om) return;
+
+    ble_gatts_notify_custom(s_conn_handle, s_wifi_scan_val_handle, om);
+}
+
 void joy_ble_nimble_notify_proof(const char *confirm_nonce, const char *proof)
 {
     if (s_conn_handle == BLE_HS_CONN_HANDLE_NONE || s_proof_val_handle == 0) return;
@@ -438,6 +539,7 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg)
 
         case BLE_GAP_EVENT_DISCONNECT:
             ESP_LOGI(TAG, "BLE disconnected; reason=%d", event->disconnect.reason);
+            ble_frame_assembler_reset(&s_frame_assembler);
             s_conn_handle = BLE_HS_CONN_HANDLE_NONE;
             if (joy_ble_is_active()) {
                 joy_ble_nimble_start_advertising();

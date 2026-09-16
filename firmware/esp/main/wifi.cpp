@@ -16,7 +16,8 @@
 #include "esp_heap_caps.h"
 #include <time.h>
 #include <string.h>
-
+#include <stdlib.h>
+#include "cJSON.h"
 static const char *WIFI_TAG = "WIFI";
 
 static TaskHandle_t time_sync_task_handle = NULL;
@@ -283,12 +284,15 @@ static void try_start_finalize_worker()
     }
 }
 
+static void wifi_paged_scan_poll(void);
+
 void wifi_poll(void)
 {
     if (s_finalize_spawn_pending)
     {
         try_start_finalize_worker();
     }
+    wifi_paged_scan_poll();
 }
 
 static void event_handler(
@@ -350,14 +354,18 @@ static void event_handler(
             ESP_LOGW(WIFI_TAG, "Failed to retry WiFi connection: %s", esp_err_to_name(err));
         }
     }
+    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_SCAN_DONE)
+    {
+        wifi_paged_scan_on_scan_done();
+    }
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
     {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         network_set_wifi_connected(true);
         network_set_got_ip(true);
         start_time_sync_after_ip();
+        api_ws_reset_authentication_blocked();
         ESP_LOGI(WIFI_TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
-
         // Get current RSSI
         wifi_ap_record_t ap_info = {};
         int rssi = -50;
@@ -461,9 +469,8 @@ void wifi_init(void)
 void wifi_connect_to_ap(const char *ssid, const char *password)
 {
     if (!ssid || strlen(ssid) == 0) return;
-
     ESP_LOGI(WIFI_TAG, "Configuring WiFi STA for SSID \"%s\"...", ssid);
-
+    api_ws_reset_authentication_blocked();
     joy_runtime_save_wifi(ssid, password ? password : "");
 
     wifi_config_t conf = {};
@@ -478,5 +485,269 @@ void wifi_connect_to_ap(const char *ssid, const char *password)
     esp_wifi_disconnect();
     esp_wifi_set_config(WIFI_IF_STA, &conf);
     esp_wifi_connect();
+}
+
+struct ScannedAp {
+    char ssid[33];
+    int8_t rssi;
+    char security[8];
+};
+
+static int compare_ap_rssi(const void *a, const void *b)
+{
+    const struct ScannedAp *ap_a = (const struct ScannedAp *)a;
+    const struct ScannedAp *ap_b = (const struct ScannedAp *)b;
+    return (ap_b->rssi - ap_a->rssi);
+}
+
+char *wifi_scan_nearby_aps_json(void)
+{
+    ESP_LOGI(WIFI_TAG, "Starting 2.4 GHz Wi-Fi scan for BLE provisioning...");
+
+    wifi_scan_config_t scan_config = {};
+    scan_config.show_hidden = false;
+    scan_config.scan_type = WIFI_SCAN_TYPE_ACTIVE;
+    scan_config.scan_time.active.min = 100;
+    scan_config.scan_time.active.max = 250;
+
+    esp_err_t err = esp_wifi_scan_start(&scan_config, true);
+    if (err != ESP_OK) {
+        ESP_LOGE(WIFI_TAG, "esp_wifi_scan_start failed: %d", err);
+        return strdup("{\"status\":\"error\",\"networks\":[]}");
+    }
+
+    uint16_t ap_count = 0;
+    esp_wifi_scan_get_ap_num(&ap_count);
+    ESP_LOGI(WIFI_TAG, "Wi-Fi scan completed. Total raw APs found: %u", (unsigned)ap_count);
+
+    if (ap_count == 0) {
+        return strdup("{\"status\":\"ok\",\"networks\":[]}");
+    }
+
+    wifi_ap_record_t *raw_records = (wifi_ap_record_t *)malloc(sizeof(wifi_ap_record_t) * ap_count);
+    if (!raw_records) {
+        ESP_LOGE(WIFI_TAG, "Out of memory allocating raw AP records");
+        return strdup("{\"status\":\"error\",\"networks\":[]}");
+    }
+
+    esp_wifi_scan_get_ap_records(&ap_count, raw_records);
+
+    struct ScannedAp *unique_aps = (struct ScannedAp *)calloc(ap_count, sizeof(struct ScannedAp));
+    size_t unique_count = 0;
+
+    if (unique_aps) {
+        for (uint16_t i = 0; i < ap_count; i++) {
+            const char *ssid = (const char *)raw_records[i].ssid;
+            if (strlen(ssid) == 0) continue;
+
+            int existing_idx = -1;
+            for (size_t u = 0; u < unique_count; u++) {
+                if (strncmp(unique_aps[u].ssid, ssid, 32) == 0) {
+                    existing_idx = (int)u;
+                    break;
+                }
+            }
+
+            const char *sec = "WPA2";
+            if (raw_records[i].authmode == WIFI_AUTH_OPEN) {
+                sec = "OPEN";
+            } else if (raw_records[i].authmode == WIFI_AUTH_WPA3_PSK || raw_records[i].authmode == WIFI_AUTH_WPA2_WPA3_PSK) {
+                sec = "WPA3";
+            }
+
+            if (existing_idx >= 0) {
+                if (raw_records[i].rssi > unique_aps[existing_idx].rssi) {
+                    unique_aps[existing_idx].rssi = raw_records[i].rssi;
+                    strncpy(unique_aps[existing_idx].security, sec, sizeof(unique_aps[existing_idx].security) - 1);
+                }
+            } else {
+                strncpy(unique_aps[unique_count].ssid, ssid, sizeof(unique_aps[unique_count].ssid) - 1);
+                unique_aps[unique_count].rssi = raw_records[i].rssi;
+                strncpy(unique_aps[unique_count].security, sec, sizeof(unique_aps[unique_count].security) - 1);
+                unique_count++;
+            }
+        }
+
+        qsort(unique_aps, unique_count, sizeof(struct ScannedAp), compare_ap_rssi);
+    }
+
+    free(raw_records);
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "status", "ok");
+    cJSON *arr = cJSON_CreateArray();
+    cJSON_AddItemToObject(root, "networks", arr);
+
+    size_t max_export = unique_count > 12 ? 12 : unique_count;
+    for (size_t i = 0; i < max_export; i++) {
+        cJSON *item = cJSON_CreateObject();
+        cJSON_AddStringToObject(item, "ssid", unique_aps[i].ssid);
+        cJSON_AddNumberToObject(item, "rssi", unique_aps[i].rssi);
+        cJSON_AddStringToObject(item, "security", unique_aps[i].security);
+        cJSON_AddItemToArray(arr, item);
+    }
+
+    if (unique_aps) {
+        free(unique_aps);
+    }
+
+    char *json_str = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    return json_str ? json_str : strdup("{\"status\":\"ok\",\"networks\":[]}");
+}
+
+enum class WifiPagedScanStatus {
+    IDLE,
+    SCANNING,
+    READY,
+    ERROR
+};
+
+static uint32_t s_paged_scan_id = 0;
+static WifiPagedScanStatus s_paged_scan_status = WifiPagedScanStatus::IDLE;
+static char s_paged_scan_error[32] = {0};
+static struct ScannedAp s_paged_scan_aps[12];
+static size_t s_paged_scan_count = 0;
+static uint16_t s_paged_scan_selected_index = 0;
+static bool s_paged_scan_requested = false;
+
+void wifi_paged_scan_schedule(uint32_t scan_id)
+{
+    s_paged_scan_id = scan_id;
+    s_paged_scan_status = WifiPagedScanStatus::SCANNING;
+    s_paged_scan_count = 0;
+    s_paged_scan_selected_index = 0;
+    s_paged_scan_error[0] = '\0';
+    s_paged_scan_requested = true;
+}
+
+void wifi_paged_scan_select_page(uint32_t scan_id, uint16_t index)
+{
+    if (scan_id == s_paged_scan_id) {
+        s_paged_scan_selected_index = index;
+    }
+}
+
+static void wifi_paged_scan_poll(void)
+{
+    if (s_paged_scan_requested)
+    {
+        s_paged_scan_requested = false;
+        wifi_scan_config_t scan_config = {};
+        scan_config.show_hidden = false;
+        scan_config.scan_type = WIFI_SCAN_TYPE_ACTIVE;
+        scan_config.scan_time.active.min = 100;
+        scan_config.scan_time.active.max = 250;
+
+        esp_err_t err = esp_wifi_scan_start(&scan_config, false);
+        if (err != ESP_OK) {
+            s_paged_scan_status = WifiPagedScanStatus::ERROR;
+            strncpy(s_paged_scan_error, "SCAN_START_FAILED", sizeof(s_paged_scan_error) - 1);
+            s_paged_scan_error[sizeof(s_paged_scan_error) - 1] = '\0';
+        }
+    }
+}
+
+void wifi_paged_scan_on_scan_done(void)
+{
+    if (s_paged_scan_status != WifiPagedScanStatus::SCANNING) return;
+
+    uint16_t ap_count = 0;
+    esp_wifi_scan_get_ap_num(&ap_count);
+    if (ap_count == 0) {
+        s_paged_scan_count = 0;
+        s_paged_scan_status = WifiPagedScanStatus::READY;
+        esp_wifi_clear_ap_list();
+        return;
+    }
+
+    uint16_t fetch_count = ap_count > 32 ? 32 : ap_count;
+    wifi_ap_record_t records[32];
+    esp_err_t err = esp_wifi_scan_get_ap_records(&fetch_count, records);
+    esp_wifi_clear_ap_list();
+
+    if (err != ESP_OK) {
+        s_paged_scan_status = WifiPagedScanStatus::ERROR;
+        strncpy(s_paged_scan_error, "SCAN_RECORDS_FAILED", sizeof(s_paged_scan_error) - 1);
+        s_paged_scan_error[sizeof(s_paged_scan_error) - 1] = '\0';
+        return;
+    }
+
+    s_paged_scan_count = 0;
+    for (uint16_t i = 0; i < fetch_count; i++) {
+        const char *ssid = (const char *)records[i].ssid;
+        if (strlen(ssid) == 0) continue;
+
+        int existing_idx = -1;
+        for (size_t u = 0; u < s_paged_scan_count; u++) {
+            if (strncmp(s_paged_scan_aps[u].ssid, ssid, 32) == 0) {
+                existing_idx = (int)u;
+                break;
+            }
+        }
+
+        const char *sec = "WPA2";
+        if (records[i].authmode == WIFI_AUTH_OPEN) {
+            sec = "OPEN";
+        } else if (records[i].authmode == WIFI_AUTH_WPA3_PSK || records[i].authmode == WIFI_AUTH_WPA2_WPA3_PSK) {
+            sec = "WPA3";
+        }
+
+        if (existing_idx >= 0) {
+            if (records[i].rssi > s_paged_scan_aps[existing_idx].rssi) {
+                s_paged_scan_aps[existing_idx].rssi = records[i].rssi;
+                strncpy(s_paged_scan_aps[existing_idx].security, sec, sizeof(s_paged_scan_aps[existing_idx].security) - 1);
+                s_paged_scan_aps[existing_idx].security[sizeof(s_paged_scan_aps[existing_idx].security) - 1] = '\0';
+            }
+        } else if (s_paged_scan_count < 12) {
+            strncpy(s_paged_scan_aps[s_paged_scan_count].ssid, ssid, sizeof(s_paged_scan_aps[s_paged_scan_count].ssid) - 1);
+            s_paged_scan_aps[s_paged_scan_count].ssid[sizeof(s_paged_scan_aps[s_paged_scan_count].ssid) - 1] = '\0';
+            s_paged_scan_aps[s_paged_scan_count].rssi = records[i].rssi;
+            strncpy(s_paged_scan_aps[s_paged_scan_count].security, sec, sizeof(s_paged_scan_aps[s_paged_scan_count].security) - 1);
+            s_paged_scan_aps[s_paged_scan_count].security[sizeof(s_paged_scan_aps[s_paged_scan_count].security) - 1] = '\0';
+            s_paged_scan_count++;
+        }
+    }
+
+    qsort(s_paged_scan_aps, s_paged_scan_count, sizeof(struct ScannedAp), compare_ap_rssi);
+    s_paged_scan_status = WifiPagedScanStatus::READY;
+}
+
+char *wifi_paged_scan_get_page_json(uint32_t scan_id)
+{
+    cJSON *root = cJSON_CreateObject();
+    if (!root) return NULL;
+
+    cJSON_AddNumberToObject(root, "scan_id", s_paged_scan_id);
+
+    const char *status_str = "IDLE";
+    if (s_paged_scan_status == WifiPagedScanStatus::SCANNING) status_str = "SCANNING";
+    else if (s_paged_scan_status == WifiPagedScanStatus::READY) status_str = "READY";
+    else if (s_paged_scan_status == WifiPagedScanStatus::ERROR) status_str = "ERROR";
+
+    cJSON_AddStringToObject(root, "status", status_str);
+    cJSON_AddNumberToObject(root, "index", s_paged_scan_selected_index);
+    cJSON_AddNumberToObject(root, "total", s_paged_scan_count);
+
+    if (s_paged_scan_status == WifiPagedScanStatus::READY && s_paged_scan_selected_index < s_paged_scan_count) {
+        cJSON *net = cJSON_CreateObject();
+        cJSON_AddStringToObject(net, "ssid", s_paged_scan_aps[s_paged_scan_selected_index].ssid);
+        cJSON_AddNumberToObject(net, "rssi", s_paged_scan_aps[s_paged_scan_selected_index].rssi);
+        cJSON_AddStringToObject(net, "security", s_paged_scan_aps[s_paged_scan_selected_index].security);
+        cJSON_AddItemToObject(root, "network", net);
+    } else {
+        cJSON_AddNullToObject(root, "network");
+    }
+
+    if (s_paged_scan_status == WifiPagedScanStatus::ERROR && s_paged_scan_error[0] != '\0') {
+        cJSON_AddStringToObject(root, "error_code", s_paged_scan_error);
+    } else {
+        cJSON_AddNullToObject(root, "error_code");
+    }
+
+    char *json = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    return json;
 }
 

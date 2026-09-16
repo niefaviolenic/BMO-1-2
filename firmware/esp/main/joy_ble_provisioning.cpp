@@ -6,6 +6,7 @@
 #include "esp_wifi.h"
 #include "display.h"
 #include "audio.h"
+#include "api.h"
 #include <cstring>
 #include <cstdio>
 #include "esp_log.h"
@@ -52,27 +53,27 @@ esp_err_t joy_ble_provisioning_init(void)
         display_set_idle_face(FACE_HAPPY);
         ESP_LOGI(TAG, "Device already provisioned; BLE provisioning idle");
     } else {
-        s_state = JoyBleState::UNPAIRED_IDLE;
-        display_set_idle_face(FACE_DEAD);
-        ESP_LOGI(TAG, "Device in unprovisioned state; hold 5s to open pairing window");
+        ESP_LOGI(TAG, "Device in unprovisioned state; automatically opening BLE pairing window on boot");
+        joy_ble_start_pairing_window();
     }
     return ESP_OK;
 }
 
 void joy_ble_start_pairing_window(void)
 {
+    api_ws_reset_authentication_blocked();
     esp_wifi_disconnect();
     generate_nonce(s_setup_nonce, sizeof(s_setup_nonce));
-    s_window_deadline_us = esp_timer_get_time() + PROVISIONING_WINDOW_US;
     s_state = JoyBleState::BOOTSTRAP_ADVERTISING;
 
     const joy_identity_t *id = joy_identity_get();
     char ble_name[16];
     snprintf(ble_name, sizeof(ble_name), "JOY-%.4s", id->provisioning_ref);
 
-    ESP_LOGI(TAG, "Started 5-minute BLE pairing window: local_name=%s, setup_nonce=%s",
+    s_window_deadline_us = esp_timer_get_time() + 60000000LL;
+    ESP_LOGI(TAG, "Started 60-second BLE pairing window: local_name=%s, setup_nonce=%s",
              ble_name, s_setup_nonce);
-    display_show_ble_pairing(300);
+    display_show_ble_pairing(60);
     audio_playBleActivated();
     joy_ble_nimble_start_advertising();
 }
@@ -258,8 +259,8 @@ void joy_ble_poll(void)
     if (!joy_ble_is_active()) return;
 
     int64_t now = esp_timer_get_time();
-    if (now >= s_window_deadline_us) {
-        ESP_LOGW(TAG, "BLE provisioning window expired (5 minutes timeout)");
+    if (s_state == JoyBleState::BOOTSTRAP_ADVERTISING && now >= s_window_deadline_us) {
+        ESP_LOGW(TAG, "BLE discovery window expired (60s timeout)");
         joy_ble_stop_provisioning();
         return;
     }
@@ -287,6 +288,12 @@ esp_err_t joy_ble_finalize_with_backend(void)
         ESP_LOGW(TAG, "Finalize skipped: no pending claim finalize");
         return ESP_OK;
     }
+    time_t now_sec = time(NULL);
+    if (now_sec < 1700000000) {
+        ESP_LOGW(TAG, "System time not yet valid (SNTP pending). Deferring finalize.");
+        return ESP_ERR_INVALID_STATE;
+    }
+
 
     char finalize_nonce[64];
     generate_nonce(finalize_nonce, sizeof(finalize_nonce));
@@ -349,26 +356,35 @@ esp_err_t joy_ble_finalize_with_backend(void)
     esp_http_client_cleanup(client);
 
     if (status_code == 200) {
-        ESP_LOGI(TAG, "Finalize successful! Parsing runtime tokens from backend...");
+        ESP_LOGI(TAG, "Finalize HTTP succeeded! Parsing runtime token...");
         cJSON *res_root = cJSON_Parse(response_buf);
+        bool token_saved = false;
         if (res_root) {
             cJSON *runtime_node = cJSON_GetObjectItem(res_root, "runtime");
             if (runtime_node) {
                 cJSON *tok_node = cJSON_GetObjectItem(runtime_node, "device_token");
-                if (tok_node && cJSON_IsString(tok_node)) {
-                    joy_runtime_save_token(tok_node->valuestring);
-                    ESP_LOGI(TAG, "Saved runtime device token: %s", tok_node->valuestring);
+                if (tok_node && cJSON_IsString(tok_node) && strlen(tok_node->valuestring) >= 16) {
+                    esp_err_t save_err = joy_runtime_save_token(tok_node->valuestring);
+                    if (save_err == ESP_OK) {
+                        token_saved = true;
+                        ESP_LOGI(TAG, "Successfully persisted enrolled runtime device token");
+                    } else {
+                        ESP_LOGE(TAG, "Failed to persist runtime token to NVS: %s", esp_err_to_name(save_err));
+                    }
                 }
             }
             cJSON_Delete(res_root);
-        } else {
-            joy_runtime_save_token("joy_tok_finalized");
+        }
+        if (!token_saved) {
+            ESP_LOGE(TAG, "Finalize failed: runtime token missing, invalid, or could not be persisted");
+            return ESP_FAIL;
         }
         joy_ble_nimble_stop();
         s_state = JoyBleState::RUNTIME_OPERATIONAL;
         display_hide_ble_pairing();
         display_set_idle_face(FACE_HAPPY);
         audio_triggerExpressionAudio((int)FACE_HAPPY);
+        api_ws_reset_authentication_blocked();
         return ESP_OK;
     } else {
         ESP_LOGW(TAG, "Finalize HTTP request failed: err=%s, status_code=%d, response=%s",

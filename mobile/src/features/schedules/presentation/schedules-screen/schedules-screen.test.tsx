@@ -142,6 +142,19 @@ vi.mock('@/features/schedules/components', () => ({
   ScheduleWeeklyCard: (props: MockComponentProps) => ({ type: 'ScheduleWeeklyCard', props }),
   ScheduleFormSheet: (props: MockComponentProps) => ({ type: 'ScheduleFormSheet', props }),
 }));
+vi.mock('@/features/robot/data/use-robot-connection', () => ({
+  useRobotConnection: () => ({
+    status: 'connected',
+    device: null,
+    devices: [],
+    activeDeviceId: null,
+    isHydrating: false,
+    isPairing: false,
+    isUnpairing: false,
+    error: null,
+  }),
+}));
+
 
 vi.mock('@/features/schedules/data/use-schedules', () => ({
   useSchedules: () => ({

@@ -14,6 +14,9 @@ struct PlaybackState
     bool active = false;
     PlaybackJob current_job{};
     char current_proactive_delivery_id[PLAYBACK_CORRELATION_ID_MAX] = {};
+    char current_proactive_attempt_id[kUuidBufferSize] = {};
+    char current_proactive_lease_id[kUuidBufferSize] = {};
+    char current_proactive_audio_receipt[kReceiptBufferSize] = {};
     char last_terminal_proactive_delivery_id[PLAYBACK_CORRELATION_ID_MAX] = {};
     PlaybackTerminalResult last_terminal_proactive_result = PlaybackTerminalResult::NONE;
     int64_t deadline_monotonic_ms = 0;
@@ -117,6 +120,30 @@ bool is_same_proactive_id(const char *delivery_id, const char *stored_id)
     return delivery_id != nullptr && stored_id[0] != '\0' &&
            std::strcmp(delivery_id, stored_id) == 0;
 }
+void playback_mark_terminal_locked(PlaybackTerminalResult result)
+{
+    if (!s_state.active)
+    {
+        return;
+    }
+
+    if (s_state.current_job.origin == PlaybackOrigin::PROACTIVE)
+    {
+        std::strncpy(
+            s_state.last_terminal_proactive_delivery_id,
+            s_state.current_proactive_delivery_id,
+            sizeof(s_state.last_terminal_proactive_delivery_id) - 1);
+        s_state.last_terminal_proactive_delivery_id[
+            sizeof(s_state.last_terminal_proactive_delivery_id) - 1] = '\0';
+        s_state.last_terminal_proactive_result = result;
+    }
+
+    clear_job(&s_state.current_job);
+    s_state.active = false;
+    s_state.current_proactive_delivery_id[0] = '\0';
+    s_state.deadline_monotonic_ms = 0;
+}
+
 
 } // namespace
 
@@ -236,31 +263,12 @@ void playback_mark_started()
     // physical downloader/decoder/I2S path.
 }
 
+
 void playback_mark_terminal(PlaybackTerminalResult result)
 {
     PlaybackLock lock;
-    if (!s_state.active)
-    {
-        return;
-    }
-
-    if (s_state.current_job.origin == PlaybackOrigin::PROACTIVE)
-    {
-        std::strncpy(
-            s_state.last_terminal_proactive_delivery_id,
-            s_state.current_proactive_delivery_id,
-            sizeof(s_state.last_terminal_proactive_delivery_id) - 1);
-        s_state.last_terminal_proactive_delivery_id[
-            sizeof(s_state.last_terminal_proactive_delivery_id) - 1] = '\0';
-        s_state.last_terminal_proactive_result = result;
-    }
-
-    clear_job(&s_state.current_job);
-    s_state.active = false;
-    s_state.current_proactive_delivery_id[0] = '\0';
-    s_state.deadline_monotonic_ms = 0;
+    playback_mark_terminal_locked(result);
 }
-
 void playback_cancel()
 {
     playback_mark_terminal(PlaybackTerminalResult::CANCELLED);
@@ -336,8 +344,45 @@ bool playback_start_proactive_ready(const ProactiveAudioReady& ready,
     s_state.current_job = job;
     s_state.active = true;
     std::strncpy(s_state.current_proactive_delivery_id, ready.delivery_id, sizeof(s_state.current_proactive_delivery_id) - 1);
+    std::strncpy(s_state.current_proactive_attempt_id, ready.attempt_id, sizeof(s_state.current_proactive_attempt_id) - 1);
+    std::strncpy(s_state.current_proactive_lease_id, ready.lease_id, sizeof(s_state.current_proactive_lease_id) - 1);
+    std::strncpy(s_state.current_proactive_audio_receipt, ready.audio_receipt, sizeof(s_state.current_proactive_audio_receipt) - 1);
     s_state.deadline_monotonic_ms = (now_us / 1000LL) + 45000LL;
     s_has_active_offer = false;
+    return true;
+}
+
+bool playback_get_proactive_details(
+    char *delivery_id, size_t deliv_len,
+    char *attempt_id, size_t att_len,
+    char *lease_id, size_t lease_len,
+    char *audio_receipt, size_t rcpt_len)
+{
+    PlaybackLock lock;
+    const char *d = s_state.current_proactive_delivery_id[0] != '\0'
+        ? s_state.current_proactive_delivery_id
+        : s_state.last_terminal_proactive_delivery_id;
+
+    if (d[0] == '\0') {
+        return false;
+    }
+
+    if (delivery_id && deliv_len > 0) {
+        std::strncpy(delivery_id, d, deliv_len - 1);
+        delivery_id[deliv_len - 1] = '\0';
+    }
+    if (attempt_id && att_len > 0) {
+        std::strncpy(attempt_id, s_state.current_proactive_attempt_id, att_len - 1);
+        attempt_id[att_len - 1] = '\0';
+    }
+    if (lease_id && lease_len > 0) {
+        std::strncpy(lease_id, s_state.current_proactive_lease_id, lease_len - 1);
+        lease_id[lease_len - 1] = '\0';
+    }
+    if (audio_receipt && rcpt_len > 0) {
+        std::strncpy(audio_receipt, s_state.current_proactive_audio_receipt, rcpt_len - 1);
+        audio_receipt[rcpt_len - 1] = '\0';
+    }
     return true;
 }
 
@@ -352,6 +397,6 @@ void playback_cancel_proactive(const ProactiveCancel& cancel,
     }
     if (s_state.active &&
         std::strcmp(s_state.current_proactive_delivery_id, cancel.delivery_id) == 0) {
-        playback_cancel();
+        playback_mark_terminal_locked(PlaybackTerminalResult::CANCELLED);
     }
 }

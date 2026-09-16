@@ -21,6 +21,8 @@ import {
   ScheduleDaysSelectionField,
 } from './schedule-days-selection-field';
 import { SchedulePromptField } from './schedule-prompt-field';
+import { useRobotConnection } from '@/features/robot/data/use-robot-connection';
+import type { RobotDeviceInfo } from '@/features/robot/domain/robot-connection';
 import {
   mapScheduleApiError,
   type Schedule,
@@ -33,6 +35,8 @@ export type ScheduleFormData = {
   frequency: 'Daily' | 'Weekly' | 'Once';
   exactTime: string;
   timeOfDay: ScheduleTimeOfDay;
+  deliveryTargets: Array<'MOBILE' | 'DEVICE'>;
+  deviceId?: string | null;
   date?: string;
   days?: ScheduleWeekday[];
   repeatDay?: ScheduleWeekday;
@@ -42,12 +46,14 @@ export type ScheduleFormSheetProps = {
   isVisible: boolean;
   mode?: 'create' | 'edit';
   schedule?: Schedule | null;
+  initialPrompt?: string;
   onClose: () => void;
   onSubmit: (data: ScheduleFormData) => Promise<void>;
   style?: StyleProp<ViewStyle>;
   testID?: string;
+  devices?: RobotDeviceInfo[];
+  activeDeviceId?: string | null;
 };
-
 const TIME_PRESETS = [
   { label: 'Pagi 09:00', hour: '09', minute: '00', period: 'Morning' as const },
   { label: 'Siang 13:00', hour: '13', minute: '00', period: 'Afternoon' as const },
@@ -67,14 +73,43 @@ export function ScheduleFormSheet({
   isVisible,
   mode = 'create',
   schedule,
+  initialPrompt,
   onClose,
   onSubmit,
   style,
   testID = 'schedule-form-sheet',
+  devices: propsDevices,
+  activeDeviceId: propsActiveDeviceId,
 }: ScheduleFormSheetProps) {
   const theme = useTheme();
+  const robotConnection = useRobotConnection();
+  const availableDevices = propsDevices ?? robotConnection.devices;
+  const activeId =
+    propsActiveDeviceId ??
+    robotConnection.activeDeviceId ??
+    robotConnection.device?.id ??
+    availableDevices[0]?.id ??
+    null;
 
-  const [prompt, setPrompt] = useState(() => (schedule && mode === 'edit' ? schedule.payload?.prompt ?? '' : ''));
+  const [targetMode, setTargetMode] = useState<'BOTH' | 'DEVICE' | 'MOBILE'>(() => {
+    if (schedule && mode === 'edit') {
+      const targets = schedule.payload?.deliveryTargets;
+      if (targets?.includes('MOBILE') && targets?.includes('DEVICE')) return 'BOTH';
+      if (targets?.includes('DEVICE')) return 'DEVICE';
+      return 'MOBILE';
+    }
+    return activeId ? 'BOTH' : 'MOBILE';
+  });
+
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(() => {
+    if (schedule && mode === 'edit') {
+      return schedule.targetDeviceId ?? activeId;
+    }
+    return activeId;
+  });
+  const [prompt, setPrompt] = useState(() =>
+    schedule && mode === 'edit' ? schedule.payload?.prompt ?? '' : initialPrompt ?? '',
+  );
   const [frequency, setFrequency] = useState<'Daily' | 'Weekly' | 'Once'>(() => {
     const f = schedule?.recurrence?.frequency;
     if (mode === 'edit' && (f === 'Daily' || f === 'Weekly' || f === 'Once')) return f;
@@ -138,14 +173,24 @@ export function ScheduleFormSheet({
       if (rec?.frequency === 'Once' && rec.date) {
         setDateString(rec.date);
       }
+      const targets = schedule.payload?.deliveryTargets;
+      if (targets?.includes('MOBILE') && targets?.includes('DEVICE')) {
+        setTargetMode('BOTH');
+      } else if (targets?.includes('DEVICE')) {
+        setTargetMode('DEVICE');
+      } else {
+        setTargetMode('MOBILE');
+      }
+      setSelectedDeviceId(schedule.targetDeviceId ?? activeId);
     } else if (mode === 'create') {
-      setPrompt('');
+      setPrompt(initialPrompt ?? '');
       setFrequency('Daily');
-      setHour('09');
       setMinute('00');
       setSelectedDays(['Monday']);
+      setTargetMode(activeId ? 'BOTH' : 'MOBILE');
+      setSelectedDeviceId(activeId);
     }
-  }, [schedule, mode, isVisible]);
+  }, [schedule, mode, isVisible, activeId]);
 
   const isValidTime = useMemo(() => {
     const h = parseInt(hour, 10);
@@ -153,13 +198,18 @@ export function ScheduleFormSheet({
     return !isNaN(h) && h >= 0 && h <= 23 && !isNaN(m) && m >= 0 && m <= 59;
   }, [hour, minute]);
 
+  const isDeviceTargeted = targetMode === 'BOTH' || targetMode === 'DEVICE';
+  const selectedDevice = availableDevices.find((d) => d.id === selectedDeviceId);
+  const isDeviceValid = !isDeviceTargeted || (Boolean(selectedDeviceId) && Boolean(selectedDevice));
+
   const isFormValid = useMemo(() => {
     if (!prompt.trim()) return false;
     if (!isValidTime) return false;
     if (frequency === 'Weekly' && selectedDays.length === 0) return false;
     if (frequency === 'Once' && !/^\d{4}-\d{2}-\d{2}$/u.test(dateString)) return false;
+    if (isDeviceTargeted && !isDeviceValid) return false;
     return true;
-  }, [prompt, isValidTime, frequency, selectedDays, dateString]);
+  }, [prompt, isValidTime, frequency, selectedDays, dateString, isDeviceTargeted, isDeviceValid]);
 
   const handleToggleDay = (day: DayOfWeek) => {
     setSelectedDays((prev) => {
@@ -186,11 +236,21 @@ export function ScheduleFormSheet({
     const timeOfDay = deriveTimeOfDay(parseInt(cleanHour, 10));
 
     try {
+      const deliveryTargets: Array<'MOBILE' | 'DEVICE'> =
+        targetMode === 'BOTH'
+          ? ['MOBILE', 'DEVICE']
+          : targetMode === 'DEVICE'
+            ? ['DEVICE']
+            : ['MOBILE'];
+      const deviceId = isDeviceTargeted ? (selectedDeviceId ?? null) : null;
+
       await onSubmit({
         prompt: prompt.trim(),
         frequency,
         exactTime,
         timeOfDay,
+        deliveryTargets,
+        deviceId,
         ...(frequency === 'Once' ? { date: dateString } : {}),
         ...(frequency === 'Weekly'
           ? {
@@ -251,6 +311,97 @@ export function ScheduleFormSheet({
               style={styles.fieldFullWidth}
               testID={`${testID}-prompt-field`}
             />
+          </View>
+          {/* Delivery Target Section */}
+          <View style={styles.fieldSection}>
+            <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>DELIVERY TARGET</Text>
+            <View style={[styles.deliverySegment, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+              {([
+                { id: 'BOTH' as const, label: 'Mobile + BMO' },
+                { id: 'DEVICE' as const, label: 'BMO Saja' },
+                { id: 'MOBILE' as const, label: 'Mobile Saja' },
+              ]).map((opt) => {
+                const isSelected = targetMode === opt.id;
+                return (
+                  <Pressable
+                    key={opt.id}
+                    style={[
+                      styles.deliverySegmentItem,
+                      isSelected && [styles.deliverySegmentActive, { backgroundColor: theme.cardBackground }],
+                    ]}
+                    onPress={() => setTargetMode(opt.id)}
+                    testID={`${testID}-target-${opt.id.toLowerCase()}`}
+                  >
+                    <Text style={[styles.deliverySegmentText, { color: isSelected ? theme.text : theme.textSecondary }]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {isDeviceTargeted ? (
+              <View style={[styles.devicePickerCard, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
+                {availableDevices.length === 0 ? (
+                  <Text style={[styles.deviceWarningText, { color: '#E53E3E' }]} testID={`${testID}-no-devices-warning`}>
+                    Belum ada BMO terhubung. Hubungkan BMO untuk mengaktifkan pengingat di robot.
+                  </Text>
+                ) : !selectedDevice ? (
+                  <Text style={[styles.deviceWarningText, { color: '#E53E3E' }]} testID={`${testID}-device-invalid-warning`}>
+                    Perangkat BMO sebelumnya tidak ditemukan atau telah di-unpair. Pilih perangkat valid di bawah.
+                  </Text>
+                ) : (
+                  <View style={styles.deviceInfoRow}>
+                    <Text style={[styles.deviceInfoText, { color: theme.text }]}>
+                      {selectedDevice.name}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.deviceStatusBadge,
+                        {
+                          color: selectedDevice.online ? '#38A169' : theme.textMuted,
+                          backgroundColor: theme.backgroundElement,
+                        },
+                      ]}
+                    >
+                      {selectedDevice.online ? 'Online' : 'Offline'}
+                    </Text>
+                  </View>
+                )}
+
+                {availableDevices.length > 1 ? (
+                  <View style={styles.deviceSelectionList}>
+                    {availableDevices.map((dev) => {
+                      const isChosen = dev.id === selectedDeviceId;
+                      return (
+                        <Pressable
+                          key={dev.id}
+                          style={[
+                            styles.deviceOptionChip,
+                            {
+                              borderColor: isChosen ? theme.text : theme.border,
+                              backgroundColor: isChosen ? theme.text : theme.backgroundElement,
+                            },
+                          ]}
+                          onPress={() => setSelectedDeviceId(dev.id)}
+                          testID={`${testID}-device-option-${dev.id}`}
+                        >
+                          <Text style={[styles.deviceOptionText, { color: isChosen ? theme.background : theme.text }]}>
+                            {dev.name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+
+                {selectedDevice && !selectedDevice.online ? (
+                  <Text style={[styles.deviceOfflineNotice, { color: theme.textMuted }]}>
+                    BMO sedang offline. Pengingat akan dikirim saat BMO online.
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
           </View>
 
           {/* Exact Time section */}
@@ -553,5 +704,78 @@ const styles = StyleSheet.create({
   submitButtonText: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  deliverySegment: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 3,
+    gap: 4,
+  },
+  deliverySegmentItem: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 9,
+  },
+  deliverySegmentActive: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  deliverySegmentText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  devicePickerCard: {
+    width: '100%',
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    gap: 8,
+  },
+  deviceInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  deviceInfoText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  deviceStatusBadge: {
+    fontSize: 11,
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  deviceWarningText: {
+    fontSize: 12,
+    fontWeight: '500',
+    lineHeight: 16,
+  },
+  deviceSelectionList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  deviceOptionChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  deviceOptionText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  deviceOfflineNotice: {
+    fontSize: 11,
+    fontWeight: '400',
+    fontStyle: 'italic',
   },
 });

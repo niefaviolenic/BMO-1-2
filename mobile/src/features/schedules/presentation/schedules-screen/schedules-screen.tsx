@@ -38,6 +38,7 @@ import {
   SchedulePausedCard,
   ScheduleWeeklyCard,
 } from '@/features/schedules/components';
+import { useRobotConnection } from '@/features/robot/data/use-robot-connection';
 import { useSchedules } from '@/features/schedules/data/use-schedules';
 import {
   mapScheduleApiError,
@@ -59,6 +60,7 @@ export function SchedulesScreen({ style, testID = 'schedules-screen' }: Schedule
   const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const { open, navigate, registerActions, isOpen } = useSidebarShell();
+  const robotConnection = useRobotConnection();
 
   const [filter, setFilter] = useState<ScheduleFilterOption>('All');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -131,7 +133,8 @@ export function SchedulesScreen({ style, testID = 'schedules-screen' }: Schedule
         date: data.date,
         days: data.days,
         repeatDay: data.repeatDay,
-        deliveryTargets: ['MOBILE'],
+        deliveryTargets: data.deliveryTargets,
+        deviceId: data.deviceId ?? undefined,
       });
       setFilter('All');
     },
@@ -149,12 +152,13 @@ export function SchedulesScreen({ style, testID = 'schedules-screen' }: Schedule
         date: data.date,
         days: data.days,
         repeatDay: data.repeatDay,
+        deliveryTargets: data.deliveryTargets,
+        deviceId: data.deviceId,
       });
       setEditingScheduleId(null);
     },
     [editingScheduleId, update],
   );
-
   const handleSuggestionPress = useCallback((label: string) => {
     setCreateInitialPrompt(label);
     setIsCreateOpen(true);
@@ -407,6 +411,7 @@ export function SchedulesScreen({ style, testID = 'schedules-screen' }: Schedule
           <ScheduleFormSheet
             isVisible={isCreateOpen}
             mode="create"
+            initialPrompt={createInitialPrompt}
             schedule={
               createInitialPrompt
                 ? ({ payload: { prompt: createInitialPrompt } } as unknown as Schedule)
@@ -417,6 +422,8 @@ export function SchedulesScreen({ style, testID = 'schedules-screen' }: Schedule
               setCreateInitialPrompt('');
             }}
             onSubmit={handleCreateSubmit}
+            devices={robotConnection.devices}
+            activeDeviceId={robotConnection.activeDeviceId}
             testID={`${testID}-create-sheet`}
           />
 
@@ -426,6 +433,8 @@ export function SchedulesScreen({ style, testID = 'schedules-screen' }: Schedule
             schedule={editingSchedule}
             onClose={() => setEditingScheduleId(null)}
             onSubmit={handleEditSubmit}
+            devices={robotConnection.devices}
+            activeDeviceId={robotConnection.activeDeviceId}
             testID={`${testID}-edit-sheet`}
           />
         </View>

@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
-
+#include "esp_err.h"
 #define SPEAKER_DEFAULT_VOLUME 100
 
 void audio_init();
@@ -55,6 +55,8 @@ void audio_setVolume(int vol);
 int audio_getVolume();
 
 void audio_adjustVolume(int delta);
+
+esp_err_t audio_drainSpeakerTail(void);
 
 void audio_play_pcm(const int16_t *mono_samples, size_t sample_count);
 

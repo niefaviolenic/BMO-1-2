@@ -95,6 +95,7 @@ window_dump.xml
 .piolibdeps/
 .clangd/
 **/build/
+**/build-*/
 **/managed_components/
 **/dependencies.lock
 **/sdkconfig.old

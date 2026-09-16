@@ -590,15 +590,32 @@ static bool send_playback_done(const char *req_id) {
     cJSON *root = cJSON_CreateObject();
     if (root == NULL)
         return false;
-    cJSON_AddStringToObject(root, "event", "audio_playback_done");
-    cJSON_AddStringToObject(root, "request_id", req_id);
+
+    char deliv_id[kUuidBufferSize] = {0};
+    char attempt_id[kUuidBufferSize] = {0};
+    char lease_id[kUuidBufferSize] = {0};
+    char audio_receipt[kReceiptBufferSize] = {0};
+
+    if (playback_get_proactive_details(deliv_id, sizeof(deliv_id), attempt_id, sizeof(attempt_id),
+                                       lease_id, sizeof(lease_id), audio_receipt, sizeof(audio_receipt))) {
+        cJSON_AddStringToObject(root, "event", "proactive_done");
+        cJSON_AddStringToObject(root, "source", "SCHEDULE");
+        cJSON_AddStringToObject(root, "delivery_id", deliv_id);
+        cJSON_AddStringToObject(root, "attempt_id", attempt_id);
+        cJSON_AddStringToObject(root, "lease_id", lease_id);
+        cJSON_AddStringToObject(root, "audio_receipt", audio_receipt);
+        cJSON_AddStringToObject(root, "reason", "COMPLETED");
+    } else {
+        cJSON_AddStringToObject(root, "event", "audio_playback_done");
+        cJSON_AddStringToObject(root, "request_id", req_id);
+    }
+
     char *json_str = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
-
     if (json_str == NULL)
         return false;
 
-    ESP_LOGI(TAG, "Sending audio_playback_done for %s", req_id);
+    ESP_LOGI(TAG, "Sending playback done for %s", req_id);
     bool sent = ws_send_text(json_str, true);
     free(json_str);
     return sent;
@@ -609,16 +626,33 @@ static bool send_playback_failed(const char *req_id, const char *reason) {
     cJSON *root = cJSON_CreateObject();
     if (root == NULL)
         return false;
-    cJSON_AddStringToObject(root, "event", "audio_playback_failed");
-    cJSON_AddStringToObject(root, "request_id", req_id);
-    cJSON_AddStringToObject(root, "reason", reason);
+
+    char deliv_id[kUuidBufferSize] = {0};
+    char attempt_id[kUuidBufferSize] = {0};
+    char lease_id[kUuidBufferSize] = {0};
+    char audio_receipt[kReceiptBufferSize] = {0};
+
+    if (playback_get_proactive_details(deliv_id, sizeof(deliv_id), attempt_id, sizeof(attempt_id),
+                                       lease_id, sizeof(lease_id), audio_receipt, sizeof(audio_receipt))) {
+        cJSON_AddStringToObject(root, "event", "proactive_failed");
+        cJSON_AddStringToObject(root, "source", "SCHEDULE");
+        cJSON_AddStringToObject(root, "delivery_id", deliv_id);
+        cJSON_AddStringToObject(root, "attempt_id", attempt_id);
+        cJSON_AddStringToObject(root, "lease_id", lease_id);
+        cJSON_AddStringToObject(root, "audio_receipt", audio_receipt);
+        cJSON_AddStringToObject(root, "reason", reason ? reason : "PLAYBACK_FAILED");
+    } else {
+        cJSON_AddStringToObject(root, "event", "audio_playback_failed");
+        cJSON_AddStringToObject(root, "request_id", req_id);
+        cJSON_AddStringToObject(root, "reason", reason ? reason : "PLAYBACK_FAILED");
+    }
+
     char *json_str = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
-
     if (json_str == NULL)
         return false;
 
-    ESP_LOGI(TAG, "Sending audio_playback_failed for %s (reason: %s)", req_id, reason);
+    ESP_LOGI(TAG, "Sending playback failed for %s (reason: %s)", req_id, reason ? reason : "unknown");
     bool sent = ws_send_text(json_str, true);
     free(json_str);
     return sent;
@@ -629,20 +663,22 @@ static bool send_authenticate() {
     cJSON *root = cJSON_CreateObject();
     if (root == NULL)
         return false;
-
-    const joy_runtime_creds_t *rt = joy_runtime_get();
-    const char *tok = (rt && strlen(rt->runtime_device_token) > 0) ? rt->runtime_device_token : JOY_DEVICE_TOKEN;
-    const joy_identity_t *id = joy_identity_get();
-    const char *dev_id = (id && strlen(id->hardware_id) > 0) ? id->hardware_id : JOY_DEVICE_ID;
-
     cJSON_AddStringToObject(root, "event", "authenticate");
-    cJSON_AddStringToObject(root, "device_id", dev_id);
-    cJSON_AddStringToObject(root, "device_token", tok);
+
+    const joy_identity_t *id = joy_identity_get();
+    const joy_runtime_creds_t *rt = joy_runtime_get();
+    const char *hw_id = (id && id->hardware_id[0]) ? id->hardware_id : JOY_DEVICE_ID;
+    const char *dev_tok = (rt && rt->is_provisioned && rt->runtime_device_token[0])
+        ? rt->runtime_device_token
+        : JOY_DEVICE_TOKEN;
+
+    cJSON_AddStringToObject(root, "device_id", hw_id);
+    cJSON_AddStringToObject(root, "device_token", dev_tok);
     char *json_str = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
     if (json_str == NULL)
         return false;
-    ESP_LOGI(TAG, "Sending authenticate to WS...");
+    ESP_LOGI(TAG, "Sending authenticate to WS: dev_id='%s'", JOY_DEVICE_ID);
     bool sent = ws_send_text(json_str, false);
     free(json_str);
     return sent;
@@ -868,6 +904,11 @@ static void handle_ws_message(const char *payload, int len) {
         log_ws_stack_high_water("authenticated");
     }
     else if (strcmp(event, "authentication_failed") == 0) {
+        cJSON *reason_node = cJSON_GetObjectItem(root, "reason");
+        cJSON *msg_node = cJSON_GetObjectItem(root, "message");
+        ESP_LOGE(TAG, "WS authentication failed: reason='%s', msg='%s'",
+                 (reason_node && cJSON_IsString(reason_node)) ? reason_node->valuestring : "none",
+                 (msg_node && cJSON_IsString(msg_node)) ? msg_node->valuestring : "none");
         ws_authentication_blocked = true;
         mark_ws_down("authentication_failed");
         ESP_LOGE(TAG, "WS authentication failed; automatic retry is paused until provisioning is fixed");
@@ -1146,7 +1187,11 @@ static void handle_ws_message(const char *payload, int len) {
                 current_request_id[sizeof(current_request_id) - 1] = '\0';
                 set_audio_deadline(45);
                 playback_state = JOY_PLAYBACK_DOWNLOADING;
-                setState(JoyState::SPEAKING);
+                PlaybackJob job{};
+                playback_get_current_job(&job);
+                current_playback_job = job;
+                recovery_request_pending = true;
+                setState(JoyState::THINKING);
                 ESP_LOGI(TAG, "Accepted proactive_audio_ready delivery_id=%s url=%s",
                          ready.delivery_id, ready.audio_url);
             } else {
@@ -1363,6 +1408,7 @@ void api_init() {
     ESP_LOGI(TAG, "API init started");
     playback_init();
     pairing_init();
+    ws_authentication_blocked = false;
     ws_pairing_reconnect_pending = false;
     ws_connection_replacement_suppressed = false;
     network_set_backend_connected(false);
@@ -1404,6 +1450,11 @@ bool api_ws_authentication_is_blocked() {
     return ws_authentication_blocked;
 }
 
+void api_ws_reset_authentication_blocked() {
+    ws_authentication_blocked = false;
+    ws_reconnect_pending = true;
+    ws_reconnect_delay_sec = 1;
+}
 static bool is_audio_mpeg_content_type(const char *content_type)
 {
     static const char expected[] = "audio/mpeg";
@@ -1794,6 +1845,9 @@ static JoyPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
     esp_http_client_close(http_client);
     esp_http_client_cleanup(http_client);
     
+    if (result == JOY_PLAYBACK_SUCCESS) {
+        (void)audio_drainSpeakerTail();
+    }
     return result;
 }
 
@@ -2044,20 +2098,26 @@ static JoyUploadResult upload_wav_voice(const char *uuid, int16_t *record_buf, s
     config.crt_bundle_attach = esp_crt_bundle_attach;
     config.common_name = JOY_BACKEND_HOST;
     config.skip_cert_common_name_check = false;
-    
+
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (client == NULL) {
         ESP_LOGE(TAG, "Failed to init HTTP upload client");
         return JOY_UPLOAD_RETRYABLE_TRANSPORT;
     }
     bool client_open = false;
-    
+
     // Set headers
-    esp_http_client_set_header(client, "X-Device-Id", JOY_DEVICE_ID);
-    esp_http_client_set_header(client, "X-Device-Token", JOY_DEVICE_TOKEN);
+    const joy_identity_t *id = joy_identity_get();
+    const joy_runtime_creds_t *rt = joy_runtime_get();
+    const char *hw_id = (id && id->hardware_id[0]) ? id->hardware_id : JOY_DEVICE_ID;
+    const char *dev_tok = (rt && rt->is_provisioned && rt->runtime_device_token[0])
+        ? rt->runtime_device_token
+        : JOY_DEVICE_TOKEN;
+
+    esp_http_client_set_header(client, "X-Device-Id", hw_id);
+    esp_http_client_set_header(client, "X-Device-Token", dev_tok);
     esp_http_client_set_header(client, "X-Request-Id", uuid);
     esp_http_client_set_header(client, "Content-Type", "audio/wav");
-    
     esp_err_t err = esp_http_client_open(client, wav_byte_size);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to open upload connection: %s", esp_err_to_name(err));

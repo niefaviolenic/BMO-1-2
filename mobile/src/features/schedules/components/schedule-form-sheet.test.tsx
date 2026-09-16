@@ -74,6 +74,45 @@ vi.mock('./schedule-days-selection-field', () => ({
 vi.mock('@/lib/api', () => ({
   isApiError: vi.fn().mockReturnValue(false),
 }));
+vi.mock('@/features/robot/data/use-robot-connection', () => ({
+  useRobotConnection: () => ({
+    status: 'connected',
+    device: {
+      id: 'bmo-01',
+      hardwareId: 'HW-01',
+      name: 'BMO Living Room',
+      status: 'ACTIVE',
+      pairedAt: null,
+      lastSeenAt: null,
+      online: true,
+      batteryPercent: 80,
+      wifiConnected: true,
+      wifiStatus: 'WiFi Active',
+      statusLabel: 'Online',
+    },
+    devices: [
+      {
+        id: 'bmo-01',
+        hardwareId: 'HW-01',
+        name: 'BMO Living Room',
+        status: 'ACTIVE',
+        pairedAt: null,
+        lastSeenAt: null,
+        online: true,
+        batteryPercent: 80,
+        wifiConnected: true,
+        wifiStatus: 'WiFi Active',
+        statusLabel: 'Online',
+      },
+    ],
+    activeDeviceId: 'bmo-01',
+    isHydrating: false,
+    isPairing: false,
+    isUnpairing: false,
+    error: null,
+  }),
+}));
+
 
 function findElement(
   node: unknown,
@@ -181,9 +220,61 @@ describe('ScheduleFormSheet Component', () => {
       expect.objectContaining({
         prompt: 'Workout at the gym',
         exactTime: '07:30',
-        frequency: 'Daily',
+        deliveryTargets: ['MOBILE'],
+        deviceId: null,
       }),
     );
-    expect(onCloseMock).toHaveBeenCalled();
+  });
+
+  it('submits BMO target with deviceId when both Mobile and BMO are selected', async () => {
+    const onSubmitMock = vi.fn().mockResolvedValue(undefined);
+    const onCloseMock = vi.fn();
+
+    const element = ScheduleFormSheet({
+      isVisible: true,
+      mode: 'create',
+      initialPrompt: 'Minum air putih',
+      onClose: onCloseMock,
+      onSubmit: onSubmitMock,
+      testID: 'form-sheet',
+    });
+
+    // Default target for create with available device is BOTH
+    const targetBoth = findElement(element, (el) => el.props?.testID === 'form-sheet-target-both');
+    expect(targetBoth).toBeDefined();
+
+    const submitBtn = findElement(element, (el) => el.props?.testID === 'form-sheet-submit-button');
+    await submitBtn?.props?.onPress();
+
+    expect(onSubmitMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: 'Minum air putih',
+        deliveryTargets: ['MOBILE', 'DEVICE'],
+        deviceId: 'bmo-01',
+      }),
+    );
+  });
+
+  it('disables submit when DEVICE target is chosen but no devices exist', () => {
+    const onSubmitMock = vi.fn().mockResolvedValue(undefined);
+    const element = ScheduleFormSheet({
+      isVisible: true,
+      mode: 'create',
+      devices: [],
+      activeDeviceId: null,
+      onClose: vi.fn(),
+      onSubmit: onSubmitMock,
+      testID: 'form-sheet',
+    });
+
+    const promptField = findElement(element, (el) => el.props?.testID === 'form-sheet-prompt-field');
+    promptField?.props?.onChangeText('Testing empty device');
+
+    // Tap BMO Saja
+    const targetDevice = findElement(element, (el) => el.props?.testID === 'form-sheet-target-device');
+    targetDevice?.props?.onPress();
+
+    const submitBtn = findElement(element, (el) => el.props?.testID === 'form-sheet-submit-button');
+    expect(submitBtn?.props?.disabled).toBe(true);
   });
 });

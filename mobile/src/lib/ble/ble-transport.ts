@@ -8,7 +8,7 @@ export const CHR_CHALLENGE_UUID = '0000fe03-6a6f-7961-692d-62696e657231';
 export const CHR_PROOF_UUID = '0000fe04-6a6f-7961-692d-62696e657231';
 export const CHR_SECURE_START_UUID = '0000fe05-6a6f-7961-692d-62696e657231';
 export const CHR_COMMIT_UUID = '0000fe06-6a6f-7961-692d-62696e657231';
-
+export const CHR_WIFI_SCAN_UUID = '0000fe07-6a6f-7961-692d-62696e657231';
 export interface DiscoveredBleDevice {
   id: string;
   name: string;
@@ -54,6 +54,16 @@ export class BleTransportClient {
   private manager: BleManager | null = null;
   private managerInitAttempted = false;
   private connectedDevice: Device | null = null;
+  private negotiatedMtu = 23;
+  private messageSeq = 1;
+
+  getNegotiatedMtu(): number {
+    return this.negotiatedMtu;
+  }
+
+  setNegotiatedMtu(mtu: number): void {
+    this.negotiatedMtu = Math.max(23, mtu);
+  }
 
   private getManager(): BleManager | null {
     if (!this.manager && !this.managerInitAttempted) {
@@ -133,10 +143,13 @@ export class BleTransportClient {
     // iOS negotiates MTU automatically at OS level; requestMTU is Android-only
     if (Platform.OS === 'android') {
       try {
-        await discovered.requestMTU(512);
+        const devWithMtu = await discovered.requestMTU(512);
+        this.negotiatedMtu = devWithMtu?.mtu ?? 23;
       } catch {
-        // Ignore MTU errors
+        this.negotiatedMtu = 23;
       }
+    } else {
+      this.negotiatedMtu = 185;
     }
 
     this.connectedDevice = discovered;
@@ -154,16 +167,54 @@ export class BleTransportClient {
     return JSON.parse(jsonStr) as T;
   }
 
-  async writeJson(charUuid: string, payload: Record<string, unknown>): Promise<void> {
+  async writeFramedJson(charUuid: string, payload: Record<string, unknown>): Promise<void> {
     if (!this.connectedDevice) {
       if (!this.getManager()) {
         throw new Error(BLE_UNSUPPORTED_ERROR);
       }
       throw new Error('BLE device not connected');
     }
+
     const jsonStr = JSON.stringify(payload);
-    const base64Val = Buffer.from(jsonStr, 'utf8').toString('base64');
-    await this.connectedDevice.writeCharacteristicWithResponseForService(JOY_SVC_UUID, charUuid, base64Val);
+    const payloadBuf = Buffer.from(jsonStr, 'utf8');
+    if (payloadBuf.length > 2048) {
+      throw new Error('BLE JSON payload exceeds maximum 2048 bytes');
+    }
+
+    // 8-byte header: version:u8=1, flags:u8, message_id:u16LE, offset:u16LE, total_bytes:u16LE
+    const maxChunkPayload = Math.max(12, (this.negotiatedMtu || 23) - 3 - 8);
+    const msgId = (this.messageSeq++) & 0xffff;
+    const totalBytes = payloadBuf.length;
+
+    let offset = 0;
+    while (offset < totalBytes || (totalBytes === 0 && offset === 0)) {
+      const chunkLen = Math.min(maxChunkPayload, totalBytes - offset);
+      const isStart = offset === 0;
+      const isEnd = offset + chunkLen === totalBytes;
+      let flags = 0;
+      if (isStart) flags |= 0x01;
+      if (isEnd) flags |= 0x02;
+
+      const header = Buffer.alloc(8);
+      header.writeUInt8(1, 0);
+      header.writeUInt8(flags, 1);
+      header.writeUInt16LE(msgId, 2);
+      header.writeUInt16LE(offset, 4);
+      header.writeUInt16LE(totalBytes, 6);
+
+      const chunkData = totalBytes > 0 ? payloadBuf.subarray(offset, offset + chunkLen) : Buffer.alloc(0);
+      const frameBuf = Buffer.concat([header, chunkData]);
+
+      const base64Val = frameBuf.toString('base64');
+      await this.connectedDevice.writeCharacteristicWithResponseForService(JOY_SVC_UUID, charUuid, base64Val);
+
+      offset += chunkLen;
+      if (totalBytes === 0) break;
+    }
+  }
+
+  async writeJson(charUuid: string, payload: Record<string, unknown>): Promise<void> {
+    await this.writeFramedJson(charUuid, payload);
   }
 
   monitorJson<T>(charUuid: string, onData: (data: T) => void): () => void {

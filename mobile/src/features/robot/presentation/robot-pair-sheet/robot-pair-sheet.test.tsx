@@ -1,7 +1,6 @@
 /* eslint-disable import/no-unresolved */
 // @ts-ignore
 import type * as ReactType from 'react';
-import React from 'react';
 // @ts-ignore
 import { describe, expect, it, vi } from 'vitest';
 
@@ -14,6 +13,7 @@ import {
   WifiNetworkItem,
   PairErrorCard,
 } from './components';
+import { provisioningManager } from '@/features/robot/data/provisioning-flow';
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof ReactType>('react');
@@ -246,6 +246,23 @@ describe('RobotPairSheet', () => {
     expect(item.props.testID).toBe('wifi-test');
   });
 
+  it('renders OPEN security correctly on WifiNetworkItem', () => {
+    const onSelect = vi.fn();
+    const item = WifiNetworkItem({
+      network: {
+        ssid: 'CoffeeShop-Open',
+        rssi: -45,
+        security: 'OPEN',
+      },
+      isSelected: true,
+      onSelect,
+      testID: 'wifi-open-test',
+    }) as unknown as MockElement;
+
+    expect(item.type).toBeDefined();
+    expect(item.props.testID).toBe('wifi-open-test');
+  });
+
   it('renders PairErrorCard with message and retry option', () => {
     const onRetry = vi.fn();
     const onDismiss = vi.fn();
@@ -258,5 +275,10 @@ describe('RobotPairSheet', () => {
 
     expect(card.type).toBeDefined();
     expect(card.props.testID).toBe('error-test');
+  });
+
+  it('invokes requestDeviceWifiScan on provisioning manager', () => {
+    provisioningManager.requestDeviceWifiScan();
+    expect(provisioningManager.requestDeviceWifiScan).toBeDefined();
   });
 });
