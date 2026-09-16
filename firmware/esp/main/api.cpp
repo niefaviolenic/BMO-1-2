@@ -694,7 +694,7 @@ static bool send_authenticate() {
     cJSON_Delete(root);
     if (json_str == NULL)
         return false;
-    ESP_LOGI(TAG, "Sending authenticate to WS: dev_id='%s'", JOY_DEVICE_ID);
+    ESP_LOGI(TAG, "Sending authenticate to WS: dev_id='%s'", hw_id);
     bool sent = ws_send_text(json_str, false);
     free(json_str);
     return sent;
@@ -871,14 +871,16 @@ static void handle_ws_message(const char *payload, int len) {
             ((strcmp(state_node->valuestring, "idle") == 0 && active_request_is_null) ||
              (strcmp(state_node->valuestring, "idle") != 0 && !active_request_is_null));
 
+        const joy_identity_t *id = joy_identity_get();
+        const char *expected_hw_id = (id && id->hardware_id[0]) ? id->hardware_id : JOY_DEVICE_ID;
+
         bool authenticated_event_is_valid =
             status_node != NULL && cJSON_IsString(status_node) &&
             strcmp(status_node->valuestring, "ok") == 0 &&
             device_id_node != NULL && cJSON_IsString(device_id_node) &&
-            strcmp(device_id_node->valuestring, JOY_DEVICE_ID) == 0 &&
+            strcmp(device_id_node->valuestring, expected_hw_id) == 0 &&
             active_request_node != NULL && active_request_is_valid &&
             state_matches_active_request;
-
         if (!authenticated_event_is_valid) {
             ESP_LOGW(TAG, "WS authenticated event failed contract validation");
             mark_ws_down("authenticated_contract_invalid");
