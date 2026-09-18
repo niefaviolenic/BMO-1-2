@@ -13,6 +13,7 @@
 #include "esp_lcd_io_i80.h"
 #include "esp_lcd_panel_io.h"
 #include "esp_log.h"
+#include "esp_rom_sys.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -21,7 +22,7 @@
 static const char *TAG = "DISPLAY";
 
 //--------------------------------------------------
-// 3.5/3.6-inch UNO TFT: ST7793, 8-bit Intel 8080 bus
+// 3.5-inch UNO TFT: HX8357-B, 8-bit Intel 8080 bus
 //--------------------------------------------------
 
 #define LCD_PIN_D0   GPIO_NUM_12
@@ -46,11 +47,14 @@ static const char *TAG = "DISPLAY";
 #define LCD_H_RES 320
 #define LCD_V_RES 240
 
-#define LCD_PANEL_H_RES 400
-#define LCD_PANEL_V_RES 240
+// The UNO-style HX8357-B panel is natively 320x480.  Rotation 1 makes the
+// physical display 480x320; keep the existing 320x240 face canvas and scale
+// it to the full panel during flush.
+#define LCD_PANEL_H_RES 480
+#define LCD_PANEL_V_RES 320
 #define LCD_PIXEL_CLOCK_HZ (2 * 1000 * 1000)
 
-#define LCD_CMD_BITS 16
+#define LCD_CMD_BITS 8
 #define LCD_PARAM_BITS 8
 
 #define LCD_DRAW_LINES 8
@@ -66,6 +70,17 @@ static SemaphoreHandle_t display_mutex = NULL;
 
 static bool display_ready = false;
 static bool display_on = false;
+
+static const gpio_num_t LCD_DATA_PINS[8] = {
+    LCD_PIN_D0,
+    LCD_PIN_D1,
+    LCD_PIN_D2,
+    LCD_PIN_D3,
+    LCD_PIN_D4,
+    LCD_PIN_D5,
+    LCD_PIN_D6,
+    LCD_PIN_D7,
+};
 
 static constexpr int FACE_CX = LCD_H_RES / 2;
 static constexpr int FACE_CY = LCD_V_RES / 2;
@@ -214,20 +229,157 @@ static void unlock_display()
 
 //--------------------------------------------------
 
-static void st7793_write_register(
-    uint16_t command,
-    uint16_t value)
+static uint64_t lcd_data_pin_mask()
 {
-    const uint8_t data[] = {
-        (uint8_t)(value >> 8),
-        (uint8_t)value};
+    uint64_t mask = 0;
+    for(gpio_num_t pin : LCD_DATA_PINS)
+        mask |= 1ULL << pin;
+    return mask;
+}
 
+static void lcd_probe_set_data_mode(gpio_mode_t mode)
+{
+    gpio_config_t config = {};
+    config.pin_bit_mask = lcd_data_pin_mask();
+    config.mode = mode;
+    config.pull_up_en = GPIO_PULLUP_DISABLE;
+    config.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    config.intr_type = GPIO_INTR_DISABLE;
+    ESP_ERROR_CHECK(gpio_config(&config));
+}
+
+static void lcd_probe_write8(uint8_t value)
+{
+    for(int bit = 0; bit < 8; ++bit)
+        ESP_ERROR_CHECK(gpio_set_level(LCD_DATA_PINS[bit], (value >> bit) & 1U));
+
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_WR, 0));
+    esp_rom_delay_us(3);
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_WR, 1));
+    esp_rom_delay_us(3);
+}
+
+static uint8_t lcd_probe_read8()
+{
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RD, 0));
+    esp_rom_delay_us(6);
+
+    uint8_t value = 0;
+    for(int bit = 0; bit < 8; ++bit)
+        value |= (uint8_t)(gpio_get_level(LCD_DATA_PINS[bit]) << bit);
+
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RD, 1));
+    esp_rom_delay_us(6);
+    return value;
+}
+
+static void lcd_probe_read_register(
+    uint16_t command,
+    bool command_is_16_bit,
+    uint8_t *result,
+    size_t result_size)
+{
+    lcd_probe_set_data_mode(GPIO_MODE_OUTPUT);
+
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_CS, 0));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RS, 0));
+    if(command_is_16_bit)
+        lcd_probe_write8((uint8_t)(command >> 8));
+    lcd_probe_write8((uint8_t)command);
+
+    lcd_probe_set_data_mode(GPIO_MODE_INPUT);
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RS, 1));
+    esp_rom_delay_us(10);
+
+    for(size_t index = 0; index < result_size; ++index)
+        result[index] = lcd_probe_read8();
+
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_CS, 1));
+    lcd_probe_set_data_mode(GPIO_MODE_OUTPUT);
+}
+
+static void lcd_probe_controller()
+{
+    gpio_config_t control_config = {};
+    control_config.pin_bit_mask =
+        (1ULL << LCD_PIN_RD) |
+        (1ULL << LCD_PIN_WR) |
+        (1ULL << LCD_PIN_RS) |
+        (1ULL << LCD_PIN_CS) |
+        (1ULL << LCD_PIN_RST);
+    control_config.mode = GPIO_MODE_OUTPUT;
+    control_config.pull_up_en = GPIO_PULLUP_DISABLE;
+    control_config.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    control_config.intr_type = GPIO_INTR_DISABLE;
+    ESP_ERROR_CHECK(gpio_config(&control_config));
+
+    lcd_probe_set_data_mode(GPIO_MODE_OUTPUT);
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_CS, 1));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RS, 1));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_WR, 1));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RD, 1));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RST, 1));
+    vTaskDelay(pdMS_TO_TICKS(20));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RST, 0));
+    vTaskDelay(pdMS_TO_TICKS(50));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RST, 1));
+    vTaskDelay(pdMS_TO_TICKS(120));
+
+    uint8_t register_0000[4] = {};
+    uint8_t register_d3[5] = {};
+    uint8_t register_04[4] = {};
+    uint8_t register_bf[6] = {};
+
+    lcd_probe_read_register(0x0000, true, register_0000, sizeof(register_0000));
+    lcd_probe_read_register(0x00D3, false, register_d3, sizeof(register_d3));
+    lcd_probe_read_register(0x0004, false, register_04, sizeof(register_04));
+    lcd_probe_read_register(0x00BF, false, register_bf, sizeof(register_bf));
+
+    ESP_LOGI(TAG, "LCD_ID reg0000(16)=%02X %02X %02X %02X",
+        register_0000[0], register_0000[1], register_0000[2], register_0000[3]);
+    ESP_LOGI(TAG, "LCD_ID regD3(8)=%02X %02X %02X %02X %02X",
+        register_d3[0], register_d3[1], register_d3[2], register_d3[3], register_d3[4]);
+    ESP_LOGI(TAG, "LCD_ID reg04(8)=%02X %02X %02X %02X",
+        register_04[0], register_04[1], register_04[2], register_04[3]);
+    ESP_LOGI(TAG, "LCD_ID regBF(8)=%02X %02X %02X %02X %02X %02X",
+        register_bf[0], register_bf[1], register_bf[2], register_bf[3],
+        register_bf[4], register_bf[5]);
+
+    if(register_bf[1] == 0x01 && register_bf[2] == 0x62 &&
+       register_bf[3] == 0x83 && register_bf[4] == 0x57)
+    {
+        ESP_LOGI(TAG, "LCD controller identified: HX8357-B");
+    }
+
+    // Put the controller back into a known reset state before the I80 driver
+    // takes ownership of the same pins.
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RST, 0));
+    vTaskDelay(pdMS_TO_TICKS(20));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RST, 1));
+    vTaskDelay(pdMS_TO_TICKS(120));
+}
+
+//--------------------------------------------------
+
+static void hx8357_write_command(
+    uint8_t command,
+    const uint8_t *data,
+    size_t data_size)
+{
     ESP_ERROR_CHECK(
         esp_lcd_panel_io_tx_param(
             lcd_io_handle,
             command,
             data,
-            sizeof(data)));
+            data_size));
+}
+
+static void hx8357_write_command1(
+    uint8_t command,
+    uint8_t value)
+{
+    const uint8_t data[] = {value};
+    hx8357_write_command(command, data, sizeof(data));
 }
 
 //--------------------------------------------------
@@ -239,25 +391,31 @@ static void lcd_write_bitmap(
     int y1,
     const uint16_t *pixels)
 {
-    // MCUFRIEND_kbv's ST7793 rotation=1 mapping.  The controller's
-    // native RAM is 240x400; after rotation, logical x is 0..399 and
-    // logical y is 0..239.
-    st7793_write_register(0x0201, 0);
-    st7793_write_register(0x0200, 0);
-    st7793_write_register(0x0212, (uint16_t)x0);
-    st7793_write_register(0x0210, (uint16_t)y0);
-    st7793_write_register(0x0213, (uint16_t)(x1 - 1));
-    st7793_write_register(0x0211, (uint16_t)(y1 - 1));
+    const uint8_t column_address[] = {
+        (uint8_t)(x0 >> 8),
+        (uint8_t)x0,
+        (uint8_t)((x1 - 1) >> 8),
+        (uint8_t)(x1 - 1)};
+    const uint8_t page_address[] = {
+        (uint8_t)(y0 >> 8),
+        (uint8_t)y0,
+        (uint8_t)((y1 - 1) >> 8),
+        (uint8_t)(y1 - 1)};
+
+    // HX8357-B uses the standard 8-bit MCU commands: 2Ah/2Bh set the
+    // address window and 2Ch starts GRAM writes.
+    hx8357_write_command(0x2A, column_address, sizeof(column_address));
+    hx8357_write_command(0x2B, page_address, sizeof(page_address));
 
     const size_t pixel_count =
         (size_t)(x1 - x0) * (size_t)(y1 - y0);
 
-    // In ST7793 8-bit 8080 mode, RGB565 is sent as high byte then low byte.
-    // The panel-IO color-byte swap performs that ordering for uint16_t data.
+    // RGB565 is sent MSB first on the 8-bit HX8357-B MCU bus.  The panel-IO
+    // color-byte swap performs that ordering for the uint16_t framebuffer.
     ESP_ERROR_CHECK(
         esp_lcd_panel_io_tx_color(
             lcd_io_handle,
-            0x0202,
+            0x2C,
             pixels,
             pixel_count * sizeof(uint16_t)));
 }
@@ -640,7 +798,7 @@ static void display_wake()
     if(display_on)
         return;
 
-    st7793_write_register(0x0007, 0x0100);
+    hx8357_write_command(0x29, NULL, 0);
 
     vTaskDelay(
         pdMS_TO_TICKS(50));
@@ -1246,7 +1404,7 @@ static void secure_clear_qr_code_locked()
 
 void display_init()
 {
-    ESP_LOGI(TAG, "Initialize ST7793 240x400 8-bit TFT");
+    ESP_LOGI(TAG, "Initialize HX8357-B 320x480 8-bit TFT");
 
     display_mutex =
         xSemaphoreCreateMutex();
@@ -1256,6 +1414,8 @@ void display_init()
         ESP_LOGE(TAG, "Display mutex failed");
         return;
     }
+
+    lcd_probe_controller();
 
     gpio_config_t rd_config = {};
     rd_config.pin_bit_mask = 1ULL << LCD_PIN_RD;
@@ -1301,8 +1461,7 @@ void display_init()
     io_config.cs_gpio_num = LCD_PIN_CS;
     io_config.pclk_hz = LCD_PIXEL_CLOCK_HZ;
     io_config.trans_queue_depth = 4;
-    // ST7793's MCU interface uses 16-bit register indexes even when the
-    // physical data bus is 8-bit.  Parameters remain two 8-bit transfers.
+    // HX8357-B uses 8-bit commands and 8-bit parameters on the 8-bit 8080 bus.
     io_config.lcd_cmd_bits = LCD_CMD_BITS;
     io_config.lcd_param_bits = LCD_PARAM_BITS;
     io_config.dc_levels.dc_idle_level = 0;
@@ -1322,72 +1481,37 @@ void display_init()
     ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RST, 1));
     vTaskDelay(pdMS_TO_TICKS(200));
 
-    // ST7793/R61509V register sequence used by MCUFRIEND_kbv for the
-    // 240x400 controller.  The command values are 16-bit register indexes;
-    // each value below is transmitted MSB first over the 8-bit bus.
-    struct St7793InitStep {
-        uint16_t command;
-        uint16_t value;
-    };
+    // HX8357-B initialization from the controller's UNO-style 8-bit setup.
+    static const uint8_t power_control[] = {0x07, 0x42, 0x18};
+    static const uint8_t vcom_control[] = {0x00, 0x07, 0x10};
+    static const uint8_t power_normal[] = {0x01, 0x02};
+    static const uint8_t panel_driving[] = {0x10, 0x3B, 0x00, 0x02, 0x11};
+    static const uint8_t display_frame[] = {0x0C};
+    static const uint8_t gamma[] = {
+        0x00, 0x32, 0x36, 0x45, 0x06, 0x16,
+        0x37, 0x75, 0x77, 0x54, 0x0C, 0x00};
+    static const uint8_t display_mode[] = {0x00};
 
-    static const St7793InitStep init_sequence[] = {
-        {0x0000, 0x0000}, {0x0000, 0x0000},
-        {0x0000, 0x0000}, {0x0000, 0x0000},
-        {0xFFFF, 15},
-        {0x0400, 0x6200},
-        {0x0008, 0x0808},
-        {0x0300, 0x0C00}, {0x0301, 0x5A0B},
-        {0x0302, 0x0906}, {0x0303, 0x1017},
-        {0x0304, 0x2300}, {0x0305, 0x1700},
-        {0x0306, 0x6309}, {0x0307, 0x0C09},
-        {0x0308, 0x100C}, {0x0309, 0x2232},
-        {0x0010, 0x0016},
-        {0x0011, 0x0101},
-        {0x0012, 0x0000},
-        {0x0013, 0x0001},
-        {0x0100, 0x0330},
-        {0x0101, 0x0237},
-        {0x0103, 0x0D00},
-        {0x0280, 0x6100},
-        {0x0102, 0xC1B0},
-        {0xFFFE, 50},
-        {0x0001, 0x0100},
-        {0x0002, 0x0100},
-        {0x0003, 0x1030},
-        {0x0009, 0x0001},
-        {0x000C, 0x0000},
-        {0x0090, 0x8000},
-        {0x000F, 0x0000},
-        {0x0210, 0x0000},
-        {0x0211, 0x00EF},
-        {0x0212, 0x0000},
-        {0x0213, 0x018F},
-        {0x0500, 0x0000},
-        {0x0501, 0x0000},
-        {0x0502, 0x005F},
-        {0x0401, 0x0001},
-        {0x0404, 0x0000},
-        {0xFFFE, 50},
-        {0x0007, 0x0100},
-        {0xFFFE, 50},
-    };
+    hx8357_write_command(0x11, NULL, 0); // sleep out
+    vTaskDelay(pdMS_TO_TICKS(20));
+    hx8357_write_command(0xD0, power_control, sizeof(power_control));
+    hx8357_write_command(0xD1, vcom_control, sizeof(vcom_control));
+    hx8357_write_command(0xD2, power_normal, sizeof(power_normal));
+    hx8357_write_command(0xC0, panel_driving, sizeof(panel_driving));
+    hx8357_write_command(0xC5, display_frame, sizeof(display_frame));
+    hx8357_write_command(0xC8, gamma, sizeof(gamma));
+    hx8357_write_command1(0x36, 0x28); // landscape + BGR
+    hx8357_write_command1(0x3A, 0x55); // RGB565 / 16-bit MCU pixels
+    hx8357_write_command(0xB2, display_mode, sizeof(display_mode));
 
-    for(const St7793InitStep &step : init_sequence)
-    {
-        if(step.command == 0xFFFF || step.command == 0xFFFE)
-        {
-            vTaskDelay(pdMS_TO_TICKS(step.value));
-        }
-        else
-        {
-            st7793_write_register(step.command, step.value);
-        }
-    }
+    const uint8_t column_address[] = {0x00, 0x00, 0x01, 0xDF};
+    const uint8_t page_address[] = {0x00, 0x00, 0x01, 0x3F};
+    hx8357_write_command(0x2A, column_address, sizeof(column_address));
+    hx8357_write_command(0x2B, page_address, sizeof(page_address));
 
-    // MCUFRIEND_kbv rotation(1): landscape 400x240, BGR, normal scan.
-    st7793_write_register(0x0001, 0x0000);
-    st7793_write_register(0x0003, 0x3008);
-    st7793_write_register(0x0401, 0x0003);
+    vTaskDelay(pdMS_TO_TICKS(120));
+    hx8357_write_command(0x29, NULL, 0); // display on
+    vTaskDelay(pdMS_TO_TICKS(25));
 
     draw_buffers[0] =
         (uint16_t*)heap_caps_malloc(
@@ -1444,7 +1568,7 @@ void display_init()
     display_ready = true;
     display_on = true;
 
-    ESP_LOGI(TAG, "ST7793 parallel TFT ready, logical=%dx%d panel=%dx%d",
+    ESP_LOGI(TAG, "HX8357-B parallel TFT ready, logical=%dx%d panel=%dx%d",
         LCD_H_RES,
         LCD_V_RES,
         LCD_PANEL_H_RES,
