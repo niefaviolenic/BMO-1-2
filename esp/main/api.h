@@ -14,4 +14,10 @@ bool api_ws_is_connected();
 bool api_ws_is_authenticated();
 bool api_ws_authentication_is_blocked();
 
+// Physical-control actions used by the BMO2 buttons.
+bool api_request_pairing_mode();
+void api_cancel_current_voice();
+bool api_spotify_next();
+bool api_spotify_previous();
+
 #endif

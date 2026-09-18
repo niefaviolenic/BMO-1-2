@@ -13,34 +13,6 @@
 
 static const char *TAG = "MAIN";
 
-#if CONFIG_SPIRAM_USE_MEMMAP
-static void bmo_expression_demo_task(void *param)
-{
-    (void)param;
-
-    static const Face faces[] = {
-        FACE_HAPPY,
-        FACE_CUTE,
-        FACE_EXCITED,
-        FACE_SLEEPY,
-        FACE_ANGRY,
-        FACE_SAD,
-        FACE_WINK,
-        FACE_SURPRISED,
-        FACE_LOVE,
-        FACE_CONFUSED};
-
-    while(true)
-    {
-        for(Face face : faces)
-        {
-            display_face(face);
-            vTaskDelay(pdMS_TO_TICKS(1200));
-        }
-    }
-}
-#endif
-
 static void api_init_when_network_ready_task(void *param)
 {
     ESP_LOGI(TAG, "Waiting for WiFi IP before API init...");
@@ -71,35 +43,6 @@ static void api_init_when_network_ready_task(void *param)
 
 extern "C" void app_main()
 {
-#if CONFIG_SPIRAM_USE_MEMMAP
-    ESP_LOGW(TAG, "FORCED_LCD_DEMO: LCD only; audio, WiFi, and state machine paused");
-
-    display_init();
-
-    while (true)
-    {
-        display_test_pattern();
-
-        static const Face faces[] = {
-            FACE_HAPPY,
-            FACE_CUTE,
-            FACE_EXCITED,
-            FACE_SLEEPY,
-            FACE_ANGRY,
-            FACE_SAD,
-            FACE_WINK,
-            FACE_SURPRISED,
-            FACE_LOVE,
-            FACE_CONFUSED};
-
-        for(Face face : faces)
-        {
-            ESP_LOGI(TAG, "FORCED_LCD_DEMO: showing face=%d", (int)face);
-            display_face(face);
-            vTaskDelay(pdMS_TO_TICKS(2500));
-        }
-    }
-#else
     network_init();
 
     display_init();
@@ -134,23 +77,11 @@ extern "C" void app_main()
     // Jalankan background task state machine orchestrator
     joy_state_machine_init();
 
-#if CONFIG_SPIRAM_USE_MEMMAP
-    xTaskCreate(
-        bmo_expression_demo_task,
-        "bmo_expression_demo",
-        4096,
-        NULL,
-        2,
-        NULL);
-    ESP_LOGW(TAG, "Wakeword disabled: PSRAM is memory-mapped only for stable LCD diagnostic");
-#else
     wakeword_init();
-#endif
 
     while (true)
     {
         button_update();
         vTaskDelay(pdMS_TO_TICKS(20));
     }
-#endif
 }

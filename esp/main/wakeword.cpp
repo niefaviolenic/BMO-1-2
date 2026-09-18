@@ -1072,6 +1072,12 @@ RecordingStatus get_recording_status()
     return status;
 }
 
+bool finish_recording(const char *reason)
+{
+    return finalize_recording(
+        reason != NULL ? reason : "finished_by_button");
+}
+
 void abort_recording(const char *reason)
 {
     fail_recording(

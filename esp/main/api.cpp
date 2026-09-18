@@ -658,6 +658,76 @@ static bool send_pairing_mode_request() {
     return sent;
 }
 
+static bool post_spotify_action(const char *action)
+{
+    if (action == NULL || action[0] == '\0')
+        return false;
+
+    if (!network_has_ip())
+    {
+        ESP_LOGW(TAG, "Spotify action skipped: WiFi has no IP action=%s", action);
+        return false;
+    }
+
+    char url[160] = {};
+    int written = snprintf(
+        url,
+        sizeof(url),
+        "https://%s/api/v1/plugins/spotify/%s",
+        JOY_BACKEND_HOST,
+        action);
+    if (written <= 0 || written >= (int)sizeof(url))
+        return false;
+
+    esp_http_client_config_t config = {};
+    config.url = url;
+    config.method = HTTP_METHOD_POST;
+    config.timeout_ms = 4000;
+    config.crt_bundle_attach = esp_crt_bundle_attach;
+    config.common_name = JOY_BACKEND_HOST;
+    config.skip_cert_common_name_check = false;
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (client == NULL)
+    {
+        ESP_LOGW(TAG, "Spotify action init failed action=%s", action);
+        return false;
+    }
+
+    esp_http_client_set_header(client, "X-Device-Id", JOY_DEVICE_ID);
+    esp_http_client_set_header(client, "X-Device-Token", JOY_DEVICE_TOKEN);
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+
+    const char body[] = "{}";
+    esp_err_t err = esp_http_client_open(client, sizeof(body) - 1);
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "Spotify action connection failed action=%s err=%s",
+                 action, esp_err_to_name(err));
+        esp_http_client_cleanup(client);
+        return false;
+    }
+
+    int body_written = esp_http_client_write(client, body, sizeof(body) - 1);
+    if (body_written != (int)(sizeof(body) - 1))
+    {
+        ESP_LOGW(TAG, "Spotify action body failed action=%s", action);
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        return false;
+    }
+
+    (void)esp_http_client_fetch_headers(client);
+    int status_code = esp_http_client_get_status_code(client);
+    esp_http_client_close(client);
+    esp_http_client_cleanup(client);
+
+    const bool success = status_code >= 200 && status_code < 300;
+    ESP_LOGI(TAG, "Spotify action=%s status=%d success=%d",
+             action, status_code, success ? 1 : 0);
+    return success;
+}
+
 static void clear_pending_playback_event()
 {
     pending_playback_event = JOY_PENDING_PLAYBACK_NONE;
@@ -1401,6 +1471,36 @@ bool api_ws_is_authenticated() {
 
 bool api_ws_authentication_is_blocked() {
     return ws_authentication_blocked;
+}
+
+bool api_request_pairing_mode()
+{
+    if (!api_ws_is_authenticated())
+    {
+        ESP_LOGW(TAG, "Pairing request skipped: WebSocket is not authenticated");
+        return false;
+    }
+    return send_pairing_mode_request();
+}
+
+void api_cancel_current_voice()
+{
+    playback_state = JOY_PLAYBACK_CANCELLED;
+    playback_cancel();
+    audio_stopThinkingFillerLoop();
+    audio_cancelExpressionAudio();
+    audio_cancelReadyAudio();
+    ESP_LOGI(TAG, "Current voice playback cancelled by BMO2 button");
+}
+
+bool api_spotify_next()
+{
+    return post_spotify_action("next");
+}
+
+bool api_spotify_previous()
+{
+    return post_spotify_action("previous");
 }
 
 static bool is_audio_mpeg_content_type(const char *content_type)

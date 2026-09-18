@@ -1,61 +1,66 @@
 #include "button.h"
 
+#include "api.h"
 #include "audio.h"
 #include "display.h"
-#include "pairing.h"
+#include "hardware_config.h"
 #include "state.h"
 #include "wakeword.h"
+
 #include "driver/gpio.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#include <stdint.h>
 
 //--------------------------------------------------
-// Touch + volume input pins.
+// BMO2 button layout.
 //--------------------------------------------------
 
-#define TOUCH_PIN      GPIO_NUM_14
-#define BTN_VOL_UP    GPIO_NUM_21
-#define BTN_VOL_DOWN  GPIO_NUM_16
+static constexpr int VOLUME_STEP = 5;
+static constexpr int64_t BUTTON_DEBOUNCE_US = 30000LL;
+static constexpr int64_t BLUETOOTH_HOLD_US = 3000000LL;
+static constexpr int64_t BLUETOOTH_WAIT_US = 120000000LL;
 
-#define VOLUME_STEP 5
-#define BUTTON_REPEAT_US 180000LL
-#define BUTTON_DEBOUNCE_US 30000LL
-#define TOUCH_DEBOUNCE_US 30000LL
-#define TOUCH_WAKE_HOLD_US 700000LL
+static const char *TAG = "BUTTON";
 
-static const char *TAG="BUTTON";
-
-static int64_t last_up_us = 0;
-static int64_t last_down_us = 0;
-static int64_t vol_up_press_start_us = 0;
-static int64_t vol_down_press_start_us = 0;
-enum class TouchLifecycleState
+enum class ButtonId : uint8_t
 {
-    TOUCH_ARMED,
-    TOUCH_CONSUMED,
-    TOUCH_BOOT_HIGH_LOCKOUT
+    A1_WAKE,
+    A2_BLUETOOTH,
+    A3_BAD_FACE,
+    A4_VOLUME_UP,
+    A5_VOLUME_DOWN,
+    A6_SPOTIFY_NEXT,
+    A7_SPOTIFY_PREVIOUS,
 };
 
-static TouchLifecycleState touch_state =
-    TouchLifecycleState::TOUCH_ARMED;
-static bool touch_candidate_level = false;
-static bool touch_stable_level = false;
-static int64_t touch_candidate_since_us = 0;
-static int64_t touch_press_started_us = 0;
-static bool touch_action_fired = false;
-static int64_t last_touch_diag_us = 0;
-
-static const char *touch_lifecycle_name(TouchLifecycleState state)
+struct DebouncedButton
 {
-    switch(state)
-    {
-        case TouchLifecycleState::TOUCH_ARMED: return "ARMED";
-        case TouchLifecycleState::TOUCH_CONSUMED: return "CONSUMED";
-        case TouchLifecycleState::TOUCH_BOOT_HIGH_LOCKOUT: return "BOOT_HIGH_LOCKOUT";
-        default: return "UNKNOWN";
-    }
-}
+    ButtonId id;
+    const char *name;
+    gpio_num_t pin;
+    bool candidate_pressed;
+    bool stable_pressed;
+    int64_t candidate_since_us;
+    int64_t pressed_since_us;
+    bool long_action_fired;
+};
+
+static DebouncedButton buttons[] = {
+    {ButtonId::A1_WAKE, "A1_TRIANGLE", static_cast<gpio_num_t>(BMO2_BUTTON_A1_GPIO), false, false, 0, 0, false},
+    {ButtonId::A2_BLUETOOTH, "A2_SMALL_CIRCLE", static_cast<gpio_num_t>(BMO2_BUTTON_A2_GPIO), false, false, 0, 0, false},
+    {ButtonId::A3_BAD_FACE, "A3_LARGE_CIRCLE", static_cast<gpio_num_t>(BMO2_BUTTON_A3_GPIO), false, false, 0, 0, false},
+    {ButtonId::A4_VOLUME_UP, "A4_UP", static_cast<gpio_num_t>(BMO2_BUTTON_A4_GPIO), false, false, 0, 0, false},
+    {ButtonId::A5_VOLUME_DOWN, "A5_DOWN", static_cast<gpio_num_t>(BMO2_BUTTON_A5_GPIO), false, false, 0, 0, false},
+    {ButtonId::A6_SPOTIFY_NEXT, "A6_RIGHT", static_cast<gpio_num_t>(BMO2_BUTTON_A6_GPIO), false, false, 0, 0, false},
+    {ButtonId::A7_SPOTIFY_PREVIOUS, "A7_LEFT", static_cast<gpio_num_t>(BMO2_BUTTON_A7_GPIO), false, false, 0, 0, false},
+};
+
+static int64_t bluetooth_wait_until_us = 0;
 
 static const char *joy_state_name(JoyState state)
 {
@@ -70,251 +75,227 @@ static const char *joy_state_name(JoyState state)
     }
 }
 
-//--------------------------------------------------
+static bool display_overlay_is_active()
+{
+    return display_pairing_code_is_visible() || display_qr_code_is_visible();
+}
+
+// Returns true only once, when a debounced button becomes pressed.
+static bool update_debounced_button(
+    DebouncedButton &button,
+    bool pressed,
+    int64_t now_us)
+{
+    if (pressed != button.candidate_pressed)
+    {
+        button.candidate_pressed = pressed;
+        button.candidate_since_us = now_us;
+    }
+
+    if (button.candidate_pressed != button.stable_pressed &&
+        now_us - button.candidate_since_us >= BUTTON_DEBOUNCE_US)
+    {
+        button.stable_pressed = button.candidate_pressed;
+
+        if (button.stable_pressed)
+        {
+            button.pressed_since_us = now_us;
+            button.long_action_fired = false;
+            ESP_LOGI(TAG, "%s pressed", button.name);
+            return true;
+        }
+
+        button.pressed_since_us = 0;
+        button.long_action_fired = false;
+        ESP_LOGI(TAG, "%s released", button.name);
+    }
+
+    return false;
+}
+
+static void start_spotify_control_task(void *param)
+{
+    const bool next = reinterpret_cast<intptr_t>(param) != 0;
+    const bool success = next ? api_spotify_next() : api_spotify_previous();
+    ESP_LOGI(TAG, "Spotify %s result=%d", next ? "next" : "previous", success ? 1 : 0);
+    vTaskDelete(NULL);
+}
+
+static void dispatch_spotify_control(bool next)
+{
+    BaseType_t result = xTaskCreate(
+        start_spotify_control_task,
+        next ? "spotify_next" : "spotify_previous",
+        4096,
+        reinterpret_cast<void *>(static_cast<intptr_t>(next ? 1 : 0)),
+        3,
+        NULL);
+
+    if (result != pdPASS)
+    {
+        ESP_LOGW(TAG, "Spotify %s task could not be created", next ? "next" : "previous");
+    }
+}
+
+static void handle_a1()
+{
+    if (display_overlay_is_active())
+    {
+        ESP_LOGW(TAG, "A1 ignored while pairing or QR overlay is visible");
+        return;
+    }
+
+    JoyState state = getState();
+    if (state == JoyState::RECORDING)
+    {
+        // A1 while recording closes the current voice capture as a valid WAV;
+        // the state machine then continues with the normal backend upload.
+        const bool finished = finish_recording("button_a1");
+        ESP_LOGI(TAG, "A1 finished recording for backend upload=%d", finished ? 1 : 0);
+        return;
+    }
+
+    if (state == JoyState::SPEAKING ||
+        state == JoyState::THINKING ||
+        state == JoyState::ERROR_STATE)
+    {
+        api_cancel_current_voice();
+        setState(JoyState::IDLE);
+        state = JoyState::IDLE;
+    }
+
+    if (state == JoyState::IDLE)
+    {
+        audio_triggerWakeAck();
+        const bool recording_started = wakeword_task();
+        ESP_LOGI(TAG, "A1 wake/voice trigger accepted=%d", recording_started ? 1 : 0);
+    }
+    else
+    {
+        ESP_LOGW(TAG, "A1 ignored in state=%s", joy_state_name(state));
+    }
+}
+
+static void handle_a2_bluetooth_long_press(int64_t now_us)
+{
+    if (bluetooth_wait_until_us > now_us)
+    {
+        ESP_LOGI(TAG, "A2 wireless pairing window already active for %lld ms",
+                 (long long)((bluetooth_wait_until_us - now_us) / 1000LL));
+        return;
+    }
+
+    bluetooth_wait_until_us = now_us + BLUETOOTH_WAIT_US;
+
+    // The current firmware exposes the existing authenticated pairing request
+    // as the wireless-pairing hook. The BMO2 button timing is local and remains
+    // two minutes even when the backend is temporarily offline.
+    const bool requested = api_request_pairing_mode();
+    ESP_LOGI(TAG, "A2 Bluetooth/pairing enabled for 120 seconds requested=%d",
+             requested ? 1 : 0);
+}
+
+static void handle_a3_bad_face()
+{
+    if (display_overlay_is_active() || getState() != JoyState::IDLE)
+    {
+        ESP_LOGW(TAG, "A3 ignored: state=%s overlay=%d",
+                 joy_state_name(getState()), display_overlay_is_active() ? 1 : 0);
+        return;
+    }
+
+    display_set_idle_face(FACE_ANGRY);
+    audio_triggerExpressionAudio(static_cast<int>(FACE_ANGRY));
+    ESP_LOGI(TAG, "A3 rendered bad face=ANGRY");
+}
+
+static void handle_button_press(ButtonId id)
+{
+    switch(id)
+    {
+        case ButtonId::A1_WAKE:
+            handle_a1();
+            break;
+        case ButtonId::A3_BAD_FACE:
+            handle_a3_bad_face();
+            break;
+        case ButtonId::A4_VOLUME_UP:
+            audio_adjustVolume(VOLUME_STEP);
+            ESP_LOGI(TAG, "A4 volume up: %d", audio_getVolume());
+            break;
+        case ButtonId::A5_VOLUME_DOWN:
+            audio_adjustVolume(-VOLUME_STEP);
+            ESP_LOGI(TAG, "A5 volume down: %d", audio_getVolume());
+            break;
+        case ButtonId::A6_SPOTIFY_NEXT:
+            dispatch_spotify_control(true);
+            break;
+        case ButtonId::A7_SPOTIFY_PREVIOUS:
+            dispatch_spotify_control(false);
+            break;
+        case ButtonId::A2_BLUETOOTH:
+            // A2 is intentionally long-press only.
+            break;
+    }
+}
 
 void button_init()
 {
-    gpio_config_t touch_config = {};
-
-    touch_config.pin_bit_mask = 1ULL << TOUCH_PIN;
-    touch_config.mode = GPIO_MODE_INPUT;
-    touch_config.pull_up_en = GPIO_PULLUP_DISABLE;
-    touch_config.pull_down_en = GPIO_PULLDOWN_ENABLE;
-    touch_config.intr_type = GPIO_INTR_DISABLE;
-
-    ESP_ERROR_CHECK(
-        gpio_config(
-            &touch_config));
+    uint64_t pin_mask = 0;
+    for (const DebouncedButton &button : buttons)
+        pin_mask |= 1ULL << button.pin;
 
     gpio_config_t button_config = {};
-
-    button_config.pin_bit_mask =
-        (1ULL << BTN_VOL_UP) |
-        (1ULL << BTN_VOL_DOWN);
-
+    button_config.pin_bit_mask = pin_mask;
     button_config.mode = GPIO_MODE_INPUT;
     button_config.pull_up_en = GPIO_PULLUP_ENABLE;
     button_config.pull_down_en = GPIO_PULLDOWN_DISABLE;
     button_config.intr_type = GPIO_INTR_DISABLE;
 
-    ESP_ERROR_CHECK(
-        gpio_config(
-            &button_config));
+    ESP_ERROR_CHECK(gpio_config(&button_config));
 
-    const int64_t now = esp_timer_get_time();
-    const bool touch_level = gpio_get_level(TOUCH_PIN) == 1;
-
-    // Synchronize with the physical level at boot. A HIGH input is treated
-    // as already consumed until a complete stable release is observed.
-    touch_candidate_level = touch_level;
-    touch_stable_level = touch_level;
-    touch_candidate_since_us = now;
-    touch_state = touch_level ?
-        TouchLifecycleState::TOUCH_BOOT_HIGH_LOCKOUT :
-        TouchLifecycleState::TOUCH_ARMED;
+    const int64_t now_us = esp_timer_get_time();
+    for (DebouncedButton &button : buttons)
+    {
+        const bool pressed = gpio_get_level(button.pin) == 0;
+        button.candidate_pressed = pressed;
+        button.stable_pressed = pressed;
+        button.candidate_since_us = now_us;
+        button.pressed_since_us = pressed ? now_us : 0;
+        // Do not fire an action for a button that was already held at boot.
+        button.long_action_fired = pressed;
+    }
 
     ESP_LOGI(
         TAG,
-        "Touch init: raw=%d stable=%d lifecycle=%s",
-        touch_level ? 1 : 0,
-        touch_stable_level ? 1 : 0,
-        touch_lifecycle_name(touch_state));
-
-    ESP_LOGI(
-        TAG,
-        "Input ready: touch=%d vol_up=%d vol_down=%d",
-        TOUCH_PIN,
-        BTN_VOL_UP,
-        BTN_VOL_DOWN);
+        "BMO2 inputs ready: A1=%d A2=%d A3=%d A4=%d A5=%d A6=%d A7=%d",
+        BMO2_BUTTON_A1_GPIO,
+        BMO2_BUTTON_A2_GPIO,
+        BMO2_BUTTON_A3_GPIO,
+        BMO2_BUTTON_A4_GPIO,
+        BMO2_BUTTON_A5_GPIO,
+        BMO2_BUTTON_A6_GPIO,
+        BMO2_BUTTON_A7_GPIO);
 }
-
-//--------------------------------------------------
 
 void button_update()
 {
-    int64_t now = esp_timer_get_time();
+    const int64_t now_us = esp_timer_get_time();
 
-    bool volume_up_raw =
-        gpio_get_level(BTN_VOL_UP) == 0;
-
-    bool volume_down_raw =
-        gpio_get_level(BTN_VOL_DOWN) == 0;
-
-    if(volume_up_raw)
+    for (DebouncedButton &button : buttons)
     {
-        if(vol_up_press_start_us == 0)
-            vol_up_press_start_us = now;
-        else if(now - vol_up_press_start_us >= BUTTON_DEBOUNCE_US &&
-                now - last_up_us > BUTTON_REPEAT_US)
+        const bool pressed = gpio_get_level(button.pin) == 0;
+        if (update_debounced_button(button, pressed, now_us))
+            handle_button_press(button.id);
+
+        if (button.id == ButtonId::A2_BLUETOOTH &&
+            button.stable_pressed &&
+            !button.long_action_fired &&
+            button.pressed_since_us > 0 &&
+            now_us - button.pressed_since_us >= BLUETOOTH_HOLD_US)
         {
-            last_up_us = now;
-            audio_adjustVolume(VOLUME_STEP);
-
-            ESP_LOGI(
-                TAG,
-                "Volume up: %d",
-                audio_getVolume());
-        }
-    }
-    else
-    {
-        vol_up_press_start_us = 0;
-    }
-
-    if(volume_down_raw)
-    {
-        if(vol_down_press_start_us == 0)
-            vol_down_press_start_us = now;
-        else if(now - vol_down_press_start_us >= BUTTON_DEBOUNCE_US &&
-                now - last_down_us > BUTTON_REPEAT_US)
-        {
-            last_down_us = now;
-            audio_adjustVolume(-VOLUME_STEP);
-
-            ESP_LOGI(
-                TAG,
-                "Volume down: %d",
-                audio_getVolume());
-        }
-    }
-    else
-    {
-        vol_down_press_start_us = 0;
-    }
-
-    bool touch_level =
-        gpio_get_level(TOUCH_PIN) == 1;
-
-    if(now - last_touch_diag_us >= 2000000LL)
-    {
-        last_touch_diag_us = now;
-        ESP_LOGI(
-            TAG,
-            "Touch sample: raw=%d candidate=%d stable=%d lifecycle=%s state=%s",
-            touch_level ? 1 : 0,
-            touch_candidate_level ? 1 : 0,
-            touch_stable_level ? 1 : 0,
-            touch_lifecycle_name(touch_state),
-            joy_state_name(getState()));
-    }
-
-    if(touch_level != touch_candidate_level)
-    {
-        const bool previous_level = touch_candidate_level;
-        touch_candidate_level = touch_level;
-        touch_candidate_since_us = now;
-
-        ESP_LOGI(
-            TAG,
-            "Touch raw transition: old=%d new=%d",
-            previous_level ? 1 : 0,
-            touch_level ? 1 : 0);
-    }
-
-    if(touch_candidate_level != touch_stable_level &&
-       now - touch_candidate_since_us >= TOUCH_DEBOUNCE_US)
-    {
-        touch_stable_level = touch_candidate_level;
-
-        ESP_LOGI(
-            TAG,
-            "Touch stable: level=%d",
-            touch_stable_level ? 1 : 0);
-
-        if(touch_stable_level)
-        {
-            if(touch_state == TouchLifecycleState::TOUCH_ARMED)
-            {
-                touch_state = TouchLifecycleState::TOUCH_CONSUMED;
-                touch_press_started_us = now;
-                touch_action_fired = false;
-                ESP_LOGI(
-                    TAG,
-                    "Touch lifecycle: %s",
-                    touch_lifecycle_name(touch_state));
-            }
-        }
-        else
-        {
-            // A short tap selects the next idle face. A long press is handled
-            // below as the physical alternative to the acoustic wake word.
-            if(touch_state == TouchLifecycleState::TOUCH_CONSUMED &&
-               !touch_action_fired &&
-               touch_press_started_us > 0 &&
-               now - touch_press_started_us < TOUCH_WAKE_HOLD_US &&
-               getState() == JoyState::IDLE)
-            {
-                if(display_pairing_code_is_visible() || display_qr_code_is_visible() || pairing_get_snapshot().phase != PairingPhase::NONE)
-                {
-                    ESP_LOGW(TAG, "Touch expression rejected: robot is in pairing mode or QR display mode");
-                }
-                else
-                {
-                    const JoyState state_before = getState();
-                    const Face face_before = display_get_idle_face();
-                    const Face face_after = display_next_touch_face();
-
-                    audio_setVolume(SPEAKER_DEFAULT_VOLUME);
-                    audio_playExpressionAudio((int)face_after);
-
-                    ESP_LOGI(
-                        TAG,
-                        "Touch accepted: Joy state before=%s expression face_before=%d face_after=%d audio=%d",
-                        joy_state_name(state_before),
-                        (int)face_before,
-                        (int)face_after,
-                        1);
-                }
-            }
-
-            // Only a stable LOW release re-arms the physical input. This is
-            // also the boot-high lockout exit path.
-            touch_press_started_us = 0;
-            touch_action_fired = false;
-            touch_state = TouchLifecycleState::TOUCH_ARMED;
-            ESP_LOGI(
-                TAG,
-                "Touch lifecycle: %s",
-            touch_lifecycle_name(touch_state));
-        }
-    }
-
-    // Long press remains an independent touch-to-wake path while a short tap
-    // is reserved for the ten coded LCD expressions and their audio clips.
-    if(touch_stable_level &&
-       touch_state == TouchLifecycleState::TOUCH_CONSUMED &&
-       !touch_action_fired &&
-       touch_press_started_us > 0 &&
-       now - touch_press_started_us >= TOUCH_WAKE_HOLD_US)
-    {
-        touch_action_fired = true;
-
-        if(getState() == JoyState::IDLE)
-        {
-            if(display_pairing_code_is_visible() || display_qr_code_is_visible() || pairing_get_snapshot().phase != PairingPhase::NONE)
-            {
-                ESP_LOGW(TAG, "Touch wake rejected: robot is in pairing mode or QR display mode");
-            }
-            else
-            {
-                const JoyState state_before = getState();
-
-                audio_triggerWakeAck();
-                const bool recording_started = wakeword_task();
-
-                ESP_LOGI(
-                    TAG,
-                    "Touch wake: state_before=%s accepted=%d",
-                    joy_state_name(state_before),
-                    recording_started ? 1 : 0);
-            }
-        }
-        else
-        {
-            ESP_LOGW(
-                TAG,
-                "Touch wake rejected: state=%s (not IDLE)",
-                joy_state_name(getState()));
+            button.long_action_fired = true;
+            handle_a2_bluetooth_long_press(now_us);
         }
     }
 }

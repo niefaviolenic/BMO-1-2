@@ -24,7 +24,7 @@ sequenceDiagram
     WSS-->>ESP: {"event":"authenticated", "status":"ok", "backend_state":"idle"}
 
     Note over U,ESP: Voice Interaction (Wake-up & Capture)
-    U->>ESP: Katakan "Hi Joy" / Sentuh Sensor Touch (GPIO 14)
+    U->>ESP: Katakan "Hi Joy" / Tekan A1 (GPIO 20)
     ESP->>ESP: WakeNet Detect "Hi Joy"
     ESP->>U: Play Wake-up Ack Cue ("heem" / rising earcon via MAX98357A)
     ESP->>ESP: JoyState::RECORDING (Display: LISTENING)
@@ -60,7 +60,7 @@ sequenceDiagram
 - **Microphone**: INMP441 Omnidirectional MEMS Microphone (I2S Input).
 - **Speaker / DAC Amp**: MAX98357A I2S 3.2W Class-D Mono Amplifier.
 - **Display**: TFT UNO 3.5" parallel 8-bit (ILI9486 assumed, 480x320 landscape).
-- **Sensors & Inputs**: Capacitive Touch Sensor (TTP223 / Direct Touch) dan Tactile Push Buttons (Volume Up/Down).
+- **Inputs BMO2**: Tujuh tactile push button A1–A7 untuk voice, pairing nirkabel, ekspresi, volume, dan kontrol Spotify.
 
 ### B. Pin Mapping (GPIO Layout)
 
@@ -80,9 +80,13 @@ sequenceDiagram
 | | CS / RS / WR / RST | `GPIO 5 / 6 / 7 / 4` | Bus I80; RS berfungsi sebagai D/C |
 | | RD | `GPIO 15` | Output HIGH; display hanya ditulis |
 | | Power / Backlight | `5V, 3.3V, GND` | Ikuti label dan manual modul; jangan menyuplai sinyal GPIO dengan 5V |
-| **Touch & Buttons** | Touch Sensor (Head/Face) | `GPIO 14` | Trigger Voice / Ganti Ekspresi |
-| | Vol Up Button | `GPIO 21` | Volume Up (+5%) |
-| | Vol Down Button | `GPIO 16` | Volume Down (-5%) |
+| **BMO2 Buttons** | A1 (segitiga) | `GPIO 20` | Wakeword / akhiri voice capture untuk upload ke backend |
+| | A2 (bulat kecil) | `GPIO 21` | Tahan 3 detik: aktifkan pairing nirkabel selama 2 menit |
+| | A3 (bulat besar) | `GPIO 47` | Tampilkan muka jelek |
+| | A4 (atas) | `GPIO 48` | Volume naik (+5%) |
+| | A5 (bawah) | `GPIO 15` | Volume turun (-5%) |
+| | A6 (kanan) | `GPIO 0` | Spotify next |
+| | A7 (kiri) | `GPIO 35` | Spotify previous |
 
 ---
 
@@ -120,7 +124,7 @@ sequenceDiagram
     5. `thinking_05.wav`: *"Hold on, Joy is thinking."* (~1.6s, Piper TTS)
     Setiap clip adalah 16kHz 16-bit Mono PCM canonical WAV, dilengkapi dengan fallback tone melody sintetis jika WAV corrupt/tidak tersedia. Fitur ini menghilangkan jeda hening (*dead air*) selama LLM dan TTS backend memproses jawaban.
   - **Audio Ekspresi Wajah Lokal (`01.wav` .. `10.wav`)**: 10 audio clip ucapan ekspresi wajah lokal (`"I am happy"`, `"I am cute"`, `"I am excited"`, `"I am sleepy"`, `"I am angry"`, `"I am sad"`, `"wink"`, `"I am surprised"`, `"I love you"`, `"I am confused"`) menggunakan Piper TTS persona Bahasa Inggris yang diputar saat animasi wajah di LCD berganti di mode `IDLE`.
-  - **Interaksi Sentuh (Touch-to-Wake)**: Sensor capacitive touch pada GPIO 14 mendukung single tap touch untuk langsung membangunkan Joy (*wake acknowledgement cue* `wake_ack.wav` + transisi `JoyState::RECORDING`), berfungsi sebagai alternatif fisik independen untuk wake word *"Hi Joy"*.
+  - **Kontrol Tombol BMO2**: A1 membangunkan Joy dan mengakhiri voice capture untuk diteruskan ke backend; A2 memakai tahan 3 detik untuk membuka window pairing selama 2 menit; A3 mengganti ke muka jelek; A4/A5 mengatur volume; A6/A7 mengontrol Spotify next/previous.
   - **Dynamic Thinking Filler Loop Controls**: Background FreeRTOS task dapat memutar loop acak filler berpikir secara non-blocking (`audio_startThinkingFillerLoop()`, `audio_stopThinkingFillerLoop()`) dan dihentikan seketika saat audio response siap diputar (`audio_ready`) atau request gagal.
 
 ### C. Proactive Audio, Voice Reservation & Playback Watchdog
@@ -135,7 +139,7 @@ sequenceDiagram
 - **QR Display Protocol**: Mendukung render kode QR dinamis pada TFT paralel 8-bit 480x320 (`display.cpp/.h` & `qrcodegen.c/.h`) untuk pairing WhatsApp Web / Baileys bridge atau on-screen onboarding:
   - `display_qr` (inbound WS): Berisi string `qr` dan ISO timestamp `expires_at`. Firmware meng-generate matrix QR code secara realtime dan merendernya secara centered dengan background putih dan border kontras pada layar TFT.
   - `clear_qr` (inbound WS): Menghapus overlay QR code seketika setelah pairing berhasil atau dibatalkan, mengembalikan display ke animasi ekspresi `JoyState::IDLE`.
-  - **Touch & Wakeword Guarding**: Selama mode QR aktif (`DisplayMode::QR_CODE`), sentuhan dan wake word di-guard agar tidak mengganggu proses scan kamera pengguna.
+  - **Button & Wakeword Guarding**: Selama mode QR aktif, tombol voice dan wakeword di-guard agar tidak mengganggu proses scan kamera pengguna.
 ## 4. State Machine & Lifecycle
 
 Firmware mengelola state tersinkronisasi antara FreeRTOS Task, LCD Display, dan WebSocket:
@@ -145,7 +149,7 @@ Firmware mengelola state tersinkronisasi antara FreeRTOS Task, LCD Display, dan 
                   │      IDLE      │ ◄────────────────────────┐
                   └───────┬────────┘                          │
                           │                                   │
-              [Wakeword ("Hi Joy") -> Wake Ack Cue / Touch Trigger]
+              [Wakeword ("Hi Joy") -> Wake Ack Cue / A1 GPIO20]
                           ▼                                   │
                   ┌────────────────┐                          │
                   │   RECORDING    │                          │
@@ -302,7 +306,7 @@ OK (100% Passing across all 14 test suites)
     ├── main/                           # Source C++ firmware
     │   ├── api.cpp / api.h             # HTTPS upload, WSS client, HTTP MP3 download
     │   ├── audio.cpp / audio.h         # MAX98357A I2S driver, wake ack cue & audio generator
-    │   ├── button.cpp / button.h       # Touch & volume buttons driver
+    │   ├── button.cpp / button.h       # Driver tombol BMO2 A1–A7
     │   ├── display.cpp / display.h     # 8-bit I80 TFT display UI & expression renderer
     │   ├── network.cpp / network.h     # FreeRTOS network event synchronization
     │   ├── pairing.cpp / pairing.h     # Device pairing controller state machine

@@ -36,6 +36,7 @@ bool wakeword_task();
 bool start_recording();
 bool is_recording();
 RecordingStatus get_recording_status();
+bool finish_recording(const char *reason);
 void abort_recording(const char *reason);
 int16_t *get_record_buffer();
 size_t get_record_size();
