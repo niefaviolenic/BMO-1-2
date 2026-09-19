@@ -4,10 +4,6 @@
 #include "joy_identity.h"
 #include "joy_ble_provisioning.h"
 
-#include "face_assets.h"
-#include "face_policy.h"
-
-static FacePolicy s_face_policy;
 #include "esp_timer.h"
 
 #include <math.h>
@@ -62,7 +58,7 @@ static const char *TAG = "DISPLAY";
 #define LCD_CMD_BITS 8
 #define LCD_PARAM_BITS 8
 
-#define LCD_DRAW_LINES 20
+#define LCD_DRAW_LINES 10
 
 //--------------------------------------------------
 
@@ -78,7 +74,7 @@ static bool display_on = false;
 static constexpr int FACE_CX = LCD_H_RES / 2;
 static constexpr int FACE_CY = LCD_V_RES / 2;
 static constexpr int TOUCH_FACE_COUNT =
-    static_cast<int>(FACE_DEAD) + 1;
+    static_cast<int>(FACE_CONFUSED) + 1;
 
 static DisplayMode current_display_mode = DisplayMode::IDLE;
 static Face current_touch_face = FACE_HAPPY;
@@ -301,60 +297,6 @@ static void flush_framebuffer_locked()
 
             buf_idx = 1 - buf_idx;
         }
-    }
-}
-
-static void render_face_asset_locked(uint8_t asset_id)
-{
-    if (!display_ready || frame_buffer == NULL) return;
-
-    const face_asset_t *asset = face_assets_get(asset_id);
-    if (!asset || !asset->data) return;
-
-    if (asset->is_rle) {
-        size_t pixel_idx = 0;
-        size_t total_pixels = (size_t)LCD_H_RES * (size_t)LCD_V_RES;
-        for (size_t i = 0; i < asset->run_count * 2 && pixel_idx < total_pixels; i += 2) {
-            uint16_t run_len = asset->data[i];
-            uint16_t color = asset->data[i + 1];
-            for (uint16_t r = 0; r < run_len && pixel_idx < total_pixels; ++r) {
-                frame_buffer[pixel_idx++] = color;
-            }
-        }
-    } else {
-        memcpy(frame_buffer, asset->data, (size_t)LCD_H_RES * (size_t)LCD_V_RES * sizeof(uint16_t));
-    }
-
-    flush_framebuffer_locked();
-}
-
-void display_render_asset(uint8_t asset_id)
-{
-    if (!lock_display(pdMS_TO_TICKS(100))) return;
-    display_wake();
-    render_face_asset_locked(asset_id);
-    unlock_display();
-}
-
-static void display_policy_task(void *param)
-{
-    while (true)
-    {
-        int64_t now_us = esp_timer_get_time();
-        FaceDecision decision = s_face_policy.update(now_us);
-        if (decision.face_changed) {
-            display_render_asset(decision.asset_id);
-        }
-
-        int delay_ms = 20;
-        if (decision.next_deadline_us > 0) {
-            int64_t diff_ms = (decision.next_deadline_us - now_us) / 1000LL;
-            if (diff_ms > 0 && diff_ms < 50) {
-                delay_ms = (int)diff_ms;
-                if (delay_ms < 5) delay_ms = 5;
-            }
-        }
-        vTaskDelay(pdMS_TO_TICKS(delay_ms));
     }
 }
 
@@ -1703,18 +1645,7 @@ void display_init()
     }
 
     ESP_LOGI(TAG, "ILI9341 Ready");
-    s_face_policy.reset(esp_timer_get_time());
-    display_render_asset(s_face_policy.get_current_asset_id());
-
-    xTaskCreateWithCaps(
-        display_policy_task,
-        "display_policy",
-        4096,
-        NULL,
-        2,
-        NULL,
-        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-
+    draw_face_locked(FACE_HAPPY);
 }
 
 //--------------------------------------------------
@@ -2066,27 +1997,22 @@ void display_set_mode(DisplayMode mode)
     {
         case DisplayMode::IDLE:
             draw_face_locked(current_touch_face);
-            s_face_policy.trigger_speaking_stop(esp_timer_get_time());
             break;
         case DisplayMode::LISTENING:
             display_wake();
             draw_screen_base();
             face_listening();
             flush_framebuffer_locked();
-            s_face_policy.trigger_recording_start(esp_timer_get_time());
             ESP_LOGI(TAG, "Face actually rendered: LISTENING");
             break;
         case DisplayMode::THINKING:
             draw_face_locked(FACE_CONFUSED);
-            s_face_policy.trigger_thinking_start(esp_timer_get_time());
             break;
         case DisplayMode::SPEAKING:
             draw_face_locked(FACE_HAPPY);
-            s_face_policy.trigger_speaking_start(esp_timer_get_time());
             break;
         case DisplayMode::ERROR:
             draw_face_locked(FACE_SAD);
-            s_face_policy.trigger_error(esp_timer_get_time());
             break;
     }
     unlock_display();

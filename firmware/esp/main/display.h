@@ -1,6 +1,7 @@
 #ifndef DISPLAY_H
 #define DISPLAY_H
 #include <time.h>
+#include <stdint.h>
 
 enum Face
 {
@@ -75,6 +76,5 @@ void display_hide_ble_pairing();
 bool display_ble_pairing_is_visible();
 
 void display_test_pattern();
-void display_render_asset(uint8_t asset_id);
 
 #endif

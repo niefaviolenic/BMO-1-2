@@ -124,6 +124,7 @@ export async function resumeSchedule(
   scheduleId: string,
   version: number,
 ): Promise<Schedule> {
+  const payload = await apiRequest<ScheduleResponse>(`/schedules/${scheduleId}/resume`, {
     method: 'POST',
     body: { version },
   });

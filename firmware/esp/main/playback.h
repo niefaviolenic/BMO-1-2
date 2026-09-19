@@ -110,12 +110,51 @@ bool playback_start_proactive_ready(const ProactiveAudioReady& ready,
                                    int64_t now_us);
 void playback_cancel_proactive(const ProactiveCancel& cancel,
                                int64_t now_us);
+bool playback_cancel_pending_offer(const char *delivery_id, const char *attempt_id);
+bool playback_try_reserve_capture(int64_t now_us);
+void playback_release_capture();
+
 bool playback_get_proactive_details(
     char *delivery_id, size_t deliv_len,
     char *attempt_id, size_t att_len,
     char *lease_id, size_t lease_len,
     char *audio_receipt, size_t rcpt_len);
 
+enum class PlaybackTransferResult : uint8_t {
+    COMPLETE,
+    DOWNLOAD_FAILED,
+    DECODE_FAILED,
+};
+
+struct PlaybackTransferSummary {
+    bool chunked;
+    bool http_complete;
+    int64_t content_length;
+    uint64_t received_bytes;
+    uint32_t decoded_frames;
+    size_t undecoded_bytes;
+};
+
+PlaybackTransferResult playback_validate_transfer_completion(const PlaybackTransferSummary &summary);
+
+enum class PendingPlaybackEventKind : uint8_t {
+    NONE,
+    DONE,
+    FAILED,
+};
+
+constexpr size_t JOY_PLAYBACK_REASON_MAX_LEN = 32;
+
+struct PendingPlaybackResult {
+    PendingPlaybackEventKind kind = PendingPlaybackEventKind::NONE;
+    PlaybackOrigin origin = PlaybackOrigin::VOICE_RESPONSE;
+    char correlation_id[kUuidBufferSize] = {};
+    char attempt_id[kUuidBufferSize] = {};
+    char lease_id[kUuidBufferSize] = {};
+    char audio_receipt[kReceiptBufferSize] = {};
+    char reason[JOY_PLAYBACK_REASON_MAX_LEN] = {};
+    int64_t settlement_deadline_us = 0;
+};
 
 void playback_init();
 
@@ -137,6 +176,7 @@ bool playback_is_expired(int64_t monotonic_ms);
 bool playback_get_current_job(PlaybackJob *job);
 
 void playback_mark_started();
+bool playback_mark_terminal(const char *correlation_id = nullptr, PlaybackTerminalResult result = PlaybackTerminalResult::DONE);
 void playback_mark_terminal(PlaybackTerminalResult result);
 void playback_cancel();
 

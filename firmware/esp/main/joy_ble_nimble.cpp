@@ -224,6 +224,7 @@ static int gatt_svr_chr_access_proof(uint16_t conn_handle, uint16_t attr_handle,
     cJSON *root = cJSON_CreateObject();
     if (!root) return BLE_ATT_ERR_INSUFFICIENT_RES;
 
+    cJSON_AddStringToObject(root, "session_id", joy_ble_get_session_id());
     cJSON_AddStringToObject(root, "confirm_nonce", nonce ? nonce : "");
     cJSON_AddStringToObject(root, "proof", proof ? proof : "");
 
@@ -419,10 +420,7 @@ static int gatt_svr_chr_access_wifi_scan(uint16_t conn_handle, uint16_t attr_han
                                         struct ble_gatt_access_ctxt *ctxt, void *arg)
 {
     if (ctxt->op == BLE_GATT_ACCESS_OP_READ_CHR) {
-        char *json_str = wifi_paged_scan_get_page_json(0);
-        if (!json_str) {
-            json_str = wifi_scan_nearby_aps_json();
-        }
+        char *json_str = wifi_paged_scan_get_page_json();
         if (!json_str) return BLE_ATT_ERR_INSUFFICIENT_RES;
 
         int rc = os_mbuf_append(ctxt->om, json_str, strlen(json_str));
@@ -452,18 +450,24 @@ static int gatt_svr_chr_access_wifi_scan(uint16_t conn_handle, uint16_t attr_han
 
         cJSON *op_node = cJSON_GetObjectItem(root, "op");
         cJSON *scan_id_node = cJSON_GetObjectItem(root, "scan_id");
-        if (op_node && cJSON_IsString(op_node) && scan_id_node && cJSON_IsNumber(scan_id_node)) {
+        esp_err_t err = ESP_ERR_INVALID_ARG;
+        if (cJSON_IsString(op_node) && cJSON_IsNumber(scan_id_node) &&
+            scan_id_node->valuedouble >= 0 && scan_id_node->valuedouble <= UINT32_MAX &&
+            scan_id_node->valuedouble == (uint32_t)scan_id_node->valuedouble) {
             uint32_t scan_id = (uint32_t)scan_id_node->valuedouble;
             if (strcmp(op_node->valuestring, "scan") == 0) {
-                wifi_paged_scan_schedule(scan_id);
+                err = wifi_paged_scan_schedule(scan_id);
             } else if (strcmp(op_node->valuestring, "page") == 0) {
                 cJSON *idx_node = cJSON_GetObjectItem(root, "index");
-                uint16_t page_idx = idx_node && cJSON_IsNumber(idx_node) ? (uint16_t)idx_node->valuedouble : 0;
-                wifi_paged_scan_select_page(scan_id, page_idx);
+                if (cJSON_IsNumber(idx_node) && idx_node->valuedouble >= 0 &&
+                    idx_node->valuedouble <= UINT16_MAX &&
+                    idx_node->valuedouble == (uint16_t)idx_node->valuedouble) {
+                    err = wifi_paged_scan_select_page(scan_id, (uint16_t)idx_node->valuedouble);
+                }
             }
         }
         cJSON_Delete(root);
-        return 0;
+        return err == ESP_OK ? 0 : BLE_ATT_ERR_UNLIKELY;
     }
     return BLE_ATT_ERR_UNLIKELY;
 }
@@ -485,6 +489,7 @@ void joy_ble_nimble_notify_proof(const char *confirm_nonce, const char *proof)
     cJSON *root = cJSON_CreateObject();
     if (!root) return;
 
+    cJSON_AddStringToObject(root, "session_id", joy_ble_get_session_id());
     cJSON_AddStringToObject(root, "confirm_nonce", confirm_nonce ? confirm_nonce : "");
     cJSON_AddStringToObject(root, "proof", proof ? proof : "");
     char *json_str = cJSON_PrintUnformatted(root);
@@ -530,7 +535,9 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg)
                      event->connect.status);
             if (event->connect.status == 0) {
                 s_conn_handle = event->connect.conn_handle;
-                joy_ble_set_state(JoyBleState::BOOTSTRAP_CONNECTED);
+                if (joy_ble_get_state() == JoyBleState::BOOTSTRAP_ADVERTISING) {
+                    joy_ble_set_state(JoyBleState::BOOTSTRAP_CONNECTED);
+                }
             } else {
                 s_conn_handle = BLE_HS_CONN_HANDLE_NONE;
                 joy_ble_nimble_start_advertising();
@@ -541,8 +548,10 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg)
             ESP_LOGI(TAG, "BLE disconnected; reason=%d", event->disconnect.reason);
             ble_frame_assembler_reset(&s_frame_assembler);
             s_conn_handle = BLE_HS_CONN_HANDLE_NONE;
-            if (joy_ble_is_active()) {
-                joy_ble_nimble_start_advertising();
+            if (joy_ble_is_active() &&
+                joy_ble_get_state() != JoyBleState::CLAIM_COMMITTED &&
+                joy_ble_get_state() != JoyBleState::FINALIZING_WITH_BACKEND) {
+                joy_ble_stop_provisioning();
             }
             break;
 

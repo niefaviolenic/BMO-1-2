@@ -7,7 +7,8 @@ enum class JoyState
     RECORDING,
     THINKING,
     SPEAKING,
-    ERROR_STATE
+    ERROR_STATE,
+    PREPARING_PLAYBACK
 };
 
 extern JoyState currentState;
@@ -17,5 +18,5 @@ bool trySetState(JoyState expected, JoyState next);
 JoyState getState();
 
 void joy_state_machine_init();
-
+void joy_state_machine_step();
 #endif

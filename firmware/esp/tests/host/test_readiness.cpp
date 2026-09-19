@@ -161,6 +161,52 @@ static void test_proactive_offer_and_ready()
     printf("  [PASS] test_proactive_offer_and_ready\n");
 }
 
+static void test_physical_arbitration_and_lazy_expiry()
+{
+    playback_init();
+    int64_t now_us = 1000000LL;
+
+    // 1. Capture reserved first -> offer rejected with BUSY
+    bool cap1 = playback_try_reserve_capture(now_us);
+    assert(cap1);
+
+    ProactiveOffer offer1{};
+    strcpy(offer1.delivery_id, "deliv-1");
+    strcpy(offer1.attempt_id, "att-1");
+    strcpy(offer1.offer_receipt, "rcpt-1");
+    offer1.expires_at_ms = 10000;
+    ProactiveRejectReason rej = ProactiveRejectReason::INVALID;
+    bool accepted1 = playback_prepare_proactive_offer(offer1, now_us, &rej);
+    assert(!accepted1);
+    assert(rej == ProactiveRejectReason::BUSY);
+
+    // Release capture
+    playback_release_capture();
+
+    // 2. Offer prepared first -> capture rejected
+    bool accepted2 = playback_prepare_proactive_offer(offer1, now_us, &rej);
+    assert(accepted2);
+
+    bool cap2 = playback_try_reserve_capture(now_us);
+    assert(!cap2); // blocked by active offer
+
+    // 3. Lazy expiry: offer TTL is 5s (5000000 us). At now_us + 6000000 us, offer is expired
+    bool cap3 = playback_try_reserve_capture(now_us + 6000000LL);
+    assert(cap3); // Unblocked via lazy expiry!
+    playback_release_capture();
+
+    // 4. Cancel pending offer
+    playback_prepare_proactive_offer(offer1, now_us + 7000000LL, &rej);
+    bool cancelled_pending = playback_cancel_pending_offer("deliv-1", "att-1");
+    assert(cancelled_pending);
+    // After cancel, capture can be reserved immediately
+    bool cap4 = playback_try_reserve_capture(now_us + 7000000LL);
+    assert(cap4);
+    playback_release_capture();
+
+    printf("  [PASS] test_physical_arbitration_and_lazy_expiry\n");
+}
+
 int main()
 {
     printf("Running Host C++ Readiness Tests...\n");
@@ -168,6 +214,6 @@ int main()
     test_ble_framing_multi_chunk();
     test_ble_framing_rejections();
     test_proactive_offer_and_ready();
-    printf("All Host C++ Readiness Tests Passed!\n");
+    test_physical_arbitration_and_lazy_expiry();
     return 0;
 }

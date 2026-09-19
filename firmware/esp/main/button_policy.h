@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 constexpr int64_t BUTTON_DEBOUNCE_US = 30000LL;          // 30 ms debounce
-constexpr int64_t BLE_PAIRING_ENTRY_HOLD_US = 3000000LL; // 3 seconds hold to open pairing
+constexpr int64_t BLE_PAIRING_ENTRY_HOLD_US = 5000000LL; // 5 seconds hold to open pairing
 constexpr int64_t BLE_PAIRING_CONFIRM_HOLD_US = 2000000LL; // 2 seconds hold to confirm physical proof
 
 enum class ButtonAction : uint8_t {
@@ -61,7 +61,8 @@ public:
         bool btn_spot_prev_pressed,
         bool touch_pressed,
         int64_t now_us,
-        SystemInteractionState sys_state);
+        SystemInteractionState sys_state,
+        bool btn_boot_pressed = false);
 
     size_t get_pending_action_count() const;
     ButtonAction pop_action();
@@ -69,12 +70,16 @@ public:
 private:
     DebouncedButton m_voice;
     DebouncedButton m_pair;
+    DebouncedButton m_boot;
     DebouncedButton m_expr;
     DebouncedButton m_vol_up;
     DebouncedButton m_vol_down;
     DebouncedButton m_spot_next;
     DebouncedButton m_spot_prev;
     DebouncedButton m_touch;
+
+    SystemInteractionState m_prev_sys_state = SystemInteractionState::IDLE;
+    bool m_arm_requires_release = false;
 
     static constexpr size_t ACTION_QUEUE_MAX = 8;
     ButtonAction m_action_queue[ACTION_QUEUE_MAX];

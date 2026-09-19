@@ -26,7 +26,7 @@ const TROUBLESHOOT_STEPS = [
   {
     number: 2,
     title: 'Enter Pairing Mode',
-    desc: 'Hold the top capacitive sensor for 5 seconds until you see the Bluetooth pairing screen.',
+    desc: 'Hold the EXPR or BOOT button for 5 seconds until the Bluetooth pairing screen appears, then release it.',
   },
   {
     number: 3,

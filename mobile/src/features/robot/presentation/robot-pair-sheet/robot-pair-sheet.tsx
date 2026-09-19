@@ -129,14 +129,16 @@ export function RobotPairSheet({
       const isSelectedOpen = !manualSsid && session.selectedNetwork?.security === 'OPEN';
       const passwordToSend = isSelectedOpen ? '' : wifiPassword;
       await provisioningManager.submitWifiCredentials(passwordToSend, targetSsid);
+    } catch {
+      // The manager exposes the failure in session.error.
     } finally {
       setIsSubmitting(false);
     }
   };
   const handleRescan = () => {
-    void provisioningManager.restartScanning();
+    provisioningManager.reset();
+    void provisioningManager.startScanning();
   };
-
   const handleRefreshWifi = () => {
     setIsManualInput(false);
     void provisioningManager.requestDeviceWifiScan();
@@ -147,10 +149,8 @@ export function RobotPairSheet({
   };
 
   const handleBack = () => {
-    if (currentStep === 'confirm') {
-      setCurrentStep('scan');
-    } else if (currentStep === 'wifi') {
-      setCurrentStep('confirm');
+    if (currentStep === 'confirm' || currentStep === 'wifi') {
+      handleRescan();
     } else {
       onClose();
     }
@@ -262,8 +262,10 @@ export function RobotPairSheet({
                   activeStep === 'scan'
                     ? handleRescan
                     : activeStep === 'wifi'
-                    ? handleSubmitWifi
-                    : undefined
+                    ? isSubmitting || session.step === 'connecting'
+                      ? () => void handleSubmitWifi()
+                      : handleRefreshWifi
+                    : handleRescan
                 }
                 style={styles.errorBannerSpacing}
                 testID={`${testID}-error`}
@@ -278,7 +280,7 @@ export function RobotPairSheet({
 
                 <CameraScanHero
                   title="Discovering Nearby Joy"
-                  subtitle="Hold Joy's touch sensor for 5 seconds to open pairing mode."
+                  subtitle="Hold Joy's EXPR or BOOT button for 5 seconds, then release it."
                   style={styles.fullWidth}
                 />
 
@@ -322,8 +324,8 @@ export function RobotPairSheet({
             {activeStep === 'confirm' ? (
               <View style={styles.stepStack} testID={`${testID}-confirm-step`}>
                 <CameraScanHero
-                  title="Hold Touch to Confirm"
-                  subtitle="Touch and hold your Joy's top capacitive sensor for 2 seconds to prove physical presence."
+                  title="Hold Button to Confirm"
+                  subtitle="Release the EXPR or BOOT button, then press and hold it again for 2 seconds."
                   style={styles.fullWidth}
                 />
 
@@ -341,10 +343,10 @@ export function RobotPairSheet({
                 >
                   <ActivityIndicator size="small" color={theme.linkPrimary} />
                   <Text style={[styles.emptyText, { color: theme.text, fontWeight: '600' }]}>
-                    Waiting for 2s touch on Joy Robot...
+                    Waiting for a new 2-second button press...
                   </Text>
                   <Text style={[styles.emptyText, { color: theme.textSecondary, textAlign: 'center', paddingHorizontal: 20 }]}>
-                    The physical robot will automatically verify and advance setup once touched.
+                    Keep this screen open. Setup advances only after the robot and server confirm this session.
                   </Text>
                 </View>
               </View>
@@ -379,7 +381,7 @@ export function RobotPairSheet({
                       Joy is discovering available Wi-Fi networks around you.
                     </Text>
                   </View>
-                ) : session.discoveredNetworks.length > 0 && !isManualInput ? (
+                ) : session.wifiScanCompleted && session.discoveredNetworks.length > 0 && !isManualInput ? (
                   <View style={styles.wifiContainer}>
                     <View style={styles.wifiHeaderRow}>
                       <Text style={[styles.wifiListTitle, { color: theme.textSecondary }]}>
@@ -506,19 +508,19 @@ export function RobotPairSheet({
                       </Text>
                     </Pressable>
                   </View>
-                ) : (
+                ) : isManualInput ? (
                   <View style={styles.wifiContainer}>
-                    {session.discoveredNetworks.length > 0 ? (
-                      <Pressable
-                        style={[styles.toggleManualButton, { alignSelf: 'flex-start' }]}
-                        onPress={() => setIsManualInput(false)}
-                        testID={`${testID}-back-to-wifi-list-btn`}
-                      >
-                        <Text style={[styles.toggleManualText, { color: theme.linkPrimary }]}>
-                          ← Back to available networks
-                        </Text>
-                      </Pressable>
-                    ) : null}
+                    <Pressable
+                      style={[styles.toggleManualButton, { alignSelf: 'flex-start' }]}
+                      onPress={() => setIsManualInput(false)}
+                      testID={`${testID}-back-to-wifi-list-btn`}
+                    >
+                      <Text style={[styles.toggleManualText, { color: theme.linkPrimary }]}>
+                        {session.discoveredNetworks.length > 0
+                          ? '← Back to available networks'
+                          : '← Back to scan results'}
+                      </Text>
+                    </Pressable>
                     <View
                       style={[
                         styles.passwordBox,
@@ -621,6 +623,92 @@ export function RobotPairSheet({
                         )}
                       </Pressable>
                     </View>
+                  </View>
+                ) : session.error ? (
+                  <View style={styles.wifiContainer}>
+                    <View
+                      style={[
+                        styles.emptyCard,
+                        {
+                          borderColor: theme.border,
+                          backgroundColor: theme.cardBackgroundSubtle ?? theme.cardBackground,
+                          paddingVertical: 24,
+                          gap: 12,
+                        },
+                      ]}
+                      testID={`${testID}-wifi-error-box`}
+                    >
+                      <Text style={[styles.emptyText, { color: theme.text, fontWeight: '600', textAlign: 'center' }]}>
+                        Wi-Fi Scan Failed
+                      </Text>
+                      <Text style={[styles.emptyText, { color: theme.textSecondary, textAlign: 'center', paddingHorizontal: 20 }]}>
+                        {session.error}
+                      </Text>
+                      <Pressable
+                        style={[styles.refreshWifiButton, { alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 8 }]}
+                        onPress={handleRefreshWifi}
+                        accessibilityRole="button"
+                        testID={`${testID}-rescan-after-error-btn`}
+                      >
+                        <RefreshCw size={14} color={theme.linkPrimary} />
+                        <Text style={[styles.refreshWifiText, { color: theme.linkPrimary, fontWeight: '600' }]}>
+                          Scan again
+                        </Text>
+                      </Pressable>
+                    </View>
+                    <Pressable
+                      style={styles.toggleManualButton}
+                      onPress={() => setIsManualInput(true)}
+                      testID={`${testID}-toggle-manual-wifi-btn`}
+                    >
+                      <Text style={[styles.toggleManualText, { color: theme.textSecondary }]}>
+                        Enter Wi-Fi network manually
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={styles.wifiContainer}>
+                    <View
+                      style={[
+                        styles.emptyCard,
+                        {
+                          borderColor: theme.border,
+                          backgroundColor: theme.cardBackgroundSubtle ?? theme.cardBackground,
+                          paddingVertical: 24,
+                          gap: 12,
+                        },
+                      ]}
+                      testID={`${testID}-wifi-empty-box`}
+                    >
+                      <Text style={[styles.emptyText, { color: theme.text, fontWeight: '600', textAlign: 'center' }]}>
+                        {session.wifiScanCompleted ? 'No 2.4 GHz Networks Found' : 'Wi-Fi Scan Not Completed'}
+                      </Text>
+                      <Text style={[styles.emptyText, { color: theme.textSecondary, textAlign: 'center', paddingHorizontal: 20 }]}>
+                        {session.wifiScanCompleted
+                          ? 'Joy found no nearby 2.4 GHz networks. Check your router or enter a hidden network manually.'
+                          : 'Try scanning again. If Joy restarted or Bluetooth disconnected, go back and start pairing again.'}
+                      </Text>
+                      <Pressable
+                        style={[styles.refreshWifiButton, { alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 8 }]}
+                        onPress={handleRefreshWifi}
+                        accessibilityRole="button"
+                        testID={`${testID}-empty-rescan-btn`}
+                      >
+                        <RefreshCw size={14} color={theme.linkPrimary} />
+                        <Text style={[styles.refreshWifiText, { color: theme.linkPrimary, fontWeight: '600' }]}>
+                          Scan again
+                        </Text>
+                      </Pressable>
+                    </View>
+                    <Pressable
+                      style={styles.toggleManualButton}
+                      onPress={() => setIsManualInput(true)}
+                      testID={`${testID}-toggle-manual-wifi-btn`}
+                    >
+                      <Text style={[styles.toggleManualText, { color: theme.textSecondary }]}>
+                        Hidden network? Enter manually
+                      </Text>
+                    </Pressable>
                   </View>
                 )}
               </View>

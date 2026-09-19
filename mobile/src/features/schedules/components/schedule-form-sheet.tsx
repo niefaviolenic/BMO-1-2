@@ -103,7 +103,7 @@ export function ScheduleFormSheet({
 
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(() => {
     if (schedule && mode === 'edit') {
-      return schedule.targetDeviceId ?? activeId;
+      return schedule.targetDeviceId ?? null;
     }
     return activeId;
   });
@@ -181,7 +181,7 @@ export function ScheduleFormSheet({
       } else {
         setTargetMode('MOBILE');
       }
-      setSelectedDeviceId(schedule.targetDeviceId ?? activeId);
+      setSelectedDeviceId(schedule.targetDeviceId ?? null);
     } else if (mode === 'create') {
       setPrompt(initialPrompt ?? '');
       setFrequency('Daily');

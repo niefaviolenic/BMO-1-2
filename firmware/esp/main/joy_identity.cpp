@@ -85,7 +85,21 @@ esp_err_t joy_identity_init(void)
             str_len = sizeof(s_identity.hardware_revision);
             nvs_get_str(factory_handle, "hw_rev", s_identity.hardware_revision, &str_len);
             nvs_get_u32(factory_handle, "reset_epoch", &s_identity.reset_epoch);
-            ESP_LOGI(TAG, "Loaded existing factory identity: hw_id=%s, ref=%s, epoch=%lu",
+            bool secrets_match = (memcmp(s_identity.provisioning_root_secret, det_id.provisioning_root_secret, 32) == 0 &&
+                                  memcmp(s_identity.manufacturing_secret, det_id.manufacturing_secret, 32) == 0 &&
+                                  strcmp(s_identity.provisioning_ref, det_id.provisioning_ref) == 0);
+            if (!secrets_match) {
+                ESP_LOGW(TAG, "Factory secrets out of sync with deterministic identity; updating NVS to match backend");
+                memcpy(s_identity.provisioning_root_secret, det_id.provisioning_root_secret, sizeof(s_identity.provisioning_root_secret));
+                memcpy(s_identity.manufacturing_secret, det_id.manufacturing_secret, sizeof(s_identity.manufacturing_secret));
+                strncpy(s_identity.provisioning_ref, det_id.provisioning_ref, sizeof(s_identity.provisioning_ref));
+                nvs_set_str(factory_handle, "prov_ref", s_identity.provisioning_ref);
+                nvs_set_blob(factory_handle, "root_sec", s_identity.provisioning_root_secret, sizeof(s_identity.provisioning_root_secret));
+                nvs_set_blob(factory_handle, "mfg_sec", s_identity.manufacturing_secret, sizeof(s_identity.manufacturing_secret));
+                nvs_commit(factory_handle);
+            }
+
+            ESP_LOGI(TAG, "Loaded factory identity: hw_id=%s, ref=%s, epoch=%lu",
                      s_identity.hardware_id, s_identity.provisioning_ref, (unsigned long)s_identity.reset_epoch);
         }
         nvs_close(factory_handle);

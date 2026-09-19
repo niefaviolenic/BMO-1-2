@@ -264,10 +264,27 @@ void playback_mark_started()
 }
 
 
-void playback_mark_terminal(PlaybackTerminalResult result)
+bool playback_mark_terminal(const char *correlation_id, PlaybackTerminalResult result)
 {
     PlaybackLock lock;
+    if (!s_state.active)
+    {
+        return false;
+    }
+    if (correlation_id != nullptr && correlation_id[0] != '\0')
+    {
+        if (std::strcmp(s_state.current_job.correlation_id, correlation_id) != 0)
+        {
+            return false;
+        }
+    }
     playback_mark_terminal_locked(result);
+    return true;
+}
+
+void playback_mark_terminal(PlaybackTerminalResult result)
+{
+    (void)playback_mark_terminal(nullptr, result);
 }
 void playback_cancel()
 {
@@ -296,13 +313,37 @@ PlaybackSnapshot playback_get_snapshot()
 static ProactiveOffer s_active_offer{};
 static bool s_has_active_offer = false;
 static int64_t s_offer_deadline_us = 0;
+static bool s_capture_reserved = false;
+
+bool playback_try_reserve_capture(int64_t now_us)
+{
+    PlaybackLock lock;
+    if (s_has_active_offer && now_us > s_offer_deadline_us) {
+        s_has_active_offer = false;
+    }
+    if (s_has_active_offer || s_capture_reserved || s_state.active) {
+        return false;
+    }
+    s_capture_reserved = true;
+    return true;
+}
+
+void playback_release_capture()
+{
+    PlaybackLock lock;
+    s_capture_reserved = false;
+}
 
 bool playback_prepare_proactive_offer(const ProactiveOffer& offer,
                                       int64_t now_us,
                                       ProactiveRejectReason* rejection)
 {
     PlaybackLock lock;
-    if (s_state.active) {
+    if (s_has_active_offer && now_us > s_offer_deadline_us) {
+        s_has_active_offer = false;
+    }
+
+    if (s_state.active || s_capture_reserved) {
         if (rejection) *rejection = ProactiveRejectReason::BUSY;
         return false;
     }
@@ -312,12 +353,38 @@ bool playback_prepare_proactive_offer(const ProactiveOffer& offer,
         return false;
     }
 
+    // Duplicate check: if exact same offer is already active, don't reset deadline
+    if (s_has_active_offer &&
+        std::strcmp(s_active_offer.delivery_id, offer.delivery_id) == 0 &&
+        std::strcmp(s_active_offer.attempt_id, offer.attempt_id) == 0) {
+        return true;
+    }
+
+    if (s_has_active_offer) {
+        if (rejection) *rejection = ProactiveRejectReason::BUSY;
+        return false;
+    }
+
     s_active_offer = offer;
     s_has_active_offer = true;
-    s_offer_deadline_us = now_us + kProactiveLeaseUs;
+    const int64_t offer_ttl_us = 5000000LL;
+    int64_t expires_limit_us = (offer.expires_at_ms > 0) ? (offer.expires_at_ms * 1000LL) : (now_us + offer_ttl_us);
+    s_offer_deadline_us = (now_us + offer_ttl_us < expires_limit_us) ? (now_us + offer_ttl_us) : expires_limit_us;
     return true;
 }
 
+bool playback_cancel_pending_offer(const char *delivery_id, const char *attempt_id)
+{
+    PlaybackLock lock;
+    if (s_has_active_offer &&
+        delivery_id != nullptr && attempt_id != nullptr &&
+        std::strcmp(s_active_offer.delivery_id, delivery_id) == 0 &&
+        std::strcmp(s_active_offer.attempt_id, attempt_id) == 0) {
+        s_has_active_offer = false;
+        return true;
+    }
+    return false;
+}
 bool playback_start_proactive_ready(const ProactiveAudioReady& ready,
                                    int64_t now_us)
 {
@@ -396,7 +463,31 @@ void playback_cancel_proactive(const ProactiveCancel& cancel,
         s_has_active_offer = false;
     }
     if (s_state.active &&
-        std::strcmp(s_state.current_proactive_delivery_id, cancel.delivery_id) == 0) {
+        std::strcmp(s_state.current_proactive_delivery_id, cancel.delivery_id) == 0 &&
+        (cancel.attempt_id[0] == '\0' || std::strcmp(s_state.current_proactive_attempt_id, cancel.attempt_id) == 0) &&
+        (cancel.lease_id[0] == '\0' || std::strcmp(s_state.current_proactive_lease_id, cancel.lease_id) == 0)) {
         playback_mark_terminal_locked(PlaybackTerminalResult::CANCELLED);
     }
 }
+
+PlaybackTransferResult playback_validate_transfer_completion(const PlaybackTransferSummary &summary)
+{
+    if (!summary.http_complete)
+    {
+        return PlaybackTransferResult::DOWNLOAD_FAILED;
+    }
+    if (!summary.chunked && summary.content_length > 0 && summary.received_bytes != static_cast<uint64_t>(summary.content_length))
+    {
+        return PlaybackTransferResult::DOWNLOAD_FAILED;
+    }
+    if (summary.decoded_frames == 0)
+    {
+        return PlaybackTransferResult::DECODE_FAILED;
+    }
+    if (summary.undecoded_bytes >= 4)
+    {
+        return PlaybackTransferResult::DECODE_FAILED;
+    }
+    return PlaybackTransferResult::COMPLETE;
+}
+

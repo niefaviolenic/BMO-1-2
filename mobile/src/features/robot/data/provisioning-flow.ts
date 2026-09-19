@@ -64,6 +64,7 @@ export interface ProvisioningSessionState {
   prepareData: ProvisioningPrepareResponse | null;
   confirmData: ProvisioningConfirmResponse | null;
   isWifiScanning: boolean;
+  wifiScanCompleted: boolean;
   discoveredNetworks: DiscoveredWifiNetwork[];
   selectedNetwork: DiscoveredWifiNetwork | null;
   error: string | null;
@@ -78,6 +79,7 @@ export const INITIAL_PROVISIONING_SESSION: ProvisioningSessionState = {
   prepareData: null,
   confirmData: null,
   isWifiScanning: false,
+  wifiScanCompleted: false,
   discoveredNetworks: [],
   selectedNetwork: null,
   error: null,
@@ -87,7 +89,12 @@ export class JoyProvisioningManager {
   private state: ProvisioningSessionState = { ...INITIAL_PROVISIONING_SESSION };
   private listeners = new Set<(state: ProvisioningSessionState) => void>();
   private proofSubscriptionCleanup: (() => void) | null = null;
+  private proofPollingCleanup: (() => void) | null = null;
   private scanTimer: ReturnType<typeof setTimeout> | null = null;
+  private sessionEpoch = 0;
+  private wifiScanEpoch = 0;
+  private isWifiScanningInternal = false;
+  private nextScanId = Date.now() >>> 0;
 
   subscribe(listener: (state: ProvisioningSessionState) => void): () => void {
     this.listeners.add(listener);
@@ -105,13 +112,24 @@ export class JoyProvisioningManager {
   }
 
   reset(): void {
+    this.sessionEpoch++;
+    this.wifiScanEpoch++;
+    this.isWifiScanningInternal = false;
     this.clearScanTimer();
+    this.cleanupProof();
+    bleClient.disconnect().catch(() => {});
+    this.updateState({ ...INITIAL_PROVISIONING_SESSION });
+  }
+
+  private cleanupProof(): void {
     if (this.proofSubscriptionCleanup) {
       this.proofSubscriptionCleanup();
       this.proofSubscriptionCleanup = null;
     }
-    bleClient.disconnect().catch(() => {});
-    this.updateState({ ...INITIAL_PROVISIONING_SESSION });
+    if (this.proofPollingCleanup) {
+      this.proofPollingCleanup();
+      this.proofPollingCleanup = null;
+    }
   }
 
   private clearScanTimer(): void {
@@ -203,11 +221,22 @@ export class JoyProvisioningManager {
   }
 
   async selectJoy(joy: DiscoveredJoy): Promise<void> {
-    this.updateState({ selectedJoy: joy, step: 'selected', error: null });
+    const currentEpoch = ++this.sessionEpoch;
+    this.stopScanning();
+    this.wifiScanEpoch++;
+    this.isWifiScanningInternal = false;
+    this.cleanupProof();
+    this.updateState({
+      ...INITIAL_PROVISIONING_SESSION,
+      discoveredJoys: this.state.discoveredJoys,
+      selectedJoy: joy,
+      step: 'selected',
+    });
 
     try {
       // 1. Connect GATT over BLE
       await bleClient.connect(joy.id);
+      if (this.sessionEpoch !== currentEpoch) return;
 
       // 2. Read Identity & Setup Nonce from GATT Char 1
       const idInfo = await bleClient.readJson<{
@@ -217,6 +246,7 @@ export class JoyProvisioningManager {
         epoch: number;
         transport_version?: number;
       }>(CHR_IDENTITY_UUID);
+      if (this.sessionEpoch !== currentEpoch) return;
 
       if (!idInfo || !idInfo.hw_id || !idInfo.nonce) {
         throw new Error('Invalid or incomplete hardware identity received from robot via BLE');
@@ -238,6 +268,7 @@ export class JoyProvisioningManager {
         setup_nonce: joy.setupNonce,
         reset_epoch: joy.resetEpoch,
       });
+      if (this.sessionEpoch !== currentEpoch) return;
 
       this.updateState({
         prepareData: prepareRes,
@@ -249,46 +280,111 @@ export class JoyProvisioningManager {
         session_id: prepareRes.session_id,
         challenge: prepareRes.challenge,
       });
+      if (this.sessionEpoch !== currentEpoch) return;
 
       let physicalConfirmed = false;
-      const onProofReceived = async (data: { confirm_nonce: string; proof: string }) => {
-        if (physicalConfirmed) return;
-        if (data && data.confirm_nonce && data.proof) {
-          physicalConfirmed = true;
-          if (this.proofSubscriptionCleanup) {
-            this.proofSubscriptionCleanup();
-            this.proofSubscriptionCleanup = null;
-          }
+      const expectedSessionId = prepareRes.session_id;
+
+      const handleProofPayload = async (data: {
+        session_id?: string;
+        confirm_nonce?: string;
+        proof?: string;
+      }) => {
+        if (physicalConfirmed || this.sessionEpoch !== currentEpoch) return;
+        // A readable proof may outlive its BLE connection; bind it to this challenge.
+        if (!data || data.session_id !== expectedSessionId) {
+          return;
+        }
+        if (!data.confirm_nonce || !data.proof) {
+          return;
+        }
+
+        physicalConfirmed = true;
+        this.cleanupProof();
+
+        try {
           await this.onPhysicalConfirmationReceived({
+            session_id: data.session_id,
             confirmation_nonce: data.confirm_nonce,
             proof: data.proof,
           });
+        } catch (confirmErr) {
+          // Error captured inside onPhysicalConfirmationReceived; do not leave unhandled rejection
         }
       };
 
+      // 5a. Subscribe to notifications on Char 3 (CHR_PROOF_UUID)
       this.proofSubscriptionCleanup = bleClient.monitorJson<{
-        confirm_nonce: string;
-        proof: string;
+        session_id?: string;
+        confirm_nonce?: string;
+        proof?: string;
       }>(CHR_PROOF_UUID, (data) => {
-        void onProofReceived(data);
+        void handleProofPayload(data);
       });
 
-      // Also poll FE04 every 250ms until deadline (up to 60s)
-      const proofPollStart = Date.now();
-      const pollProofTimer = setInterval(async () => {
-        if (physicalConfirmed || this.state.step !== 'waiting_physical_confirm' || Date.now() - proofPollStart > 60_000) {
-          clearInterval(pollProofTimer);
-          return;
-        }
-        try {
-          const proofRes = await bleClient.readJson<{ confirm_nonce?: string; proof?: string }>(CHR_PROOF_UUID);
-          if (proofRes && proofRes.confirm_nonce && proofRes.proof) {
-            clearInterval(pollProofTimer);
-            void onProofReceived({ confirm_nonce: proofRes.confirm_nonce, proof: proofRes.proof });
+      // 5b. Serial polling fallback on CHR_PROOF_UUID (no overlapping reads, with deadline & cleanup)
+      let proofPollingActive = true;
+      this.proofPollingCleanup = () => {
+        proofPollingActive = false;
+      };
+
+      (async () => {
+        const proofPollStart = Date.now();
+        const pollDeadline = proofPollStart + 60_000;
+
+        while (
+          proofPollingActive &&
+          !physicalConfirmed &&
+          this.sessionEpoch === currentEpoch &&
+          this.state.step === 'waiting_physical_confirm' &&
+          Date.now() < pollDeadline
+        ) {
+          await delay(250);
+          if (
+            !proofPollingActive ||
+            physicalConfirmed ||
+            this.sessionEpoch !== currentEpoch ||
+            this.state.step !== 'waiting_physical_confirm'
+          ) {
+            break;
           }
-        } catch {}
-      }, 250);
+
+          try {
+            const proofRes = await bleClient.readJson<{
+              session_id?: string;
+              confirm_nonce?: string;
+              proof?: string;
+            }>(CHR_PROOF_UUID);
+
+            if (
+              !proofPollingActive ||
+              physicalConfirmed ||
+              this.sessionEpoch !== currentEpoch ||
+              this.state.step !== 'waiting_physical_confirm'
+            ) {
+              break;
+            }
+
+            if (
+              proofRes &&
+              proofRes.session_id === expectedSessionId &&
+              proofRes.confirm_nonce &&
+              proofRes.proof
+            ) {
+              await handleProofPayload(proofRes);
+              break;
+            }
+          } catch (readErr) {
+            // Serial read poll error, wait for next tick
+          }
+        }
+        if (proofPollingActive && !physicalConfirmed && this.sessionEpoch === currentEpoch) {
+          this.cleanupProof();
+          this.updateState({ step: 'error', error: 'Konfirmasi tombol 2 detik melewati batas waktu. Mulai pairing lagi.' });
+        }
+      })().catch(() => {});
     } catch (err: unknown) {
+      if (this.sessionEpoch !== currentEpoch) return;
       const msg = err instanceof Error ? err.message : 'Failed to prepare provisioning with device';
       this.updateState({ error: msg, step: 'error' });
       throw err;
@@ -296,21 +392,33 @@ export class JoyProvisioningManager {
   }
 
   async onPhysicalConfirmationReceived(confirmation: {
+    session_id: string;
     confirmation_nonce: string;
     proof: string;
   }): Promise<void> {
+    const currentEpoch = this.sessionEpoch;
     if (!this.state.selectedJoy || !this.state.prepareData) {
       throw new Error('No active prepare session found');
+    }
+
+    if (
+      confirmation.session_id !== this.state.prepareData.session_id
+    ) {
+      throw new Error(
+        `Proof session mismatch: expected ${this.state.prepareData.session_id}, got ${confirmation.session_id}`
+      );
     }
 
     if (!confirmation.confirmation_nonce || !confirmation.proof) {
       throw new Error('Invalid physical proof payload received from robot');
     }
 
+    const activeSessionId = this.state.prepareData.session_id;
+
     try {
       // 6. Confirm with Backend API
       const confirmRes = await confirmProvisioning({
-        session_id: this.state.prepareData.session_id,
+        session_id: activeSessionId,
         confirmation: {
           hardware_id: this.state.selectedJoy.hardwareId,
           provisioning_ref: this.state.selectedJoy.provisioningRef,
@@ -321,87 +429,111 @@ export class JoyProvisioningManager {
           proof: confirmation.proof,
         },
       });
+
+      // Never advance WiFi until backend confirm succeeds for current session
+      if (
+        this.sessionEpoch !== currentEpoch ||
+        this.state.prepareData?.session_id !== activeSessionId
+      ) {
+        return;
+      }
+
       this.updateState({
         confirmData: confirmRes,
         step: 'entering_wifi_password',
         isWifiScanning: true,
+        wifiScanCompleted: false,
         error: null,
       });
       void this.requestDeviceWifiScan();
     } catch (err: unknown) {
+      if (this.sessionEpoch !== currentEpoch) return;
       const msg = err instanceof Error ? err.message : 'Physical confirmation failed';
       this.updateState({ error: msg, step: 'error' });
       throw err;
     }
   }
 
-  async requestDeviceWifiScan(): Promise<void> {
+  async requestDeviceWifiScan(options?: {
+    timeoutMs?: number;
+    pollIntervalMs?: number;
+  }): Promise<void> {
+    if (this.isWifiScanningInternal) return;
+    this.isWifiScanningInternal = true;
+    const currentEpoch = this.sessionEpoch;
+    const currentScanEpoch = ++this.wifiScanEpoch;
+    const isCurrent = () =>
+      this.sessionEpoch === currentEpoch && this.wifiScanEpoch === currentScanEpoch;
+    const scanId = this.nextScanId = (this.nextScanId + 1) >>> 0;
+    type ScanReply = {
+      scan_id: number;
+      status: 'IDLE' | 'SCANNING' | 'READY' | 'ERROR';
+      index: number;
+      total: number;
+      network: DiscoveredWifiNetwork | null;
+      error_code?: string | null;
+    };
+
     this.updateState({
       isWifiScanning: true,
+      wifiScanCompleted: false,
+      discoveredNetworks: [],
+      selectedNetwork: null,
       error: null,
     });
-
     try {
-      const scanId = Math.floor(Date.now() / 1000);
-      try {
-        await bleClient.writeJson(CHR_WIFI_SCAN_UUID, { op: 'scan', scan_id: scanId });
-      } catch {}
-
-      const deadline = Date.now() + 15_000;
-      let scanDone = false;
-      let totalPages = 0;
-      let networks: DiscoveredWifiNetwork[] = [];
-
-      while (Date.now() < deadline && !scanDone) {
-        await delay(250);
-        try {
-          const res = await bleClient.readJson<{
-            scan_id?: number;
-            status?: string;
-            index?: number;
-            total?: number;
-            network?: DiscoveredWifiNetwork | null;
-            networks?: DiscoveredWifiNetwork[];
-            error_code?: string | null;
-          }>(CHR_WIFI_SCAN_UUID);
-
-          if (Array.isArray(res?.networks)) {
-            networks = res.networks;
-            scanDone = true;
-            break;
+      console.log('[BLE] Wi-Fi scan requested:', scanId);
+      await bleClient.writeJson(CHR_WIFI_SCAN_UUID, { op: 'scan', scan_id: scanId });
+      if (!isCurrent()) return;
+      const deadline = Date.now() + (options?.timeoutMs ?? 15_000);
+      let ready: ScanReply | null = null;
+      while (Date.now() < deadline) {
+        await delay(options?.pollIntervalMs ?? 250);
+        if (!isCurrent()) return;
+        const reply = await bleClient.readJson<ScanReply>(CHR_WIFI_SCAN_UUID);
+        if (!isCurrent()) return;
+        if (reply?.scan_id !== scanId) continue;
+        if (reply.status === 'ERROR') {
+          throw new Error(`Pemindaian Wi-Fi robot gagal: ${reply.error_code ?? 'SCAN_ERROR'}`);
+        }
+        if (reply.status === 'READY') {
+          if (!Number.isInteger(reply.total) || reply.total < 0 || reply.total > 12) {
+            throw new Error('Jumlah jaringan dari robot tidak valid');
           }
-
-          if (res?.status === 'READY') {
-            totalPages = res.total ?? 0;
-            scanDone = true;
-            break;
-          }
-
-          if (res?.status === 'ERROR') {
-            throw new Error(res.error_code ?? 'Scan failed on robot');
-          }
-        } catch {}
-      }
-
-      if (scanDone && totalPages > 0 && networks.length === 0) {
-        for (let i = 0; i < totalPages; i++) {
-          try {
-            await bleClient.writeJson(CHR_WIFI_SCAN_UUID, { op: 'page', scan_id: scanId, index: i });
-            const pageRes = await bleClient.readJson<{ network?: DiscoveredWifiNetwork | null }>(CHR_WIFI_SCAN_UUID);
-            if (pageRes?.network && pageRes.network.ssid) {
-              networks.push(pageRes.network);
-            }
-          } catch {}
+          ready = reply;
+          break;
         }
       }
+      if (!ready) throw new Error('Pemindaian Wi-Fi robot melewati batas waktu');
 
+      const networks: DiscoveredWifiNetwork[] = [];
+      for (let index = 0; index < ready.total; index++) {
+        if (!isCurrent()) return;
+        await bleClient.writeJson(CHR_WIFI_SCAN_UUID, { op: 'page', scan_id: scanId, index });
+        if (!isCurrent()) return;
+        const page = await bleClient.readJson<ScanReply>(CHR_WIFI_SCAN_UUID);
+        if (!isCurrent()) return;
+        if (page?.scan_id !== scanId || page.index !== index ||
+            page.status !== 'READY' || page.total !== ready.total || !page.network?.ssid) {
+          throw new Error(`Halaman jaringan Wi-Fi ${index + 1} tidak valid`);
+        }
+        networks.push(page.network);
+      }
+      if (!isCurrent()) return;
+      console.log('[BLE] Wi-Fi scan ready:', scanId, 'networks:', networks.length);
       this.setDiscoveredWifiNetworks(networks);
-    } catch (scanErr) {
-      console.warn('[BLE] Wi-Fi scan request error/timeout:', scanErr);
+    } catch (err: unknown) {
+      if (!isCurrent()) return;
+      const detail = err instanceof Error ? err.message : String(err);
       this.updateState({
         isWifiScanning: false,
+        wifiScanCompleted: false,
+        error: `Gagal membaca Wi-Fi dari robot. Periksa koneksi Bluetooth lalu coba lagi. ${detail}`,
         step: 'entering_wifi_password',
       });
+      console.warn('[BLE] Wi-Fi scan failed:', scanId, detail);
+    } finally {
+      if (isCurrent()) this.isWifiScanningInternal = false;
     }
   }
 
@@ -418,6 +550,8 @@ export class JoyProvisioningManager {
       discoveredNetworks: networks,
       selectedNetwork: selected,
       isWifiScanning: false,
+      wifiScanCompleted: true,
+      error: null,
       step: 'entering_wifi_password',
     });
   }
@@ -431,6 +565,7 @@ export class JoyProvisioningManager {
     customSsid?: string,
     options?: { pollIntervalMs?: number; maxPollAttempts?: number }
   ): Promise<void> {
+    const currentEpoch = this.sessionEpoch;
     const { selectedJoy, selectedNetwork, confirmData } = this.state;
     const ssid = customSsid || selectedNetwork?.ssid;
     if (!ssid || !selectedJoy || !confirmData) {
@@ -456,6 +591,8 @@ export class JoyProvisioningManager {
         }
       );
 
+      if (this.sessionEpoch !== currentEpoch) return;
+
       // 8. Write Secure Envelope to GATT Char 4
       await bleClient.writeJson(CHR_SECURE_START_UUID, {
         res_id: confirmData.reservation_id,
@@ -463,12 +600,17 @@ export class JoyProvisioningManager {
         ciphertext: envelope.ciphertext,
         tag: envelope.tag,
       });
+
+      if (this.sessionEpoch !== currentEpoch) return;
+
       // 9. Read Commit Proof from GATT Char 5
       const commitData = await bleClient.readJson<{
         commit_nonce: string;
         commit_proof: string;
         status: string;
       }>(CHR_COMMIT_UUID);
+
+      if (this.sessionEpoch !== currentEpoch) return;
 
       if (!commitData || !commitData.commit_nonce || !commitData.commit_proof) {
         throw new Error('Failed to retrieve commit proof from robot via BLE');
@@ -480,6 +622,8 @@ export class JoyProvisioningManager {
         commit_proof: commitData.commit_proof,
       });
 
+      if (this.sessionEpoch !== currentEpoch) return;
+
       // 11. Poll backend until device is finalized by firmware (or max timeout reached)
       const maxPollAttempts = options?.maxPollAttempts ?? 45;
       const pollIntervalMs = options?.pollIntervalMs ?? 1000;
@@ -487,8 +631,11 @@ export class JoyProvisioningManager {
       let terminalError: string | null = null;
 
       for (let attempt = 0; attempt < maxPollAttempts; attempt++) {
+        if (this.sessionEpoch !== currentEpoch) return;
         try {
           const statusRes = await getProvisioningStatus(confirmData.reservation_id);
+          if (this.sessionEpoch !== currentEpoch) return;
+
           if (
             statusRes.device_id ||
             statusRes.status === 'FINALIZED_PENDING_RUNTIME_ACK' ||
@@ -501,7 +648,11 @@ export class JoyProvisioningManager {
             break;
           }
         } catch (pollErr: unknown) {
-          if (pollErr instanceof Error && (pollErr.message.includes('404') || pollErr.message.includes('410'))) {
+          if (this.sessionEpoch !== currentEpoch) return;
+          if (
+            pollErr instanceof Error &&
+            (pollErr.message.includes('404') || pollErr.message.includes('410'))
+          ) {
             terminalError = pollErr.message;
             break;
           }
@@ -511,17 +662,25 @@ export class JoyProvisioningManager {
         }
       }
 
+      if (this.sessionEpoch !== currentEpoch) return;
+
       if (terminalError) {
         throw new Error(terminalError);
       }
 
       if (!finalized) {
-        throw new Error('Robot Wi-Fi configured, but backend finalization timed out. Please check if Joy is online and retry.');
+        throw new Error(
+          'Robot Wi-Fi configured, but backend finalization timed out. Please check if Joy is online and retry.'
+        );
       }
+
       // 12. Hydrate device registry and complete setup
       await hydrateDevices();
+      if (this.sessionEpoch !== currentEpoch) return;
+
       this.updateState({ step: 'success' });
     } catch (err: unknown) {
+      if (this.sessionEpoch !== currentEpoch) return;
       const msg = err instanceof Error ? err.message : 'Wi-Fi connection/commit failed';
       this.updateState({ error: msg, step: 'error' });
       throw err;

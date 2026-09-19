@@ -9,12 +9,15 @@ void ButtonPolicy::reset()
 {
     m_voice = DebouncedButton{};
     m_pair = DebouncedButton{};
+    m_boot = DebouncedButton{};
     m_expr = DebouncedButton{};
     m_vol_up = DebouncedButton{};
     m_vol_down = DebouncedButton{};
     m_spot_next = DebouncedButton{};
     m_spot_prev = DebouncedButton{};
     m_touch = DebouncedButton{};
+    m_prev_sys_state = SystemInteractionState::IDLE;
+    m_arm_requires_release = false;
     m_action_count = 0;
 }
 
@@ -61,6 +64,8 @@ bool ButtonPolicy::update_debounced(
         if (now_us - btn.last_raw_change_us >= BUTTON_DEBOUNCE_US) {
             btn.stable_pressed = true;
             btn.press_start_us = now_us;
+            btn.hold_emitted = false;
+            btn.released_since_hold = true;
             just_pressed = true;
         }
     } else if (btn.stable_pressed && !btn.raw_pressed) {
@@ -85,13 +90,17 @@ void ButtonPolicy::update_raw(
     bool btn_spot_prev_pressed,
     bool touch_pressed,
     int64_t now_us,
-    SystemInteractionState sys_state)
+    SystemInteractionState sys_state,
+    bool btn_boot_pressed)
 {
     bool voice_edge = false, voice_rel = false;
     update_debounced(m_voice, btn_voice_pressed, now_us, voice_edge, voice_rel);
 
     bool pair_edge = false, pair_rel = false;
     update_debounced(m_pair, btn_pair_pressed, now_us, pair_edge, pair_rel);
+
+    bool boot_edge = false, boot_rel = false;
+    update_debounced(m_boot, btn_boot_pressed, now_us, boot_edge, boot_rel);
 
     bool expr_edge = false, expr_rel = false;
     update_debounced(m_expr, btn_expr_pressed, now_us, expr_edge, expr_rel);
@@ -111,36 +120,75 @@ void ButtonPolicy::update_raw(
     bool touch_edge = false, touch_rel = false;
     update_debounced(m_touch, touch_pressed, now_us, touch_edge, touch_rel);
 
-    // 1. Voice button action
+    bool armed = (sys_state == SystemInteractionState::PAIRING_ARMED_PROOF);
+    bool prev_armed = (m_prev_sys_state == SystemInteractionState::PAIRING_ARMED_PROOF);
+
+    bool any_pairing_raw = btn_pair_pressed || btn_boot_pressed || btn_expr_pressed;
+    bool any_pairing_debounced = m_pair.stable_pressed || m_boot.stable_pressed || m_expr.stable_pressed;
+
+    if (armed && !prev_armed) {
+        // Transitioned into PAIRING_ARMED_PROOF:
+        // Require released physical button if already held before/during arming
+        if (any_pairing_raw || any_pairing_debounced) {
+            m_arm_requires_release = true;
+        } else {
+            m_arm_requires_release = false;
+        }
+    } else if (!armed && prev_armed) {
+        m_arm_requires_release = false;
+    }
+
+    if (!any_pairing_raw && !any_pairing_debounced) {
+        m_arm_requires_release = false;
+    }
+
+    // 1. Voice button action (ignored during THINKING, SPEAKING, PAIRING)
     if (voice_edge) {
         if (sys_state == SystemInteractionState::IDLE) {
             push_action(ButtonAction::VOICE_START);
         } else if (sys_state == SystemInteractionState::RECORDING) {
             push_action(ButtonAction::VOICE_STOP);
         }
-        // Ignored during THINKING, SPEAKING, PAIRING
     }
 
-    // 2. BLE Pairing button: hold actions
-    if (m_pair.stable_pressed && !m_pair.hold_emitted && m_pair.released_since_hold) {
-        int64_t hold_duration = now_us - m_pair.press_start_us;
-        if (sys_state == SystemInteractionState::IDLE && hold_duration >= BLE_PAIRING_ENTRY_HOLD_US) {
-            m_pair.hold_emitted = true;
-            m_pair.released_since_hold = false;
-            push_action(ButtonAction::BLE_OPEN_DISCOVERY);
-        } else if (sys_state == SystemInteractionState::PAIRING_ARMED_PROOF && hold_duration >= BLE_PAIRING_CONFIRM_HOLD_US) {
-            m_pair.hold_emitted = true;
-            m_pair.released_since_hold = false;
-            push_action(ButtonAction::BLE_PHYSICAL_CONFIRM);
+    // 2. BLE Pairing button: hold actions for all pairing-capable inputs (pair, boot, expr)
+    DebouncedButton *pairing_btns[] = { &m_pair, &m_boot, &m_expr };
+    for (DebouncedButton *btn : pairing_btns) {
+        if (btn->stable_pressed && !btn->hold_emitted && btn->released_since_hold) {
+            int64_t hold_duration = now_us - btn->press_start_us;
+
+            if (sys_state == SystemInteractionState::IDLE) {
+                if (hold_duration >= BLE_PAIRING_ENTRY_HOLD_US) {
+                    for (DebouncedButton *b : pairing_btns) {
+                        if (b->stable_pressed) {
+                            b->hold_emitted = true;
+                            b->released_since_hold = false;
+                        }
+                    }
+                    push_action(ButtonAction::BLE_OPEN_DISCOVERY);
+                    break;
+                }
+            } else if (sys_state == SystemInteractionState::PAIRING_ARMED_PROOF) {
+                if (!m_arm_requires_release && hold_duration >= BLE_PAIRING_CONFIRM_HOLD_US) {
+                    for (DebouncedButton *b : pairing_btns) {
+                        if (b->stable_pressed) {
+                            b->hold_emitted = true;
+                            b->released_since_hold = false;
+                        }
+                    }
+                    push_action(ButtonAction::BLE_PHYSICAL_CONFIRM);
+                    break;
+                }
+            }
         }
     }
 
-    // 3. Expression button
+    // 3. Expression button: short click in IDLE
     if (expr_edge && sys_state == SystemInteractionState::IDLE) {
         push_action(ButtonAction::EXPRESSION_ASSET_11);
     }
 
-    // 4. Touch pad
+    // 4. Touch pad: short touch in IDLE
     if (touch_edge && sys_state == SystemInteractionState::IDLE) {
         push_action(ButtonAction::TOUCH_ASSET_6);
     }
@@ -162,4 +210,6 @@ void ButtonPolicy::update_raw(
     } else if (spot_prev_edge) {
         push_action(ButtonAction::SPOTIFY_PREV);
     }
+
+    m_prev_sys_state = sys_state;
 }

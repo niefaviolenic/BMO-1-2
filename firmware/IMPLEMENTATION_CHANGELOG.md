@@ -1,5 +1,14 @@
 # Joy ESP32-S3 Implementation / Change Log
 
+## 2026-09-18 — BLE confirmation and Wi-Fi scan repair
+
+- Reproduced on COM12: FE07 scan found APs, then `xQueueGiveMutexRecursive` asserted in `esp_event_loop_run` and rebooted the device. The scan callback's compiled stack frame was 3,008 bytes; the system event task stack was 2,304 bytes.
+- Consume AP records individually instead of allocating a 32-record stack array. Serialize scan state and page reads, propagate driver errors, and remove the blocking legacy scan fallback from GATT reads.
+- Physical confirmation now requires a fresh EXPR/BOOT/button hold after arming. A carried-over discovery hold or capacitive touch cannot confirm. One hold cannot both confirm and reopen discovery.
+- Clear proof/commit material on new sessions and stop; FE04 replies include `session_id`. Mobile rejects stale-session proof and stale async completion, checks scan/page IDs, and shows scan errors instead of silently presenting manual entry.
+- Verification: firmware built and app-only flash hash verified; real BLE client retrieved all network pages in three consecutive scans (including `pesatu` and `DEPLUNET02`), with no reboot and connection retained. Armed challenge remained unconfirmed without a new physical press. Eleven host button regressions passed.
+- Mobile manager regressions cover backend confirmation gating, stale proof, timeout, cancellation, page mismatch, empty scan versus disconnect, and reset races. Native mobile/backend end-to-end acceptance still requires the user's physical button test; the laptop probe did not claim a backend reservation.
+
 Date: 2026-08-23
 Branch: `cenna`
 Starting SHA: `639a2b933b08cea415f91198716b86d216dd6556`

@@ -75,8 +75,8 @@
 
     #define PIN_TOUCH_PAD 14
     #define PIN_BOOT_BTN  0
-    #define PIN_VOL_DOWN  15
-    #define PIN_VOL_UP    16
+    #define PIN_VOL_UP    15
+    #define PIN_VOL_DOWN  16
     #define PIN_EXPRESSION 17
 
     #define PIN_BTN_VOICE        (-1)

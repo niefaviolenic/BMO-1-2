@@ -42,9 +42,9 @@ function mergeLive(
 ): RobotDeviceInfo {
   const previous = connectionState.device?.id === device.id ? connectionState.device : null;
   return toRobotDeviceInfo(device, {
-    online: live.online ?? previous?.online,
-    batteryPercent: live.batteryPercent ?? previous?.batteryPercent ?? null,
-    wifiConnected: live.wifiConnected ?? previous?.wifiConnected ?? null,
+    online: live.online !== undefined ? live.online : (previous?.online ?? false),
+    batteryPercent: live.batteryPercent !== undefined ? live.batteryPercent : (previous?.batteryPercent ?? null),
+    wifiConnected: live.wifiConnected !== undefined ? live.wifiConnected : (previous?.wifiConnected ?? null),
   });
 }
 

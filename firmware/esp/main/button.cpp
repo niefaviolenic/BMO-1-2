@@ -9,7 +9,6 @@
 #include "board_config.h"
 #include "button_policy.h"
 #include "wakeword.h"
-extern "C" void api_spotify_queue_action(int action_type);
 #include "driver/gpio.h"
 #if __has_include("driver/touch_sensor_legacy.h")
 #include "driver/touch_sensor_legacy.h"
@@ -39,40 +38,10 @@ extern "C" void api_spotify_queue_action(int action_type);
 #define BTN_VOL_DOWN  GPIO_NUM_16
 #define BTN_EXPRESSION GPIO_NUM_17
 #define VOLUME_STEP 5
-#define BUTTON_DEBOUNCE_US 30000LL
-#define TOUCH_DEBOUNCE_US 30000LL
 
 static const char *TAG="BUTTON";
 
-struct DebouncedButtonState
-{
-    bool candidate_pressed;
-    bool stable_pressed;
-    int64_t candidate_since_us;
-};
-
-static DebouncedButtonState volume_up_state = {};
-static DebouncedButtonState volume_down_state = {};
-static bool expression_button_candidate_pressed = false;
-static bool expression_button_stable_pressed = false;
-static int64_t expression_button_candidate_since_us = 0;
 static ButtonPolicy s_button_policy;
-enum class TouchLifecycleState
-{
-    TOUCH_ARMED,
-    TOUCH_CONSUMED,
-    TOUCH_BOOT_HIGH_LOCKOUT
-};
-
-static TouchLifecycleState touch_state =
-    TouchLifecycleState::TOUCH_ARMED;
-static bool touch_candidate_level = false;
-static bool touch_stable_level = false;
-static int64_t touch_candidate_since_us = 0;
-static int64_t last_touch_diag_us = 0;
-static int64_t touch_press_start_us = 0;
-static bool touch_physical_confirm_triggered = false;
-static bool touch_factory_reset_triggered = false;
 
 // GPIO14 is an ESP32-S3 native touch channel. The previous implementation
 // treated it only as a digital input, which cannot detect a bare capacitive
@@ -176,39 +145,6 @@ static bool read_touch_level()
     return (gpio_get_level(TOUCH_PIN) == 1);
 }
 
-static bool update_debounced_button(
-    gpio_num_t pin,
-    DebouncedButtonState &button,
-    int64_t now)
-{
-    const bool pressed = gpio_get_level(pin) == 0;
-
-    if(pressed != button.candidate_pressed)
-    {
-        button.candidate_pressed = pressed;
-        button.candidate_since_us = now;
-    }
-
-    if(button.candidate_pressed != button.stable_pressed &&
-       now - button.candidate_since_us >= BUTTON_DEBOUNCE_US)
-    {
-        button.stable_pressed = button.candidate_pressed;
-        return button.stable_pressed;
-    }
-
-    return false;
-}
-
-static const char *touch_lifecycle_name(TouchLifecycleState state)
-{
-    switch(state)
-    {
-        case TouchLifecycleState::TOUCH_ARMED: return "ARMED";
-        case TouchLifecycleState::TOUCH_CONSUMED: return "CONSUMED";
-        case TouchLifecycleState::TOUCH_BOOT_HIGH_LOCKOUT: return "BOOT_HIGH_LOCKOUT";
-        default: return "UNKNOWN";
-    }
-}
 
 static const char *joy_state_name(JoyState state)
 {
@@ -260,36 +196,8 @@ void button_init()
         gpio_config(
             &button_config));
 
-    const int64_t now = esp_timer_get_time();
-    const bool touch_level = native_touch_enabled ?
-        native_touch_level : gpio_get_level(TOUCH_PIN) == 1;
     const bool expression_button_pressed =
         gpio_get_level(BTN_EXPRESSION) == 0;
-    const bool volume_up_pressed = gpio_get_level(BTN_VOL_UP) == 0;
-    const bool volume_down_pressed = gpio_get_level(BTN_VOL_DOWN) == 0;
-
-    volume_up_state = {volume_up_pressed, volume_up_pressed, now};
-    volume_down_state = {volume_down_pressed, volume_down_pressed, now};
-
-    expression_button_candidate_pressed = expression_button_pressed;
-    expression_button_stable_pressed = expression_button_pressed;
-    expression_button_candidate_since_us = now;
-
-    // Synchronize with the physical level at boot. A HIGH input is treated
-    // as already consumed until a complete stable release is observed.
-    touch_candidate_level = touch_level;
-    touch_stable_level = touch_level;
-    touch_candidate_since_us = now;
-    touch_state = touch_level ?
-        TouchLifecycleState::TOUCH_BOOT_HIGH_LOCKOUT :
-        TouchLifecycleState::TOUCH_ARMED;
-
-    ESP_LOGI(
-        TAG,
-        "Touch init: raw=%d stable=%d lifecycle=%s",
-        touch_level ? 1 : 0,
-        touch_stable_level ? 1 : 0,
-        touch_lifecycle_name(touch_state));
 
     ESP_LOGI(
         TAG,
@@ -318,284 +226,130 @@ void button_update()
 {
     int64_t now = esp_timer_get_time();
 
-    // Diagnostic live log every 1s showing exact GPIO readings
-    static int64_t last_pin_diag_us = 0;
-    if (now - last_pin_diag_us >= 1000000LL) {
-        last_pin_diag_us = now;
-        ESP_LOGI(TAG, "Pins: expr(17)=%d boot(0)=%d vol_up(15)=%d vol_dn(16)=%d touch_raw=%lu",
-                 gpio_get_level(BTN_EXPRESSION),
-                 gpio_get_level(BTN_BOOT),
-                 gpio_get_level(BTN_VOL_UP),
-                 gpio_get_level(BTN_VOL_DOWN),
-                 (unsigned long)native_touch_raw);
-    }
-    // Dedicated button policy handling for assigned 7 inputs
+    // Read GPIO states
+    const bool expr_down = (gpio_get_level(BTN_EXPRESSION) == 0);
+    const bool boot_down = (gpio_get_level(BTN_BOOT) == 0);
+    const bool vol_up_down = (gpio_get_level(BTN_VOL_UP) == 0);
+    const bool vol_dn_down = (gpio_get_level(BTN_VOL_DOWN) == 0);
+
     bool btn_voice_down = BOARD_PIN_IS_ASSIGNED(PIN_BTN_VOICE) ? (gpio_get_level((gpio_num_t)PIN_BTN_VOICE) == 0) : false;
-    bool btn_pair_down = BOARD_PIN_IS_ASSIGNED(PIN_BTN_PAIR) ? (gpio_get_level((gpio_num_t)PIN_BTN_PAIR) == 0) : false;
-    bool btn_expr_down = BOARD_PIN_IS_ASSIGNED(PIN_BTN_EXPRESSION) ? (gpio_get_level((gpio_num_t)PIN_BTN_EXPRESSION) == 0) : false;
-    bool btn_vol_up_down = BOARD_PIN_IS_ASSIGNED(PIN_BTN_VOL_UP) ? (gpio_get_level((gpio_num_t)PIN_BTN_VOL_UP) == 0) : false;
-    bool btn_vol_dn_down = BOARD_PIN_IS_ASSIGNED(PIN_BTN_VOL_DOWN) ? (gpio_get_level((gpio_num_t)PIN_BTN_VOL_DOWN) == 0) : false;
+    bool btn_pair_down = false;
+    if (BOARD_PIN_IS_ASSIGNED(PIN_BTN_PAIR)) {
+        btn_pair_down = (gpio_get_level((gpio_num_t)PIN_BTN_PAIR) == 0);
+    }
+    bool btn_expr_down = BOARD_PIN_IS_ASSIGNED(PIN_BTN_EXPRESSION) ? (gpio_get_level((gpio_num_t)PIN_BTN_EXPRESSION) == 0) : expr_down;
+    bool btn_vol_up = BOARD_PIN_IS_ASSIGNED(PIN_BTN_VOL_UP) ? (gpio_get_level((gpio_num_t)PIN_BTN_VOL_UP) == 0) : vol_up_down;
+    bool btn_vol_dn = BOARD_PIN_IS_ASSIGNED(PIN_BTN_VOL_DOWN) ? (gpio_get_level((gpio_num_t)PIN_BTN_VOL_DOWN) == 0) : vol_dn_down;
     bool btn_spot_next_down = BOARD_PIN_IS_ASSIGNED(PIN_BTN_SPOTIFY_NEXT) ? (gpio_get_level((gpio_num_t)PIN_BTN_SPOTIFY_NEXT) == 0) : false;
     bool btn_spot_prev_down = BOARD_PIN_IS_ASSIGNED(PIN_BTN_SPOTIFY_PREV) ? (gpio_get_level((gpio_num_t)PIN_BTN_SPOTIFY_PREV) == 0) : false;
     bool touch_pad_down = read_touch_level();
+    bool btn_boot_down = boot_down;
 
+    // Pairing state owns inputs so face/voice cannot override it
     SystemInteractionState sys_interaction = SystemInteractionState::IDLE;
-    JoyState cur_joy_state = getState();
-    if (cur_joy_state == JoyState::RECORDING) sys_interaction = SystemInteractionState::RECORDING;
-    else if (cur_joy_state == JoyState::THINKING) sys_interaction = SystemInteractionState::THINKING;
-    else if (cur_joy_state == JoyState::SPEAKING) sys_interaction = SystemInteractionState::SPEAKING;
-    else if (joy_ble_get_state() == JoyBleState::BOOTSTRAP_ADVERTISING) sys_interaction = SystemInteractionState::PAIRING_DISCOVERING;
-    else if (joy_ble_get_state() == JoyBleState::PHYSICAL_CONFIRM_PENDING) sys_interaction = SystemInteractionState::PAIRING_ARMED_PROOF;
-    else if (joy_ble_get_state() == JoyBleState::FINALIZING_WITH_BACKEND) sys_interaction = SystemInteractionState::PAIRING_FINALIZING;
+    JoyBleState ble_state = joy_ble_get_state();
+    if (ble_state == JoyBleState::PHYSICAL_CONFIRM_PENDING) {
+        sys_interaction = SystemInteractionState::PAIRING_ARMED_PROOF;
+    } else if (ble_state == JoyBleState::BOOTSTRAP_ADVERTISING) {
+        sys_interaction = SystemInteractionState::PAIRING_DISCOVERING;
+    } else if (joy_ble_is_active()) {
+        sys_interaction = SystemInteractionState::PAIRING_FINALIZING;
+    } else {
+        JoyState cur_joy_state = getState();
+        if (cur_joy_state == JoyState::RECORDING) {
+            sys_interaction = SystemInteractionState::RECORDING;
+        } else if (cur_joy_state == JoyState::THINKING) {
+            sys_interaction = SystemInteractionState::THINKING;
+        } else if (cur_joy_state == JoyState::SPEAKING) {
+            sys_interaction = SystemInteractionState::SPEAKING;
+        }
+    }
 
     s_button_policy.update_raw(
         btn_voice_down,
         btn_pair_down,
         btn_expr_down,
-        btn_vol_up_down,
-        btn_vol_dn_down,
+        btn_vol_up,
+        btn_vol_dn,
         btn_spot_next_down,
         btn_spot_prev_down,
         touch_pad_down,
         now,
-        sys_interaction);
+        sys_interaction,
+        btn_boot_down);
 
     while (s_button_policy.get_pending_action_count() > 0) {
         ButtonAction action = s_button_policy.pop_action();
         switch (action) {
             case ButtonAction::VOICE_START:
-                if (getState() == JoyState::IDLE) {
-                    audio_triggerWakeAck();
-                    start_recording();
-                    setState(JoyState::RECORDING);
+                if (getState() == JoyState::IDLE && !joy_ble_is_active()) {
+                    if (wakeword_task()) {
+                        audio_triggerWakeAck();
+                    }
                 }
                 break;
             case ButtonAction::VOICE_STOP:
                 request_finish_recording();
                 break;
-            case ButtonAction::BLE_OPEN_DISCOVERY:
-                joy_ble_start_pairing_window();
+            case ButtonAction::BLE_OPEN_DISCOVERY: {
+                const joy_runtime_creds_t *runtime = joy_runtime_get();
+                const bool was_provisioned = (runtime && runtime->is_provisioned);
+                if (was_provisioned) {
+                    ESP_LOGI(TAG, ">>> 5-SECOND HOLD DETECTED (PAIRED): Unpairing and opening BLE Pairing Window! <<<");
+                    joy_ble_unpair();
+                    joy_ble_start_pairing_window();
+                } else {
+                    ESP_LOGI(TAG, ">>> 5-SECOND HOLD DETECTED (UNPAIRED): Opening BLE Pairing Window! <<<");
+                    joy_ble_start_pairing_window();
+                }
                 break;
+            }
             case ButtonAction::BLE_PHYSICAL_CONFIRM:
+                ESP_LOGI(TAG, "=======================================================");
+                ESP_LOGI(TAG, ">>> PHYSICAL PROOF 2S HOLD CONFIRMED & SENT VIA BLE! <<<");
+                ESP_LOGI(TAG, "=======================================================");
                 joy_ble_on_physical_hold_2s();
                 break;
             case ButtonAction::EXPRESSION_ASSET_11:
-                display_set_idle_face(FACE_CUTE);
+                if (getState() == JoyState::IDLE &&
+                    !joy_ble_is_active() &&
+                    !display_pairing_code_is_visible() &&
+                    !display_qr_code_is_visible() &&
+                    !display_ble_pairing_is_visible()) {
+                    const Face next_face = display_next_touch_face();
+                    ESP_LOGI(TAG, "Expression button click -> switched to face=%d", (int)next_face);
+                    audio_triggerExpressionAudio((int)next_face);
+                } else {
+                    ESP_LOGW(TAG, "Expression button ignored: state=%s (not IDLE or pairing visible)", joy_state_name(getState()));
+                }
                 break;
             case ButtonAction::TOUCH_ASSET_6:
-                display_set_idle_face(FACE_HAPPY);
+                if (getState() == JoyState::IDLE &&
+                    !joy_ble_is_active() &&
+                    !display_pairing_code_is_visible() &&
+                    !display_qr_code_is_visible() &&
+                    !display_ble_pairing_is_visible()) {
+                    const Face next_face = display_next_touch_face();
+                    ESP_LOGI(TAG, "Touch interaction -> switched to face=%d", (int)next_face);
+                    audio_triggerExpressionAudio((int)next_face);
+                }
                 break;
             case ButtonAction::VOLUME_UP:
-                audio_setVolume(audio_getVolume() + VOLUME_STEP);
+                audio_adjustVolume(VOLUME_STEP);
+                ESP_LOGI(TAG, "Volume up: %d", audio_getVolume());
                 break;
             case ButtonAction::VOLUME_DOWN:
-                audio_setVolume(audio_getVolume() - VOLUME_STEP);
+                audio_adjustVolume(-VOLUME_STEP);
+                ESP_LOGI(TAG, "Volume down: %d", audio_getVolume());
                 break;
             case ButtonAction::SPOTIFY_NEXT:
-                api_spotify_queue_action(1);
-                break;
             case ButtonAction::SPOTIFY_PREV:
-                api_spotify_queue_action(2);
                 break;
             default:
                 break;
         }
     }
 
-
-    enum class BtnKind { NONE, EXPR, BOOT, VOL_UP, VOL_DOWN };
-    static BtnKind s_debounced_btn = BtnKind::NONE;
-    static BtnKind s_cand_btn = BtnKind::NONE;
-    static int64_t s_cand_since_us = 0;
-    static BtnKind s_held_btn = BtnKind::NONE;
-    static int64_t s_press_start_us = 0;
-    static bool s_hold_2s_triggered = false;
-    static bool s_hold_5s_triggered = false;
-    static int64_t s_last_hold_log_us = 0;
-
-    const bool expr_down = (gpio_get_level(BTN_EXPRESSION) == 0);
-    const bool boot_down = (gpio_get_level(BTN_BOOT) == 0);
-    const bool vol_up_down = (gpio_get_level(BTN_VOL_UP) == 0);
-    const bool vol_dn_down = (gpio_get_level(BTN_VOL_DOWN) == 0);
-
-    BtnKind active_raw = BtnKind::NONE;
-    if (expr_down) active_raw = BtnKind::EXPR;
-    else if (boot_down) active_raw = BtnKind::BOOT;
-    else if (vol_dn_down) active_raw = BtnKind::VOL_DOWN;
-    else if (vol_up_down) active_raw = BtnKind::VOL_UP;
-
-    if (active_raw != s_cand_btn) {
-        s_cand_btn = active_raw;
-        s_cand_since_us = now;
-    }
-
-    // Debounce: 20ms for press, 150ms for release to filter microswitch chatter
-    int64_t debounce_limit_us = (s_cand_btn == BtnKind::NONE) ? 150000LL : 20000LL;
-
-    if (s_cand_btn != s_debounced_btn && (now - s_cand_since_us >= debounce_limit_us)) {
-        s_debounced_btn = s_cand_btn;
-
-        if (s_debounced_btn != BtnKind::NONE) {
-            // Button just pressed DOWN
-            s_held_btn = s_debounced_btn;
-            s_press_start_us = now;
-            s_hold_2s_triggered = false;
-            s_hold_5s_triggered = false;
-            s_last_hold_log_us = now;
-
-            const char *btn_name = (s_held_btn == BtnKind::EXPR) ? "EXPRESSION" :
-                                   (s_held_btn == BtnKind::BOOT) ? "BOOT" :
-                                   (s_held_btn == BtnKind::VOL_DOWN) ? "VOL_DOWN" : "VOL_UP";
-            ESP_LOGI(TAG, "Button pressed: %s (hold 2s for verify, hold 5s for pairing)", btn_name);
-        } else {
-            // Button RELEASED
-            const int64_t duration_us = (s_press_start_us > 0) ? (now - s_press_start_us) : 0;
-            BtnKind released_btn = s_held_btn;
-            s_held_btn = BtnKind::NONE;
-            s_press_start_us = 0;
-
-            if (s_hold_5s_triggered || s_hold_2s_triggered) {
-                ESP_LOGI(TAG, "Button released after hold action completed");
-            } else if (duration_us < 2000000LL) {
-                // Short click:
-                if (released_btn == BtnKind::EXPR || released_btn == BtnKind::BOOT) {
-                    if (getState() == JoyState::IDLE &&
-                        !display_pairing_code_is_visible() &&
-                        !display_qr_code_is_visible() &&
-                        !display_ble_pairing_is_visible()) {
-                        const Face next_face = display_next_touch_face();
-                        ESP_LOGI(TAG, "Expression button click -> switched to face=%d", (int)next_face);
-                        audio_triggerExpressionAudio((int)next_face);
-                    } else {
-                        ESP_LOGW(TAG, "Expression button ignored: state=%s (not IDLE or pairing visible)", joy_state_name(getState()));
-                    }
-                } else if (released_btn == BtnKind::VOL_UP) {
-                    audio_adjustVolume(VOLUME_STEP);
-                    ESP_LOGI(TAG, "Volume up: %d", audio_getVolume());
-                } else if (released_btn == BtnKind::VOL_DOWN) {
-                    audio_adjustVolume(-VOLUME_STEP);
-                    ESP_LOGI(TAG, "Volume down: %d", audio_getVolume());
-                }
-            }
-        }
-    }
-    // While ANY button is being held:
-    if (s_debounced_btn != BtnKind::NONE && s_press_start_us > 0) {
-        const int64_t hold_us = now - s_press_start_us;
-
-        if (now - s_last_hold_log_us >= 500000LL) {
-            s_last_hold_log_us = now;
-            ESP_LOGI(TAG, "Button holding: %lld ms / 2000 ms (BLE state: %s)",
-                     (long long)(hold_us / 1000LL),
-                     (joy_ble_get_state() == JoyBleState::PHYSICAL_CONFIRM_PENDING) ? "PHYSICAL_CONFIRM_PENDING" :
-                     joy_ble_is_active() ? "BLE_ACTIVE" : "IDLE");
-        }
-
-        // 2-second hold for physical confirmation (Step 2 of pairing, EXPR or BOOT):
-        if ((s_held_btn == BtnKind::EXPR || s_held_btn == BtnKind::BOOT) &&
-            joy_ble_get_state() == JoyBleState::PHYSICAL_CONFIRM_PENDING &&
-            hold_us >= 2000000LL && !s_hold_2s_triggered) {
-            s_hold_2s_triggered = true;
-            joy_ble_on_physical_hold_2s();
-            ESP_LOGI(TAG, "=======================================================");
-            ESP_LOGI(TAG, ">>> PHYSICAL PROOF 2S HOLD CONFIRMED & SENT VIA BLE! <<<");
-            ESP_LOGI(TAG, "=======================================================");
-        }
-
-        // 5-second hold for BLE pairing window reset / unpair (EXPR or BOOT):
-        if ((s_held_btn == BtnKind::EXPR || s_held_btn == BtnKind::BOOT) && !s_hold_2s_triggered &&
-            hold_us >= 5000000LL && !s_hold_5s_triggered) {
-            s_hold_5s_triggered = true;
-            const joy_runtime_creds_t *runtime = joy_runtime_get();
-            const bool was_provisioned = (runtime && runtime->is_provisioned);
-            if (was_provisioned) {
-                ESP_LOGI(TAG, ">>> 5-SECOND HOLD DETECTED (PAIRED): Unpairing and opening BLE Pairing Window! <<<");
-                joy_ble_unpair();
-                joy_ble_start_pairing_window();
-            } else {
-                ESP_LOGI(TAG, ">>> 5-SECOND HOLD DETECTED (UNPAIRED): Opening BLE Pairing Window! <<<");
-                joy_ble_start_pairing_window();
-            }
-        }
-    }
-    const bool touch_level = read_touch_level();
-
-    if(now - last_touch_diag_us >= 2000000LL)
-    {
-        last_touch_diag_us = now;
-        long delta = (long)((native_touch_raw > native_touch_baseline) ? (native_touch_raw - native_touch_baseline) : (native_touch_baseline - native_touch_raw));
-        ESP_LOGI(
-            TAG,
-            "Touch sample: val=%lu base=%lu delta=%ld thresh=%lu level=%d cand=%d stable=%d state=%s",
-            (unsigned long)native_touch_raw,
-            (unsigned long)native_touch_baseline,
-            delta,
-            (unsigned long)native_touch_threshold,
-            touch_level ? 1 : 0,
-            touch_candidate_level ? 1 : 0,
-            touch_stable_level ? 1 : 0,
-            joy_state_name(getState()));
-    }
-    if(touch_level != touch_candidate_level)
-    {
-        const bool previous_level = touch_candidate_level;
-        touch_candidate_level = touch_level;
-        touch_candidate_since_us = now;
-
-        ESP_LOGI(
-            TAG,
-            "Touch raw transition: old=%d new=%d",
-            previous_level ? 1 : 0,
-            touch_level ? 1 : 0);
-    }
-
-    if(touch_candidate_level != touch_stable_level &&
-       now - touch_candidate_since_us >= TOUCH_DEBOUNCE_US)
-    {
-        touch_stable_level = touch_candidate_level;
-
-        ESP_LOGI(
-            TAG,
-            "Touch stable: level=%d",
-            touch_stable_level ? 1 : 0);
-
-        if(touch_stable_level)
-        {
-            touch_press_start_us = now;
-            touch_physical_confirm_triggered = false;
-            touch_factory_reset_triggered = false;
-            touch_state = TouchLifecycleState::TOUCH_CONSUMED;
-            ESP_LOGI(TAG, "Touch press started at %lld us", (long long)now);
-        }
-        else
-        {
-            touch_state = TouchLifecycleState::TOUCH_ARMED;
-            const int64_t duration_us = (touch_press_start_us > 0) ? (now - touch_press_start_us) : 0;
-            ESP_LOGI(TAG, "Touch released after %lld ms", (long long)(duration_us / 1000LL));
-
-            if (touch_physical_confirm_triggered || touch_factory_reset_triggered)
-            {
-                ESP_LOGI(TAG, "Touch release consumed by previous confirmation/reset");
-            }
-            else if (duration_us < 5000000LL)
-            {
-                if(getState() == JoyState::IDLE)
-                {
-                    const Face next_face = display_next_touch_face();
-                    ESP_LOGI(TAG, "Touch interaction -> switched to face=%d", (int)next_face);
-                    audio_triggerExpressionAudio((int)next_face);
-                }
-                else
-                {
-                    ESP_LOGW(TAG, "Short touch rejected: state=%s (not IDLE)", joy_state_name(getState()));
-                }
-            }
-            else
-            {
-                ESP_LOGI(TAG, "Touch released after %lld ms", (long long)(duration_us / 1000LL));
-            }
-            touch_press_start_us = 0;
-        }
-    }
+    // Touch is handled by ButtonPolicy; it never confirms a pairing challenge.
 
 }

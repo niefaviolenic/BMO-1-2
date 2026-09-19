@@ -16,7 +16,6 @@
 #include "esp_crt_bundle.h"
 #include "cJSON.h"
 #include "mp3dec.h"
-#include "spotify_controller.h"
 
 #include "esp_log.h"
 #include "esp_random.h"
@@ -108,20 +107,6 @@ static bool ws_reconnect_pending = false;
 static bool ws_pairing_reconnect_pending = false;
 static bool ws_connection_replacement_suppressed = false;
 
-static SpotifyController s_spotify_controller;
-
-extern "C" void api_spotify_queue_action(int action_type)
-{
-    SpotifyActionType act = (action_type == 1) ? SpotifyActionType::NEXT : SpotifyActionType::PREVIOUS;
-    bool queued = s_spotify_controller.queue_action(act, esp_timer_get_time(), api_ws_is_authenticated());
-    if (!queued) {
-        ESP_LOGW(TAG, "Spotify action %s dropped (queue full or not authenticated)",
-                 act == SpotifyActionType::NEXT ? "NEXT" : "PREVIOUS");
-    } else {
-        ESP_LOGI(TAG, "Spotify action %s queued",
-                 act == SpotifyActionType::NEXT ? "NEXT" : "PREVIOUS");
-    }
-}
 enum JoyWsLifecycleState {
     JOY_WS_LIFECYCLE_STOPPED,
     JOY_WS_LIFECYCLE_STARTED,
@@ -136,15 +121,7 @@ static bool ws_reconnect_allowed()
     return !ws_authentication_blocked && !ws_connection_replacement_suppressed;
 }
 
-enum JoyPendingPlaybackEvent {
-    JOY_PENDING_PLAYBACK_NONE,
-    JOY_PENDING_PLAYBACK_DONE,
-    JOY_PENDING_PLAYBACK_FAILED
-};
-
-static JoyPendingPlaybackEvent pending_playback_event = JOY_PENDING_PLAYBACK_NONE;
-static char pending_playback_request_id[37] = {0};
-static char pending_playback_reason[JOY_PLAYBACK_REASON_MAX_LEN] = {0};
+static PendingPlaybackResult s_pending_playback{};
 static bool recovery_request_pending = false;
 static volatile bool pending_request_failed = false;
 static char pending_request_failed_id[37] = {0};
@@ -273,7 +250,6 @@ static void mark_ws_down(const char *source)
     ws_auth_pending = false;
     ws_auth_deadline = 0;
     pairing_on_disconnected();
-    s_spotify_controller.on_disconnected();
     network_set_backend_connected(false);
     log_ws_lifecycle_event("state_down_after", source, NULL);
 }
@@ -566,7 +542,7 @@ static bool adopt_recovered_request(const char *request_id)
 
     if (current_request_id[0] == '\0' ||
         (strcmp(current_request_id, request_id) != 0 && request_is_terminal() &&
-         pending_playback_event == JOY_PENDING_PLAYBACK_NONE))
+         s_pending_playback.kind == PendingPlaybackEventKind::NONE))
     {
         strncpy(current_request_id, request_id, sizeof(current_request_id) - 1);
         current_request_id[sizeof(current_request_id) - 1] = '\0';
@@ -601,29 +577,45 @@ static bool ws_send_text(const char *text, bool require_authenticated) {
     return true;
 }
 
-// Send event audio_playback_done
-static bool send_playback_done(const char *req_id) {
+static bool send_playback_result(const PendingPlaybackResult &result) {
     cJSON *root = cJSON_CreateObject();
     if (root == NULL)
         return false;
 
-    char deliv_id[kUuidBufferSize] = {0};
-    char attempt_id[kUuidBufferSize] = {0};
-    char lease_id[kUuidBufferSize] = {0};
-    char audio_receipt[kReceiptBufferSize] = {0};
-
-    if (playback_get_proactive_details(deliv_id, sizeof(deliv_id), attempt_id, sizeof(attempt_id),
-                                       lease_id, sizeof(lease_id), audio_receipt, sizeof(audio_receipt))) {
-        cJSON_AddStringToObject(root, "event", "proactive_done");
-        cJSON_AddStringToObject(root, "source", "SCHEDULE");
-        cJSON_AddStringToObject(root, "delivery_id", deliv_id);
-        cJSON_AddStringToObject(root, "attempt_id", attempt_id);
-        cJSON_AddStringToObject(root, "lease_id", lease_id);
-        cJSON_AddStringToObject(root, "audio_receipt", audio_receipt);
-        cJSON_AddStringToObject(root, "reason", "COMPLETED");
+    if (result.origin == PlaybackOrigin::PROACTIVE) {
+        if (result.kind == PendingPlaybackEventKind::DONE) {
+            cJSON_AddStringToObject(root, "event", "proactive_done");
+            cJSON_AddStringToObject(root, "source", "SCHEDULE");
+            cJSON_AddStringToObject(root, "delivery_id", result.correlation_id);
+            cJSON_AddStringToObject(root, "attempt_id", result.attempt_id);
+            cJSON_AddStringToObject(root, "lease_id", result.lease_id);
+            cJSON_AddStringToObject(root, "audio_receipt", result.audio_receipt);
+            cJSON_AddStringToObject(root, "reason", "COMPLETED");
+        } else {
+            cJSON_AddStringToObject(root, "event", "proactive_failed");
+            cJSON_AddStringToObject(root, "source", "SCHEDULE");
+            cJSON_AddStringToObject(root, "delivery_id", result.correlation_id);
+            cJSON_AddStringToObject(root, "attempt_id", result.attempt_id);
+            cJSON_AddStringToObject(root, "lease_id", result.lease_id);
+            cJSON_AddStringToObject(root, "audio_receipt", result.audio_receipt);
+            const char *reason = result.reason[0] != '\0' ? result.reason : "PLAYBACK_FAILED";
+            cJSON_AddStringToObject(root, "reason", reason);
+        }
     } else {
-        cJSON_AddStringToObject(root, "event", "audio_playback_done");
-        cJSON_AddStringToObject(root, "request_id", req_id);
+        if (result.kind == PendingPlaybackEventKind::DONE) {
+            cJSON_AddStringToObject(root, "event", "audio_playback_done");
+            cJSON_AddStringToObject(root, "request_id", result.correlation_id);
+        } else {
+            cJSON_AddStringToObject(root, "event", "audio_playback_failed");
+            cJSON_AddStringToObject(root, "request_id", result.correlation_id);
+            const char *mapped_reason = "DOWNLOAD_FAILED";
+            if (strcmp(result.reason, "DECODE_FAILED") == 0) {
+                mapped_reason = "DECODE_FAILED";
+            } else if (strcmp(result.reason, "PLAYBACK_FAILED") == 0) {
+                mapped_reason = "PLAYBACK_FAILED";
+            }
+            cJSON_AddStringToObject(root, "reason", mapped_reason);
+        }
     }
 
     char *json_str = cJSON_PrintUnformatted(root);
@@ -631,47 +623,43 @@ static bool send_playback_done(const char *req_id) {
     if (json_str == NULL)
         return false;
 
-    ESP_LOGI(TAG, "Sending playback done for %s", req_id);
+    ESP_LOGI(TAG, "Sending playback %s for %s",
+             result.kind == PendingPlaybackEventKind::DONE ? "done" : "failed",
+             result.correlation_id);
     bool sent = ws_send_text(json_str, true);
     free(json_str);
     return sent;
 }
 
-// Send event audio_playback_failed
-static bool send_playback_failed(const char *req_id, const char *reason) {
-    cJSON *root = cJSON_CreateObject();
-    if (root == NULL)
-        return false;
-
-    char deliv_id[kUuidBufferSize] = {0};
-    char attempt_id[kUuidBufferSize] = {0};
-    char lease_id[kUuidBufferSize] = {0};
-    char audio_receipt[kReceiptBufferSize] = {0};
-
-    if (playback_get_proactive_details(deliv_id, sizeof(deliv_id), attempt_id, sizeof(attempt_id),
-                                       lease_id, sizeof(lease_id), audio_receipt, sizeof(audio_receipt))) {
-        cJSON_AddStringToObject(root, "event", "proactive_failed");
-        cJSON_AddStringToObject(root, "source", "SCHEDULE");
-        cJSON_AddStringToObject(root, "delivery_id", deliv_id);
-        cJSON_AddStringToObject(root, "attempt_id", attempt_id);
-        cJSON_AddStringToObject(root, "lease_id", lease_id);
-        cJSON_AddStringToObject(root, "audio_receipt", audio_receipt);
-        cJSON_AddStringToObject(root, "reason", reason ? reason : "PLAYBACK_FAILED");
-    } else {
-        cJSON_AddStringToObject(root, "event", "audio_playback_failed");
-        cJSON_AddStringToObject(root, "request_id", req_id);
-        cJSON_AddStringToObject(root, "reason", reason ? reason : "PLAYBACK_FAILED");
+static bool send_playback_done(const char *req_id) {
+    PendingPlaybackResult res{};
+    res.kind = PendingPlaybackEventKind::DONE;
+    res.origin = current_playback_job.origin;
+    strncpy(res.correlation_id, req_id, sizeof(res.correlation_id) - 1);
+    if (res.origin == PlaybackOrigin::PROACTIVE) {
+        playback_get_proactive_details(res.correlation_id, sizeof(res.correlation_id),
+                                       res.attempt_id, sizeof(res.attempt_id),
+                                       res.lease_id, sizeof(res.lease_id),
+                                       res.audio_receipt, sizeof(res.audio_receipt));
     }
+    return send_playback_result(res);
+}
 
-    char *json_str = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    if (json_str == NULL)
-        return false;
-
-    ESP_LOGI(TAG, "Sending playback failed for %s (reason: %s)", req_id, reason ? reason : "unknown");
-    bool sent = ws_send_text(json_str, true);
-    free(json_str);
-    return sent;
+static bool send_playback_failed(const char *req_id, const char *reason) {
+    PendingPlaybackResult res{};
+    res.kind = PendingPlaybackEventKind::FAILED;
+    res.origin = current_playback_job.origin;
+    strncpy(res.correlation_id, req_id, sizeof(res.correlation_id) - 1);
+    if (reason) {
+        strncpy(res.reason, reason, sizeof(res.reason) - 1);
+    }
+    if (res.origin == PlaybackOrigin::PROACTIVE) {
+        playback_get_proactive_details(res.correlation_id, sizeof(res.correlation_id),
+                                       res.attempt_id, sizeof(res.attempt_id),
+                                       res.lease_id, sizeof(res.lease_id),
+                                       res.audio_receipt, sizeof(res.audio_receipt));
+    }
+    return send_playback_result(res);
 }
 
 // WebSocket Send Authenticate
@@ -716,13 +704,6 @@ static bool send_pairing_mode_request() {
     return sent;
 }
 
-static void clear_pending_playback_event()
-{
-    pending_playback_event = JOY_PENDING_PLAYBACK_NONE;
-    pending_playback_request_id[0] = '\0';
-    pending_playback_reason[0] = '\0';
-}
-
 static void mark_request_result_sent(const char *request_id)
 {
     const bool matches_current = strcmp(current_request_id, request_id) == 0;
@@ -741,46 +722,71 @@ static void mark_request_result_sent(const char *request_id)
     reset_audio_deadline();
 }
 
-static void queue_pending_playback_event(const char *request_id, JoyPendingPlaybackEvent event, const char *reason)
+static void clear_pending_playback_event()
 {
-    pending_playback_event = event;
-    strncpy(pending_playback_request_id, request_id, sizeof(pending_playback_request_id) - 1);
-    pending_playback_request_id[sizeof(pending_playback_request_id) - 1] = '\0';
-    if (reason != NULL)
-    {
-        strncpy(pending_playback_reason, reason, sizeof(pending_playback_reason) - 1);
-        pending_playback_reason[sizeof(pending_playback_reason) - 1] = '\0';
-    }
-    else
-    {
-        pending_playback_reason[0] = '\0';
-    }
+    s_pending_playback = PendingPlaybackResult{};
+}
 
-    playback_state = event == JOY_PENDING_PLAYBACK_DONE
+static void queue_pending_playback_result(const PendingPlaybackResult &result)
+{
+    s_pending_playback = result;
+    playback_state = result.kind == PendingPlaybackEventKind::DONE
         ? JOY_PLAYBACK_DONE_PENDING_SEND
         : JOY_PLAYBACK_FAILED_PENDING_SEND;
 }
 
+static void queue_pending_playback_event(const char *request_id, PendingPlaybackEventKind event, const char *reason)
+{
+    PendingPlaybackResult pending{};
+    pending.kind = event;
+    pending.origin = current_playback_job.origin;
+    strncpy(pending.correlation_id, request_id, sizeof(pending.correlation_id) - 1);
+    if (reason != NULL)
+    {
+        strncpy(pending.reason, reason, sizeof(pending.reason) - 1);
+    }
+    if (pending.origin == PlaybackOrigin::PROACTIVE)
+    {
+        playback_get_proactive_details(pending.correlation_id, sizeof(pending.correlation_id),
+                                       pending.attempt_id, sizeof(pending.attempt_id),
+                                       pending.lease_id, sizeof(pending.lease_id),
+                                       pending.audio_receipt, sizeof(pending.audio_receipt));
+        pending.settlement_deadline_us = esp_timer_get_time() + 50000000LL;
+    }
+    else
+    {
+        pending.settlement_deadline_us = esp_timer_get_time() + 60000000LL;
+    }
+    queue_pending_playback_result(pending);
+}
+
 static bool flush_pending_playback_event()
 {
-    if (pending_playback_event == JOY_PENDING_PLAYBACK_NONE)
+    if (s_pending_playback.kind == PendingPlaybackEventKind::NONE)
         return true;
 
-    bool sent = pending_playback_event == JOY_PENDING_PLAYBACK_DONE
-        ? send_playback_done(pending_playback_request_id)
-        : send_playback_failed(pending_playback_request_id, pending_playback_reason);
+    int64_t now_us = esp_timer_get_time();
+    if (s_pending_playback.settlement_deadline_us > 0 && now_us > s_pending_playback.settlement_deadline_us)
+    {
+        ESP_LOGW(TAG, "Discarding expired pending playback result for %s (deadline passed)",
+                 s_pending_playback.correlation_id);
+        clear_pending_playback_event();
+        playback_state = JOY_PLAYBACK_FAILED;
+        return true;
+    }
 
+    bool sent = send_playback_result(s_pending_playback);
     if (!sent)
         return false;
 
-    JoyPlaybackState final_state = pending_playback_event == JOY_PENDING_PLAYBACK_DONE
+    JoyPlaybackState final_state = s_pending_playback.kind == PendingPlaybackEventKind::DONE
         ? JOY_PLAYBACK_DONE
         : JOY_PLAYBACK_FAILED;
-    char sent_request_id[37] = {0};
-    strncpy(sent_request_id, pending_playback_request_id, sizeof(sent_request_id) - 1);
+    char sent_id[kUuidBufferSize] = {0};
+    strncpy(sent_id, s_pending_playback.correlation_id, sizeof(sent_id) - 1);
     clear_pending_playback_event();
     playback_state = final_state;
-    mark_request_result_sent(sent_request_id);
+    mark_request_result_sent(sent_id);
     return true;
 }
 
@@ -797,7 +803,7 @@ static void handle_request_failed(const char *code) {
     }
     
     vTaskDelay(pdMS_TO_TICKS(2000));
-    setState(JoyState::IDLE);
+    // State owner in state.cpp will transition to IDLE
 }
 
 static void queue_request_failed(const char *request_id, const char *code)
@@ -1198,6 +1204,24 @@ static void handle_ws_message(const char *payload, int len) {
             ready.expires_at_ms = expires_node && cJSON_IsNumber(expires_node) ? (int64_t)expires_node->valuedouble : 0;
 
             int64_t now_us = esp_timer_get_time();
+
+            // CAS IDLE -> PREPARING_PLAYBACK before starting proactive playback
+            if (getState() != JoyState::IDLE || !trySetState(JoyState::IDLE, JoyState::PREPARING_PLAYBACK)) {
+                ESP_LOGW(TAG, "Rejecting proactive_audio_ready delivery_id=%s: device is not IDLE (state=%d)",
+                         ready.delivery_id, (int)getState());
+                playback_cancel_pending_offer(ready.delivery_id, ready.attempt_id);
+                PendingPlaybackResult rej{};
+                rej.kind = PendingPlaybackEventKind::FAILED;
+                rej.origin = PlaybackOrigin::PROACTIVE;
+                strncpy(rej.correlation_id, ready.delivery_id, sizeof(rej.correlation_id) - 1);
+                strncpy(rej.attempt_id, ready.attempt_id, sizeof(rej.attempt_id) - 1);
+                strncpy(rej.lease_id, ready.lease_id, sizeof(rej.lease_id) - 1);
+                strncpy(rej.audio_receipt, ready.audio_receipt, sizeof(rej.audio_receipt) - 1);
+                strncpy(rej.reason, "CANCELLED", sizeof(rej.reason) - 1);
+                send_playback_result(rej);
+                return;
+            }
+
             if (playback_start_proactive_ready(ready, now_us)) {
                 strncpy(backend_state, "audio_ready", sizeof(backend_state) - 1);
                 backend_state[sizeof(backend_state) - 1] = '\0';
@@ -1213,7 +1237,17 @@ static void handle_ws_message(const char *payload, int len) {
                 ESP_LOGI(TAG, "Accepted proactive_audio_ready delivery_id=%s url=%s",
                          ready.delivery_id, ready.audio_url);
             } else {
+                trySetState(JoyState::PREPARING_PLAYBACK, JoyState::IDLE);
                 ESP_LOGW(TAG, "Rejected proactive_audio_ready delivery_id=%s", ready.delivery_id);
+                PendingPlaybackResult rej{};
+                rej.kind = PendingPlaybackEventKind::FAILED;
+                rej.origin = PlaybackOrigin::PROACTIVE;
+                strncpy(rej.correlation_id, ready.delivery_id, sizeof(rej.correlation_id) - 1);
+                strncpy(rej.attempt_id, ready.attempt_id, sizeof(rej.attempt_id) - 1);
+                strncpy(rej.lease_id, ready.lease_id, sizeof(rej.lease_id) - 1);
+                strncpy(rej.audio_receipt, ready.audio_receipt, sizeof(rej.audio_receipt) - 1);
+                strncpy(rej.reason, "CANCELLED", sizeof(rej.reason) - 1);
+                send_playback_result(rej);
             }
         }
     }
@@ -1233,18 +1267,6 @@ static void handle_ws_message(const char *payload, int len) {
             }
             playback_cancel_proactive(cancel, esp_timer_get_time());
             ESP_LOGI(TAG, "Handled proactive_cancel delivery_id=%s", cancel.delivery_id);
-        }
-    }
-    else if (strcmp(event, "spotify_action_result") == 0) {
-        cJSON *action_id_node = cJSON_GetObjectItem(root, "action_id");
-        cJSON *status_node = cJSON_GetObjectItem(root, "status");
-        cJSON *error_node = cJSON_GetObjectItem(root, "error_code");
-        if (action_id_node && cJSON_IsString(action_id_node)) {
-            bool ok = (status_node && cJSON_IsString(status_node) && strcmp(status_node->valuestring, "SUCCEEDED") == 0);
-            const char *err = (error_node && cJSON_IsString(error_node)) ? error_node->valuestring : nullptr;
-            s_spotify_controller.on_action_result(action_id_node->valuestring, ok, err);
-            ESP_LOGI(TAG, "Received spotify_action_result: id=%s ok=%d error=%s",
-                     action_id_node->valuestring, ok ? 1 : 0, err ? err : "none");
         }
     }
 
@@ -1431,26 +1453,6 @@ static void ws_monitor_task(void *param) {
             // A connection attempt or shutdown is still active; do not stop/start it.
         }
 
-        if (ws_authenticated) {
-            char spot_id[37] = {0};
-            SpotifyActionType spot_act = SpotifyActionType::NONE;
-            if (s_spotify_controller.get_action_to_send(spot_id, sizeof(spot_id), &spot_act, esp_timer_get_time())) {
-                cJSON *spot_root = cJSON_CreateObject();
-                if (spot_root) {
-                    cJSON_AddStringToObject(spot_root, "event", "spotify_action");
-                    cJSON_AddStringToObject(spot_root, "action_id", spot_id);
-                    cJSON_AddStringToObject(spot_root, "action", spot_act == SpotifyActionType::NEXT ? "NEXT" : "PREVIOUS");
-                    char *spot_str = cJSON_PrintUnformatted(spot_root);
-                    cJSON_Delete(spot_root);
-                    if (spot_str) {
-                        ESP_LOGI(TAG, "Sending spotify_action to WS: id=%s action=%s",
-                                 spot_id, spot_act == SpotifyActionType::NEXT ? "NEXT" : "PREVIOUS");
-                        ws_send_text(spot_str, true);
-                        free(spot_str);
-                    }
-                }
-            }
-        }
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
@@ -1847,32 +1849,27 @@ static JoyPlaybackResult download_and_play_mp3(const PlaybackJob *job) {
         }
     }
 
-    if (result == JOY_PLAYBACK_DOWNLOAD_FAILED && !read_failed) {
-        if (is_chunked) {
-            ESP_LOGI(TAG, "MP3 chunked download completeness is_eof=%d received_bytes=%llu playback_started=%d frames=%lu bytes_left=%d",
-                     is_eof ? 1 : 0, (unsigned long long)received_bytes,
-                     playback_started ? 1 : 0, (unsigned long)decoded_frames, bytes_left);
-            if (playback_started && decoded_frames > 0 && is_eof) {
-                result = JOY_PLAYBACK_SUCCESS;
-            } else if (!playback_started || bytes_left != 0) {
-                result = JOY_PLAYBACK_DECODE_FAILED;
-            } else {
-                result = JOY_PLAYBACK_DOWNLOAD_FAILED;
-            }
-        } else {
-            bool complete_data = esp_http_client_is_complete_data_received(http_client);
-            ESP_LOGI(TAG, "MP3 download completeness=%s expected_bytes=%lld received_bytes=%llu",
-                     complete_data ? "yes" : "no", (long long)content_length,
-                     (unsigned long long)received_bytes);
-            if (!complete_data || received_bytes != (uint64_t)content_length) {
-                result = JOY_PLAYBACK_DOWNLOAD_FAILED;
-            }
-            else if (!playback_started || bytes_left != 0) {
-                result = JOY_PLAYBACK_DECODE_FAILED;
-            }
-            else {
-                result = JOY_PLAYBACK_SUCCESS;
-            }
+    PlaybackTransferSummary summary{};
+    summary.chunked = is_chunked;
+    summary.http_complete = is_chunked ? is_eof : esp_http_client_is_complete_data_received(http_client);
+    summary.content_length = content_length;
+    summary.received_bytes = received_bytes;
+    summary.decoded_frames = decoded_frames;
+    summary.undecoded_bytes = (bytes_left > 0) ? static_cast<size_t>(bytes_left) : 0;
+
+    PlaybackTransferResult transfer_res = playback_validate_transfer_completion(summary);
+    if (transfer_res == PlaybackTransferResult::DOWNLOAD_FAILED) {
+        result = JOY_PLAYBACK_DOWNLOAD_FAILED;
+    } else if (transfer_res == PlaybackTransferResult::DECODE_FAILED) {
+        result = JOY_PLAYBACK_DECODE_FAILED;
+    } else {
+        result = JOY_PLAYBACK_SUCCESS;
+    }
+
+    if (result == JOY_PLAYBACK_SUCCESS && playback_started) {
+        if (audio_drainSpeakerTail() != ESP_OK) {
+            ESP_LOGW(TAG, "Speaker tail drain failed");
+            result = JOY_PLAYBACK_PLAYBACK_FAILED;
         }
     }
     
@@ -2284,10 +2281,7 @@ static JoyUploadResult upload_wav_voice(const char *uuid, int16_t *record_buf, s
             duplicate_expired = strcmp(status_node->valuestring, "expired") == 0;
             clear_upload_request(uuid, JOY_PLAYBACK_CANCELLED);
             duplicate_failure = strcmp(status_node->valuestring, "failed") == 0 || duplicate_expired;
-            if (!duplicate_failure)
-            {
-                setState(JoyState::IDLE);
-            }
+            // State owner transitions to IDLE
             result = JOY_UPLOAD_TERMINAL_DUPLICATE;
         }
         else
@@ -2376,9 +2370,7 @@ void api_upload_audio_and_process() {
         sample_count = get_record_size();
 
         if (record_buf == NULL || sample_count <= WAV_HEADER_SAMPLES) {
-            ESP_LOGW(TAG, "Record buffer is empty, skipping API processing");
             audio_stopThinkingFillerLoop();
-            setState(JoyState::IDLE);
             return;
         }
 
@@ -2401,16 +2393,9 @@ void api_upload_audio_and_process() {
             return;
         }
         ESP_LOGI(TAG, "Local WAV validation passed bytes=%lu", (unsigned long)wav_byte_size);
-
-        if (!api_ws_is_authenticated()) {
-            ESP_LOGW(TAG, "WebSocket is not authenticated. Refusing voice processing.");
-            handle_request_failed("WEBSOCKET_NOT_CONNECTED");
-            return;
-        }
-
-        if (pending_playback_event != JOY_PENDING_PLAYBACK_NONE) {
+        if (s_pending_playback.kind != PendingPlaybackEventKind::NONE) {
             (void)flush_pending_playback_event();
-            if (pending_playback_event != JOY_PENDING_PLAYBACK_NONE)
+            if (s_pending_playback.kind != PendingPlaybackEventKind::NONE)
                 return;
         }
 
@@ -2583,32 +2568,28 @@ void api_upload_audio_and_process() {
             handle_request_failed("AUDIO_EXPIRED");
             return;
         }
-
         if (play_result == JOY_PLAYBACK_SUCCESS) {
-            playback_mark_terminal(playback_terminal_result(play_result));
+            playback_mark_terminal(current_request_id, playback_terminal_result(play_result));
             if (send_playback_done(current_request_id)) {
                 playback_state = JOY_PLAYBACK_DONE;
                 mark_request_result_sent(current_request_id);
             } else {
-                queue_pending_playback_event(current_request_id, JOY_PENDING_PLAYBACK_DONE, NULL);
+                queue_pending_playback_event(current_request_id, PendingPlaybackEventKind::DONE, NULL);
             }
-
-            setState(JoyState::IDLE);
         } else {
-            playback_mark_terminal(playback_terminal_result(play_result));
+            playback_mark_terminal(current_request_id, playback_terminal_result(play_result));
             const char *failure_reason = play_result == JOY_PLAYBACK_DECODE_FAILED
                 ? "DECODE_FAILED"
                 : play_result == JOY_PLAYBACK_PLAYBACK_FAILED
                     ? "PLAYBACK_FAILED"
                     : "DOWNLOAD_FAILED";
-            queue_pending_playback_event(current_request_id, JOY_PENDING_PLAYBACK_FAILED, failure_reason);
+            queue_pending_playback_event(current_request_id, PendingPlaybackEventKind::FAILED, failure_reason);
             flush_pending_playback_event();
 
             audio_stopThinkingFillerLoop();
             setState(JoyState::ERROR_STATE);
             audio_play_error();
             vTaskDelay(pdMS_TO_TICKS(2000));
-            setState(JoyState::IDLE);
         }
     }
 }

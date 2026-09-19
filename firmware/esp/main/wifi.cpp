@@ -13,6 +13,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "esp_heap_caps.h"
 #include <time.h>
 #include <string.h>
@@ -23,6 +24,8 @@ static const char *WIFI_TAG = "WIFI";
 static TaskHandle_t time_sync_task_handle = NULL;
 static TaskHandle_t s_finalize_task_handle = NULL;
 static volatile bool s_finalize_spawn_pending = false;
+static StaticSemaphore_t s_scan_mutex_storage;
+static SemaphoreHandle_t s_scan_mutex = nullptr;
 
 static void log_heap_diagnostics(const char *context)
 {
@@ -356,7 +359,8 @@ static void event_handler(
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_SCAN_DONE)
     {
-        wifi_paged_scan_on_scan_done();
+        const auto *event = static_cast<const wifi_event_sta_scan_done_t *>(event_data);
+        wifi_paged_scan_on_scan_done(event ? event->status : 1);
     }
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
     {
@@ -390,6 +394,7 @@ static void event_handler(
 }
 void wifi_init(void)
 {
+    s_scan_mutex = xSemaphoreCreateMutexStatic(&s_scan_mutex_storage);
     network_init();
 
 
@@ -500,102 +505,6 @@ static int compare_ap_rssi(const void *a, const void *b)
     return (ap_b->rssi - ap_a->rssi);
 }
 
-char *wifi_scan_nearby_aps_json(void)
-{
-    ESP_LOGI(WIFI_TAG, "Starting 2.4 GHz Wi-Fi scan for BLE provisioning...");
-
-    wifi_scan_config_t scan_config = {};
-    scan_config.show_hidden = false;
-    scan_config.scan_type = WIFI_SCAN_TYPE_ACTIVE;
-    scan_config.scan_time.active.min = 100;
-    scan_config.scan_time.active.max = 250;
-
-    esp_err_t err = esp_wifi_scan_start(&scan_config, true);
-    if (err != ESP_OK) {
-        ESP_LOGE(WIFI_TAG, "esp_wifi_scan_start failed: %d", err);
-        return strdup("{\"status\":\"error\",\"networks\":[]}");
-    }
-
-    uint16_t ap_count = 0;
-    esp_wifi_scan_get_ap_num(&ap_count);
-    ESP_LOGI(WIFI_TAG, "Wi-Fi scan completed. Total raw APs found: %u", (unsigned)ap_count);
-
-    if (ap_count == 0) {
-        return strdup("{\"status\":\"ok\",\"networks\":[]}");
-    }
-
-    wifi_ap_record_t *raw_records = (wifi_ap_record_t *)malloc(sizeof(wifi_ap_record_t) * ap_count);
-    if (!raw_records) {
-        ESP_LOGE(WIFI_TAG, "Out of memory allocating raw AP records");
-        return strdup("{\"status\":\"error\",\"networks\":[]}");
-    }
-
-    esp_wifi_scan_get_ap_records(&ap_count, raw_records);
-
-    struct ScannedAp *unique_aps = (struct ScannedAp *)calloc(ap_count, sizeof(struct ScannedAp));
-    size_t unique_count = 0;
-
-    if (unique_aps) {
-        for (uint16_t i = 0; i < ap_count; i++) {
-            const char *ssid = (const char *)raw_records[i].ssid;
-            if (strlen(ssid) == 0) continue;
-
-            int existing_idx = -1;
-            for (size_t u = 0; u < unique_count; u++) {
-                if (strncmp(unique_aps[u].ssid, ssid, 32) == 0) {
-                    existing_idx = (int)u;
-                    break;
-                }
-            }
-
-            const char *sec = "WPA2";
-            if (raw_records[i].authmode == WIFI_AUTH_OPEN) {
-                sec = "OPEN";
-            } else if (raw_records[i].authmode == WIFI_AUTH_WPA3_PSK || raw_records[i].authmode == WIFI_AUTH_WPA2_WPA3_PSK) {
-                sec = "WPA3";
-            }
-
-            if (existing_idx >= 0) {
-                if (raw_records[i].rssi > unique_aps[existing_idx].rssi) {
-                    unique_aps[existing_idx].rssi = raw_records[i].rssi;
-                    strncpy(unique_aps[existing_idx].security, sec, sizeof(unique_aps[existing_idx].security) - 1);
-                }
-            } else {
-                strncpy(unique_aps[unique_count].ssid, ssid, sizeof(unique_aps[unique_count].ssid) - 1);
-                unique_aps[unique_count].rssi = raw_records[i].rssi;
-                strncpy(unique_aps[unique_count].security, sec, sizeof(unique_aps[unique_count].security) - 1);
-                unique_count++;
-            }
-        }
-
-        qsort(unique_aps, unique_count, sizeof(struct ScannedAp), compare_ap_rssi);
-    }
-
-    free(raw_records);
-
-    cJSON *root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "status", "ok");
-    cJSON *arr = cJSON_CreateArray();
-    cJSON_AddItemToObject(root, "networks", arr);
-
-    size_t max_export = unique_count > 12 ? 12 : unique_count;
-    for (size_t i = 0; i < max_export; i++) {
-        cJSON *item = cJSON_CreateObject();
-        cJSON_AddStringToObject(item, "ssid", unique_aps[i].ssid);
-        cJSON_AddNumberToObject(item, "rssi", unique_aps[i].rssi);
-        cJSON_AddStringToObject(item, "security", unique_aps[i].security);
-        cJSON_AddItemToArray(arr, item);
-    }
-
-    if (unique_aps) {
-        free(unique_aps);
-    }
-
-    char *json_str = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-
-    return json_str ? json_str : strdup("{\"status\":\"ok\",\"networks\":[]}");
-}
 
 enum class WifiPagedScanStatus {
     IDLE,
@@ -612,72 +521,88 @@ static size_t s_paged_scan_count = 0;
 static uint16_t s_paged_scan_selected_index = 0;
 static bool s_paged_scan_requested = false;
 
-void wifi_paged_scan_schedule(uint32_t scan_id)
+esp_err_t wifi_paged_scan_schedule(uint32_t scan_id)
 {
+    if (!s_scan_mutex) return ESP_ERR_INVALID_STATE;
+    xSemaphoreTake(s_scan_mutex, portMAX_DELAY);
+    if (s_paged_scan_status == WifiPagedScanStatus::SCANNING) {
+        xSemaphoreGive(s_scan_mutex);
+        return ESP_ERR_INVALID_STATE;
+    }
     s_paged_scan_id = scan_id;
     s_paged_scan_status = WifiPagedScanStatus::SCANNING;
     s_paged_scan_count = 0;
     s_paged_scan_selected_index = 0;
     s_paged_scan_error[0] = '\0';
     s_paged_scan_requested = true;
+    if (joy_ble_get_state() == JoyBleState::PHYSICAL_CONFIRMED ||
+        joy_ble_get_state() == JoyBleState::WAITING_WIFI_CREDENTIALS) {
+        joy_ble_set_state(JoyBleState::WIFI_SCANNING);
+    }
+    ESP_LOGI(WIFI_TAG, "Wi-Fi scan scheduled: scan_id=%lu", (unsigned long)scan_id);
+    xSemaphoreGive(s_scan_mutex);
+    return ESP_OK;
 }
 
-void wifi_paged_scan_select_page(uint32_t scan_id, uint16_t index)
+esp_err_t wifi_paged_scan_select_page(uint32_t scan_id, uint16_t index)
 {
-    if (scan_id == s_paged_scan_id) {
-        s_paged_scan_selected_index = index;
-    }
+    if (!s_scan_mutex) return ESP_ERR_INVALID_STATE;
+    xSemaphoreTake(s_scan_mutex, portMAX_DELAY);
+    const bool valid = scan_id == s_paged_scan_id &&
+                       s_paged_scan_status == WifiPagedScanStatus::READY &&
+                       index < s_paged_scan_count;
+    if (valid) s_paged_scan_selected_index = index;
+    xSemaphoreGive(s_scan_mutex);
+    return valid ? ESP_OK : ESP_ERR_INVALID_ARG;
 }
 
 static void wifi_paged_scan_poll(void)
 {
+    if (!s_scan_mutex) return;
+    xSemaphoreTake(s_scan_mutex, portMAX_DELAY);
     if (s_paged_scan_requested)
     {
         s_paged_scan_requested = false;
         wifi_scan_config_t scan_config = {};
         scan_config.show_hidden = false;
         scan_config.scan_type = WIFI_SCAN_TYPE_ACTIVE;
-        scan_config.scan_time.active.min = 100;
-        scan_config.scan_time.active.max = 250;
-
+        // Default scan_time (0) is required when Bluetooth coexistence is active
         esp_err_t err = esp_wifi_scan_start(&scan_config, false);
+        ESP_LOGI(WIFI_TAG, "paged scan esp_wifi_scan_start returned %d", (int)err);
         if (err != ESP_OK) {
             s_paged_scan_status = WifiPagedScanStatus::ERROR;
-            strncpy(s_paged_scan_error, "SCAN_START_FAILED", sizeof(s_paged_scan_error) - 1);
+            snprintf(s_paged_scan_error, sizeof(s_paged_scan_error), "SCAN_START_%d", (int)err);
             s_paged_scan_error[sizeof(s_paged_scan_error) - 1] = '\0';
+            if (joy_ble_get_state() == JoyBleState::WIFI_SCANNING) {
+                joy_ble_set_state(JoyBleState::WAITING_WIFI_CREDENTIALS);
+            }
         }
     }
+    xSemaphoreGive(s_scan_mutex);
 }
 
-void wifi_paged_scan_on_scan_done(void)
+void wifi_paged_scan_on_scan_done(uint32_t scan_status)
 {
-    if (s_paged_scan_status != WifiPagedScanStatus::SCANNING) return;
+    if (!s_scan_mutex) return;
+    xSemaphoreTake(s_scan_mutex, portMAX_DELAY);
+    if (s_paged_scan_status != WifiPagedScanStatus::SCANNING) {
+        esp_wifi_clear_ap_list();
+        xSemaphoreGive(s_scan_mutex);
+        return;
+    }
 
     uint16_t ap_count = 0;
-    esp_wifi_scan_get_ap_num(&ap_count);
-    if (ap_count == 0) {
-        s_paged_scan_count = 0;
-        s_paged_scan_status = WifiPagedScanStatus::READY;
-        esp_wifi_clear_ap_list();
-        return;
-    }
-
-    uint16_t fetch_count = ap_count > 32 ? 32 : ap_count;
-    wifi_ap_record_t records[32];
-    esp_err_t err = esp_wifi_scan_get_ap_records(&fetch_count, records);
-    esp_wifi_clear_ap_list();
-
-    if (err != ESP_OK) {
-        s_paged_scan_status = WifiPagedScanStatus::ERROR;
-        strncpy(s_paged_scan_error, "SCAN_RECORDS_FAILED", sizeof(s_paged_scan_error) - 1);
-        s_paged_scan_error[sizeof(s_paged_scan_error) - 1] = '\0';
-        return;
-    }
+    esp_err_t err = scan_status == 0 ? esp_wifi_scan_get_ap_num(&ap_count) : ESP_FAIL;
+    // Consume one driver-owned record at a time: this callback runs on the
+    // 2304-byte system event task. A 32-record local array overflowed its stack.
+    wifi_ap_record_t record = {};
 
     s_paged_scan_count = 0;
-    for (uint16_t i = 0; i < fetch_count; i++) {
-        const char *ssid = (const char *)records[i].ssid;
-        if (strlen(ssid) == 0) continue;
+    for (uint16_t i = 0; err == ESP_OK && i < ap_count; i++) {
+        err = esp_wifi_scan_get_ap_record(&record);
+        if (err != ESP_OK) break;
+        const char *ssid = (const char *)record.ssid;
+        if (ssid[0] == '\0') continue;
 
         int existing_idx = -1;
         for (size_t u = 0; u < s_paged_scan_count; u++) {
@@ -688,36 +613,51 @@ void wifi_paged_scan_on_scan_done(void)
         }
 
         const char *sec = "WPA2";
-        if (records[i].authmode == WIFI_AUTH_OPEN) {
+        if (record.authmode == WIFI_AUTH_OPEN) {
             sec = "OPEN";
-        } else if (records[i].authmode == WIFI_AUTH_WPA3_PSK || records[i].authmode == WIFI_AUTH_WPA2_WPA3_PSK) {
+        } else if (record.authmode == WIFI_AUTH_WPA3_PSK || record.authmode == WIFI_AUTH_WPA2_WPA3_PSK) {
             sec = "WPA3";
         }
 
         if (existing_idx >= 0) {
-            if (records[i].rssi > s_paged_scan_aps[existing_idx].rssi) {
-                s_paged_scan_aps[existing_idx].rssi = records[i].rssi;
+            if (record.rssi > s_paged_scan_aps[existing_idx].rssi) {
+                s_paged_scan_aps[existing_idx].rssi = record.rssi;
                 strncpy(s_paged_scan_aps[existing_idx].security, sec, sizeof(s_paged_scan_aps[existing_idx].security) - 1);
                 s_paged_scan_aps[existing_idx].security[sizeof(s_paged_scan_aps[existing_idx].security) - 1] = '\0';
             }
         } else if (s_paged_scan_count < 12) {
             strncpy(s_paged_scan_aps[s_paged_scan_count].ssid, ssid, sizeof(s_paged_scan_aps[s_paged_scan_count].ssid) - 1);
             s_paged_scan_aps[s_paged_scan_count].ssid[sizeof(s_paged_scan_aps[s_paged_scan_count].ssid) - 1] = '\0';
-            s_paged_scan_aps[s_paged_scan_count].rssi = records[i].rssi;
+            s_paged_scan_aps[s_paged_scan_count].rssi = record.rssi;
             strncpy(s_paged_scan_aps[s_paged_scan_count].security, sec, sizeof(s_paged_scan_aps[s_paged_scan_count].security) - 1);
             s_paged_scan_aps[s_paged_scan_count].security[sizeof(s_paged_scan_aps[s_paged_scan_count].security) - 1] = '\0';
             s_paged_scan_count++;
         }
     }
 
-    qsort(s_paged_scan_aps, s_paged_scan_count, sizeof(struct ScannedAp), compare_ap_rssi);
-    s_paged_scan_status = WifiPagedScanStatus::READY;
+    esp_wifi_clear_ap_list();
+    if (err != ESP_OK) {
+        s_paged_scan_count = 0;
+        s_paged_scan_status = WifiPagedScanStatus::ERROR;
+        snprintf(s_paged_scan_error, sizeof(s_paged_scan_error), "SCAN_RESULTS_%d", (int)err);
+    } else {
+        qsort(s_paged_scan_aps, s_paged_scan_count, sizeof(struct ScannedAp), compare_ap_rssi);
+        s_paged_scan_status = WifiPagedScanStatus::READY;
+        ESP_LOGI(WIFI_TAG, "Wi-Fi scan ready: scan_id=%lu networks=%u",
+                 (unsigned long)s_paged_scan_id, (unsigned)s_paged_scan_count);
+    }
+    if (joy_ble_get_state() == JoyBleState::WIFI_SCANNING) {
+        joy_ble_set_state(JoyBleState::WAITING_WIFI_CREDENTIALS);
+    }
+    xSemaphoreGive(s_scan_mutex);
 }
 
-char *wifi_paged_scan_get_page_json(uint32_t scan_id)
+char *wifi_paged_scan_get_page_json(void)
 {
+    if (!s_scan_mutex) return nullptr;
     cJSON *root = cJSON_CreateObject();
     if (!root) return NULL;
+    xSemaphoreTake(s_scan_mutex, portMAX_DELAY);
 
     cJSON_AddNumberToObject(root, "scan_id", s_paged_scan_id);
 
@@ -746,6 +686,7 @@ char *wifi_paged_scan_get_page_json(uint32_t scan_id)
         cJSON_AddNullToObject(root, "error_code");
     }
 
+    xSemaphoreGive(s_scan_mutex);
     char *json = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
     return json;

@@ -277,4 +277,34 @@ describe('ScheduleFormSheet Component', () => {
     const submitBtn = findElement(element, (el) => el.props?.testID === 'form-sheet-submit-button');
     expect(submitBtn?.props?.disabled).toBe(true);
   });
+
+  it('does not silently retarget null device to active device when editing schedule', () => {
+    const onSubmitMock = vi.fn().mockResolvedValue(undefined);
+    const scheduleWithNullTargetDevice: Schedule = {
+      ...mockExistingSchedule,
+      targetDeviceId: null,
+      payload: {
+        prompt: 'Morning wake up alert',
+        deliveryTargets: ['DEVICE'],
+      },
+    };
+
+    const element = ScheduleFormSheet({
+      isVisible: true,
+      mode: 'edit',
+      schedule: scheduleWithNullTargetDevice,
+      activeDeviceId: 'bmo-01',
+      onClose: vi.fn(),
+      onSubmit: onSubmitMock,
+      testID: 'form-sheet',
+    });
+
+    // The invalid device warning must be visible because targetDeviceId is null
+    const warning = findElement(element, (el) => el.props?.testID === 'form-sheet-device-invalid-warning');
+    expect(warning).not.toBeNull();
+
+    // Submit button must be disabled to block invalid DEVICE submit
+    const submitBtn = findElement(element, (el) => el.props?.testID === 'form-sheet-submit-button');
+    expect(submitBtn?.props?.disabled).toBe(true);
+  });
 });

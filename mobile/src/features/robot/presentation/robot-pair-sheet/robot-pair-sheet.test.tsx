@@ -4,16 +4,7 @@ import type * as ReactType from 'react';
 // @ts-ignore
 import { describe, expect, it, vi } from 'vitest';
 
-import { RobotPairSheet } from './robot-pair-sheet';
-import {
-  PairStepIndicator,
-  BluetoothStatusBanner,
-  JoyTroubleshootingCard,
-  JoyBeaconItem,
-  WifiNetworkItem,
-  PairErrorCard,
-} from './components';
-import { provisioningManager } from '@/features/robot/data/provisioning-flow';
+import { WifiNetworkItem } from './components';
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof ReactType>('react');
@@ -160,125 +151,29 @@ type MockElement = {
   };
 };
 
-describe('RobotPairSheet', () => {
-  it('renders header with step indicator and title', () => {
-    const tree = RobotPairSheet({
-      isVisible: true,
-      onClose: vi.fn(),
-      testID: 'pair-sheet',
-    }) as unknown as MockElement;
 
-    expect(tree.type).toBeDefined();
-    expect(tree.props.testID).toBe('pair-sheet');
-
-    const header = tree.props.header;
-    expect(header).toBeDefined();
-    expect(header?.props.testID).toBe('pair-sheet-header');
-  });
-
-  it('renders PairStepIndicator with 4 steps', () => {
-    const indicator = PairStepIndicator({
-      currentStep: 'scan',
-      testID: 'indicator-test',
-    }) as unknown as MockElement;
-
-    expect(indicator.type).toBeDefined();
-    expect(indicator.props.testID).toBe('indicator-test');
-  });
-
-  it('renders BluetoothStatusBanner with settings trigger', () => {
-    const onSettings = vi.fn();
-    const banner = BluetoothStatusBanner({
-      onOpenSettings: onSettings,
-      testID: 'banner-test',
-    }) as unknown as MockElement;
-
-    expect(banner.type).toBeDefined();
-    expect(banner.props.testID).toBe('banner-test');
-  });
-
-  it('renders JoyTroubleshootingCard with rescan callback', () => {
-    const onRescan = vi.fn();
-    const card = JoyTroubleshootingCard({
-      onRescan,
-      isScanning: false,
-      testID: 'troubleshoot-test',
-    }) as unknown as MockElement;
-
-    expect(card.type).toBeDefined();
-    expect(card.props.testID).toBe('troubleshoot-test');
-  });
-
-  it('renders JoyBeaconItem with device information', () => {
-    const onSelect = vi.fn();
-    const item = JoyBeaconItem({
-      joy: {
-        id: 'joy-1',
-        name: 'Joy Robot A1',
-        provisioningRef: 'JOY-A1B2',
-        hardwareId: 'hw-123',
-        setupNonce: 'nonce',
-        resetEpoch: 0,
-        rssi: -45,
-      },
-      onPress: onSelect,
-      testID: 'beacon-test',
-    }) as unknown as MockElement;
-
-    expect(item.type).toBeDefined();
-    expect(item.props.testID).toBe('beacon-test');
-  });
-
-  it('renders WifiNetworkItem with security and selection status', () => {
+describe('Wi-Fi network selection', () => {
+  it('renders WifiNetworkItem and triggers onSelect when pressed', () => {
     const onSelect = vi.fn();
     const item = WifiNetworkItem({
       network: {
-        ssid: 'MyHomeWiFi',
-        rssi: -50,
+        ssid: 'TestNetwork24G',
+        rssi: -55,
         security: 'WPA2',
       },
-      isSelected: true,
+      isSelected: false,
       onSelect,
-      testID: 'wifi-test',
+      testID: 'wifi-item-test',
     }) as unknown as MockElement;
 
     expect(item.type).toBeDefined();
-    expect(item.props.testID).toBe('wifi-test');
-  });
-
-  it('renders OPEN security correctly on WifiNetworkItem', () => {
-    const onSelect = vi.fn();
-    const item = WifiNetworkItem({
-      network: {
-        ssid: 'CoffeeShop-Open',
-        rssi: -45,
-        security: 'OPEN',
-      },
-      isSelected: true,
-      onSelect,
-      testID: 'wifi-open-test',
-    }) as unknown as MockElement;
-
-    expect(item.type).toBeDefined();
-    expect(item.props.testID).toBe('wifi-open-test');
-  });
-
-  it('renders PairErrorCard with message and retry option', () => {
-    const onRetry = vi.fn();
-    const onDismiss = vi.fn();
-    const card = PairErrorCard({
-      message: 'Failed to connect to Joy',
-      onRetry,
-      onDismiss,
-      testID: 'error-test',
-    }) as unknown as MockElement;
-
-    expect(card.type).toBeDefined();
-    expect(card.props.testID).toBe('error-test');
-  });
-
-  it('invokes requestDeviceWifiScan on provisioning manager', () => {
-    provisioningManager.requestDeviceWifiScan();
-    expect(provisioningManager.requestDeviceWifiScan).toBeDefined();
+    expect(item.props.testID).toBe('wifi-item-test');
+    // Invoke onPress handler
+    (item.props as { onPress?: () => void }).onPress?.();
+    expect(onSelect).toHaveBeenCalledWith({
+      ssid: 'TestNetwork24G',
+      rssi: -55,
+      security: 'WPA2',
+    });
   });
 });

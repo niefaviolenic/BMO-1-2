@@ -35,6 +35,17 @@ static int64_t s_arm_deadline_us = 0;
 static char s_commit_nonce[64] = {0};
 static char s_commit_proof[128] = {0};
 
+static void clear_confirmation()
+{
+    s_arm_deadline_us = 0;
+    s_session_id[0] = '\0';
+    s_challenge[0] = '\0';
+    s_confirmation_nonce[0] = '\0';
+    s_physical_proof[0] = '\0';
+    s_commit_nonce[0] = '\0';
+    s_commit_proof[0] = '\0';
+}
+
 static void generate_nonce(char *dst, size_t max_len)
 {
     uint8_t rand_bytes[16];
@@ -63,6 +74,7 @@ void joy_ble_start_pairing_window(void)
 {
     api_ws_reset_authentication_blocked();
     esp_wifi_disconnect();
+    clear_confirmation();
     generate_nonce(s_setup_nonce, sizeof(s_setup_nonce));
     s_state = JoyBleState::BOOTSTRAP_ADVERTISING;
 
@@ -82,9 +94,7 @@ void joy_ble_stop_provisioning(void)
 {
     s_state = JoyBleState::UNPAIRED_IDLE;
     s_window_deadline_us = 0;
-    s_arm_deadline_us = 0;
-    memset(s_session_id, 0, sizeof(s_session_id));
-    memset(s_challenge, 0, sizeof(s_challenge));
+    clear_confirmation();
     joy_ble_nimble_stop();
     display_hide_ble_pairing();
     const joy_runtime_creds_t *runtime = joy_runtime_get();
@@ -151,7 +161,12 @@ const char *joy_ble_get_commit_proof(void)
 
 esp_err_t joy_ble_arm_physical_confirmation(const char *session_id, const char *challenge)
 {
-    if (!session_id || !challenge) return ESP_ERR_INVALID_ARG;
+    if (!session_id || !challenge || !session_id[0] || !challenge[0] ||
+        strlen(session_id) >= sizeof(s_session_id) || strlen(challenge) >= sizeof(s_challenge)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (s_state != JoyBleState::BOOTSTRAP_CONNECTED) return ESP_ERR_INVALID_STATE;
+    clear_confirmation();
 
     strncpy(s_session_id, session_id, sizeof(s_session_id) - 1);
     s_session_id[sizeof(s_session_id) - 1] = '\0';
@@ -162,6 +177,7 @@ esp_err_t joy_ble_arm_physical_confirmation(const char *session_id, const char *
     s_arm_deadline_us = esp_timer_get_time() + PHYSICAL_ARM_WINDOW_US;
     s_state = JoyBleState::PHYSICAL_CONFIRM_PENDING;
 
+    display_hide_ble_pairing();
     display_set_idle_face(FACE_SURPRISED);
     ESP_LOGI(TAG, "Armed physical confirmation window (60s): session_id=%s", s_session_id);
     return ESP_OK;
@@ -169,8 +185,9 @@ esp_err_t joy_ble_arm_physical_confirmation(const char *session_id, const char *
 
 void joy_ble_on_physical_hold_2s(void)
 {
-    if (s_state != JoyBleState::PHYSICAL_CONFIRM_PENDING) {
-        ESP_LOGW(TAG, "2s physical hold ignored: state is not PHYSICAL_CONFIRM_PENDING");
+    if (s_state != JoyBleState::PHYSICAL_CONFIRM_PENDING ||
+        esp_timer_get_time() >= s_arm_deadline_us) {
+        ESP_LOGW(TAG, "2s physical hold ignored: no live confirmation challenge");
         return;
     }
 
@@ -206,6 +223,11 @@ esp_err_t joy_ble_handle_secure_start_payload(
     const char *pass)
 {
     const joy_identity_t *id = joy_identity_get();
+    if (s_state != JoyBleState::PHYSICAL_CONFIRMED &&
+        s_state != JoyBleState::WAITING_WIFI_CREDENTIALS &&
+        s_state != JoyBleState::WIFI_SELECTION_READY) {
+        return ESP_ERR_INVALID_STATE;
+    }
 
     // 1. Verify start_proof HMAC
     bool valid = joy_crypto_verify_secure_start(
@@ -265,7 +287,7 @@ void joy_ble_poll(void)
         return;
     }
 
-    if (s_state == JoyBleState::BOOTSTRAP_ADVERTISING || s_state == JoyBleState::BOOTSTRAP_CONNECTED) {
+    if (s_state == JoyBleState::BOOTSTRAP_ADVERTISING) {
         static int last_countdown_sec = -1;
         int remaining_sec = (int)((s_window_deadline_us - now) / 1000000LL);
         if (remaining_sec != last_countdown_sec) {
@@ -275,7 +297,7 @@ void joy_ble_poll(void)
     }
     if (s_state == JoyBleState::PHYSICAL_CONFIRM_PENDING && now >= s_arm_deadline_us) {
         ESP_LOGW(TAG, "Physical confirm arming expired (60s timeout)");
-        s_state = JoyBleState::BOOTSTRAP_CONNECTED;
+        joy_ble_stop_provisioning();
     }
 }
 

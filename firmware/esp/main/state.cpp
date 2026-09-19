@@ -3,7 +3,7 @@
 #include "audio.h"
 #include "api.h"
 #include "wakeword.h"
-
+#include "playback.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -27,6 +27,7 @@ static const char *state_name(JoyState state)
         case JoyState::THINKING: return "THINKING";
         case JoyState::SPEAKING: return "SPEAKING";
         case JoyState::ERROR_STATE: return "ERROR";
+        case JoyState::PREPARING_PLAYBACK: return "PREPARING_PLAYBACK";
         default: return "UNKNOWN";
     }
 }
@@ -48,6 +49,9 @@ static void apply_state_display(JoyState state)
             break;
         case JoyState::ERROR_STATE:
             display_set_mode(DisplayMode::ERROR);
+            break;
+        case JoyState::PREPARING_PLAYBACK:
+            // Display-suppressed claim: maintain current display mode without SPI flush
             break;
     }
 }
@@ -115,92 +119,91 @@ JoyState getState()
     return state;
 }
 
+void joy_state_machine_step()
+{
+    JoyState current = getState();
+
+    switch (current)
+    {
+        case JoyState::IDLE:
+            vTaskDelay(pdMS_TO_TICKS(20));
+            break;
+
+        case JoyState::PREPARING_PLAYBACK:
+            vTaskDelay(pdMS_TO_TICKS(10));
+            break;
+
+        case JoyState::RECORDING: {
+            ESP_LOGI(TAG, "Entering RECORDING state");
+            // Single Owner: unconditionally start fresh recording on entry
+            if (!start_recording())
+            {
+                ESP_LOGE(TAG, "Recording start failed; upload skipped");
+                reset_recording();
+                playback_release_capture();
+                setState(JoyState::IDLE);
+                break;
+            }
+
+            TickType_t recording_wait_start = xTaskGetTickCount();
+            while (is_recording())
+            {
+                if ((TickType_t)(xTaskGetTickCount() - recording_wait_start) >=
+                    pdMS_TO_TICKS(RECORDING_STATE_WATCHDOG_MS))
+                {
+                    ESP_LOGE(TAG, "Recording watchdog timeout; upload skipped");
+                    abort_recording("state_watchdog_timeout");
+                    break;
+                }
+
+                vTaskDelay(pdMS_TO_TICKS(10));
+            }
+
+            RecordingStatus rec_status = get_recording_status();
+
+            if (rec_status == RecordingStatus::COMPLETED &&
+                get_record_size() > WAV_HEADER_SAMPLES)
+            {
+                setState(JoyState::THINKING);
+                audio_startThinkingFillerLoop();
+                api_upload_audio_and_process();
+                audio_stopThinkingFillerLoop();
+            }
+            else
+            {
+                display_set_mode(DisplayMode::IDLE);
+                ESP_LOGW(TAG, "Recording not uploadable: status=%d; upload skipped", (int)rec_status);
+            }
+
+            reset_recording();
+            playback_release_capture();
+            setState(JoyState::IDLE);
+            break;
+        }
+
+        case JoyState::THINKING:
+            ESP_LOGI(TAG, "Entering THINKING state");
+            audio_startThinkingFillerLoop();
+            api_upload_audio_and_process();
+            audio_stopThinkingFillerLoop();
+            reset_recording();
+            playback_release_capture();
+            setState(JoyState::IDLE);
+            break;
+
+        case JoyState::SPEAKING:
+        case JoyState::ERROR_STATE:
+            vTaskDelay(pdMS_TO_TICKS(100));
+            break;
+    }
+}
+
 static void joy_state_machine_task(void *pvParameters)
 {
     ESP_LOGI(TAG, "State machine orchestrator task started");
     while (true)
     {
-        JoyState current = getState();
-
-        switch (current)
-        {
-            case JoyState::IDLE:
-                // Menunggu trigger dari Wake Word (yang merubah state ke RECORDING)
-                vTaskDelay(pdMS_TO_TICKS(20));
-                break;
-
-            case JoyState::RECORDING: {
-                ESP_LOGI(TAG, "Entering RECORDING state");
-                if (!is_recording() && get_recording_status() != RecordingStatus::COMPLETED)
-                {
-                    if(!start_recording())
-                    {
-                        ESP_LOGE(
-                            TAG,
-                            "Recording start failed; upload skipped");
-                        setState(JoyState::IDLE);
-                        break;
-                    }
-                }
-
-                TickType_t recording_wait_start = xTaskGetTickCount();
-                while (is_recording())
-                {
-                    if((TickType_t)(xTaskGetTickCount() - recording_wait_start) >=
-                       pdMS_TO_TICKS(RECORDING_STATE_WATCHDOG_MS))
-                    {
-                        ESP_LOGE(
-                            TAG,
-                            "Recording watchdog timeout; upload skipped");
-                        abort_recording("state_watchdog_timeout");
-                        break;
-                    }
-
-                    vTaskDelay(pdMS_TO_TICKS(10));
-                }
-
-                RecordingStatus recording_status =
-                    get_recording_status();
-
-                if(recording_status == RecordingStatus::COMPLETED &&
-                   get_record_size() > WAV_HEADER_SAMPLES)
-                {
-                    // Phase 1 Thinking Transition: immediately switch expression to
-                    // DisplayMode::THINKING (FACE_CONFUSED) when user finishes speaking,
-                    // matching the thinking filler voice without flashing IDLE/HAPPY.
-                    setState(JoyState::THINKING);
-                    audio_startThinkingFillerLoop();
-                    api_upload_audio_and_process();
-                    audio_stopThinkingFillerLoop();
-                }
-                else
-                {
-                    display_set_mode(DisplayMode::IDLE);
-                    ESP_LOGW(
-                        TAG,
-                        "Recording not uploadable: status=%d; upload skipped",
-                        (int)recording_status);
-                }
-                setState(JoyState::IDLE);
-                break;
-            }
-
-            case JoyState::THINKING:
-                ESP_LOGI(TAG, "Entering THINKING state");
-                audio_startThinkingFillerLoop();
-                // api_upload_audio_and_process mengupload, menunggu WS audio_ready, 
-                // memutar MP3 progresif secara blocking, dan mengirim completion events.
-                api_upload_audio_and_process();
-                audio_stopThinkingFillerLoop();
-                setState(JoyState::IDLE);
-                break;
-
-            case JoyState::SPEAKING:
-            case JoyState::ERROR_STATE:
-                // State ini dikendalikan didalam api_upload_audio_and_process
-                vTaskDelay(pdMS_TO_TICKS(100));
-                break;
-        }
+        joy_state_machine_step();
     }
 }
 

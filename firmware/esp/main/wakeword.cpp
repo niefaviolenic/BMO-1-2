@@ -8,6 +8,8 @@
 #include "display.h"
 #include "pairing.h"
 #include "state.h"
+#include "playback.h"
+#include "esp_timer.h"
 #include "driver/gpio.h"
 #include "driver/i2s_std.h"
 #include "esp_check.h"
@@ -41,9 +43,9 @@ static const char *TAG = "WAKE";
 #define WAKEWORD_COOLDOWN_MS     1000
 #define WAKEWORD_STARTUP_GUARD_MS 1000
 
-#define RECORD_DURATION_SEC 60
+#define RECORD_DURATION_SEC 15
 #define RECORD_SAMPLE_RATE 16000
-#define RECORD_MAX_SAMPLES (RECORD_SAMPLE_RATE * RECORD_DURATION_SEC) // 960000 samples
+#define RECORD_MAX_SAMPLES (RECORD_SAMPLE_RATE * RECORD_DURATION_SEC) // 240000 samples
 
 #define RECORD_BUFFER_SIZE (RECORD_MAX_SAMPLES + WAV_HEADER_SAMPLES)
 #define PREROLL_BUFFER_SAMPLES 24000 // ~1.5s at 16kHz mono circular pre-roll buffer
@@ -130,7 +132,7 @@ static TickType_t recording_last_sample_tick = 0;
 static TickType_t recording_last_diag_tick = 0;
 static portMUX_TYPE recording_mux = portMUX_INITIALIZER_UNLOCKED;
 static TickType_t wakeword_cooldown_until = 0;
-static int16_t preroll_buffer[PREROLL_BUFFER_SAMPLES] = {};
+static int16_t *preroll_buffer = NULL;
 static size_t preroll_write_index = 0;
 static size_t preroll_count = 0;
 static portMUX_TYPE preroll_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -961,6 +963,14 @@ void wakeword_init()
         }
     }
 
+    if(preroll_buffer == NULL)
+    {
+        preroll_buffer = (int16_t *)heap_caps_calloc(PREROLL_BUFFER_SAMPLES, sizeof(int16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if(preroll_buffer == NULL)
+        {
+            preroll_buffer = (int16_t *)calloc(PREROLL_BUFFER_SAMPLES, sizeof(int16_t));
+        }
+    }
     BaseType_t task_created =
         xTaskCreatePinnedToCoreWithCaps(
             wakeword_listener_task,
@@ -997,13 +1007,37 @@ bool wakeword_task()
         return false;
     }
 
-    if(!trySetState(JoyState::IDLE, JoyState::RECORDING))
+    int64_t now_us = esp_timer_get_time();
+    if (!playback_try_reserve_capture(now_us))
+    {
+        ESP_LOGW(TAG, "Wake task rejected: capture reservation refused (playback active or offer pending)");
         return false;
-    // Immediately start recording and commit pre-roll buffer to eliminate handoff gap
-    start_recording();
+    }
+
+    if(!trySetState(JoyState::IDLE, JoyState::RECORDING))
+    {
+        playback_release_capture();
+        return false;
+    }
 
     ESP_LOGI(TAG, "Voice capture requested (seamless single-breath)");
     return true;
+}
+
+void reset_recording()
+{
+    portENTER_CRITICAL(&recording_mux);
+    recording_status = RecordingStatus::IDLE;
+    record_index = WAV_HEADER_SAMPLES;
+    silence_samples = 0;
+    speech_samples = 0;
+    leading_silence_samples = 0;
+    recording_speech_detected = false;
+    s_finish_recording_requested = false;
+    recording_started_tick = 0;
+    recording_last_sample_tick = 0;
+    recording_last_diag_tick = 0;
+    portEXIT_CRITICAL(&recording_mux);
 }
 
 //--------------------------------------------------
