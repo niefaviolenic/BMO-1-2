@@ -6,26 +6,26 @@
 
 #if defined(CONFIG_JOY_BOARD_PROFILE_BMO_V2) || defined(JOY_BOARD_PROFILE_BMO_V2)
     #define BOARD_PROFILE_NAME "bmo_v2"
-    #ifndef PIN_BTN_VOICE
-        #error "PIN_BTN_VOICE must be defined for bmo_v2 production board profile"
+    #if !defined(PIN_BTN_VOICE) || (PIN_BTN_VOICE < 0)
+        #error "PIN_BTN_VOICE must be defined and >= 0 for bmo_v2 production board profile"
     #endif
-    #ifndef PIN_BTN_PAIR
-        #error "PIN_BTN_PAIR must be defined for bmo_v2 production board profile"
+    #if !defined(PIN_BTN_PAIR) || (PIN_BTN_PAIR < 0)
+        #error "PIN_BTN_PAIR must be defined and >= 0 for bmo_v2 production board profile"
     #endif
-    #ifndef PIN_BTN_EXPRESSION
-        #error "PIN_BTN_EXPRESSION must be defined for bmo_v2 production board profile"
+    #if !defined(PIN_BTN_EXPRESSION) || (PIN_BTN_EXPRESSION < 0)
+        #error "PIN_BTN_EXPRESSION must be defined and >= 0 for bmo_v2 production board profile"
     #endif
-    #ifndef PIN_BTN_VOL_UP
-        #error "PIN_BTN_VOL_UP must be defined for bmo_v2 production board profile"
+    #if !defined(PIN_BTN_VOL_UP) || (PIN_BTN_VOL_UP < 0)
+        #error "PIN_BTN_VOL_UP must be defined and >= 0 for bmo_v2 production board profile"
     #endif
-    #ifndef PIN_BTN_VOL_DOWN
-        #error "PIN_BTN_VOL_DOWN must be defined for bmo_v2 production board profile"
+    #if !defined(PIN_BTN_VOL_DOWN) || (PIN_BTN_VOL_DOWN < 0)
+        #error "PIN_BTN_VOL_DOWN must be defined and >= 0 for bmo_v2 production board profile"
     #endif
-    #ifndef PIN_BTN_SPOTIFY_NEXT
-        #error "PIN_BTN_SPOTIFY_NEXT must be defined for bmo_v2 production board profile"
+    #if !defined(PIN_BTN_SPOTIFY_NEXT) || (PIN_BTN_SPOTIFY_NEXT < 0)
+        #error "PIN_BTN_SPOTIFY_NEXT must be defined and >= 0 for bmo_v2 production board profile"
     #endif
-    #ifndef PIN_BTN_SPOTIFY_PREV
-        #error "PIN_BTN_SPOTIFY_PREV must be defined for bmo_v2 production board profile"
+    #if !defined(PIN_BTN_SPOTIFY_PREV) || (PIN_BTN_SPOTIFY_PREV < 0)
+        #error "PIN_BTN_SPOTIFY_PREV must be defined and >= 0 for bmo_v2 production board profile"
     #endif
 #elif defined(CONFIG_JOY_BOARD_PROFILE_BMO_V2_REFERENCE) || defined(JOY_BOARD_PROFILE_BMO_V2_REFERENCE)
     #define BOARD_PROFILE_NAME "bmo_v2_reference"

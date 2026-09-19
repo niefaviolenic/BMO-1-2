@@ -16,6 +16,7 @@
 #include "esp_crt_bundle.h"
 #include "cJSON.h"
 #include "mp3dec.h"
+#include "spotify_controller.h"
 
 #include "esp_log.h"
 #include "esp_random.h"
@@ -107,6 +108,20 @@ static bool ws_reconnect_pending = false;
 static bool ws_pairing_reconnect_pending = false;
 static bool ws_connection_replacement_suppressed = false;
 
+static SpotifyController s_spotify_controller;
+
+extern "C" void api_spotify_queue_action(int action_type)
+{
+    SpotifyActionType act = (action_type == 1) ? SpotifyActionType::NEXT : SpotifyActionType::PREVIOUS;
+    bool queued = s_spotify_controller.queue_action(act, esp_timer_get_time(), api_ws_is_authenticated());
+    if (!queued) {
+        ESP_LOGW(TAG, "Spotify action %s dropped (queue full or not authenticated)",
+                 act == SpotifyActionType::NEXT ? "NEXT" : "PREVIOUS");
+    } else {
+        ESP_LOGI(TAG, "Spotify action %s queued",
+                 act == SpotifyActionType::NEXT ? "NEXT" : "PREVIOUS");
+    }
+}
 enum JoyWsLifecycleState {
     JOY_WS_LIFECYCLE_STOPPED,
     JOY_WS_LIFECYCLE_STARTED,
@@ -250,6 +265,7 @@ static void mark_ws_down(const char *source)
     ws_auth_pending = false;
     ws_auth_deadline = 0;
     pairing_on_disconnected();
+    s_spotify_controller.on_disconnected();
     network_set_backend_connected(false);
     log_ws_lifecycle_event("state_down_after", source, NULL);
 }
@@ -1269,6 +1285,18 @@ static void handle_ws_message(const char *payload, int len) {
             ESP_LOGI(TAG, "Handled proactive_cancel delivery_id=%s", cancel.delivery_id);
         }
     }
+    else if (strcmp(event, "spotify_action_result") == 0) {
+        cJSON *action_id_node = cJSON_GetObjectItem(root, "action_id");
+        cJSON *status_node = cJSON_GetObjectItem(root, "status");
+        cJSON *error_node = cJSON_GetObjectItem(root, "error_code");
+        if (action_id_node && cJSON_IsString(action_id_node)) {
+            bool ok = (status_node && cJSON_IsString(status_node) && strcmp(status_node->valuestring, "SUCCEEDED") == 0);
+            const char *err = (error_node && cJSON_IsString(error_node)) ? error_node->valuestring : nullptr;
+            s_spotify_controller.on_action_result(action_id_node->valuestring, ok, err);
+            ESP_LOGI(TAG, "Received spotify_action_result: id=%s ok=%d error=%s",
+                     action_id_node->valuestring, ok ? 1 : 0, err ? err : "none");
+        }
+    }
 
     cJSON_Delete(root);
 }
@@ -1451,6 +1479,26 @@ static void ws_monitor_task(void *param) {
         else if (ws_lifecycle_state == JOY_WS_LIFECYCLE_STARTED ||
                  ws_lifecycle_state == JOY_WS_LIFECYCLE_TERMINAL) {
             // A connection attempt or shutdown is still active; do not stop/start it.
+        }
+        if (ws_authenticated) {
+            char spot_id[37] = {0};
+            SpotifyActionType spot_act = SpotifyActionType::NONE;
+            if (s_spotify_controller.get_action_to_send(spot_id, sizeof(spot_id), &spot_act, esp_timer_get_time())) {
+                cJSON *spot_root = cJSON_CreateObject();
+                if (spot_root) {
+                    cJSON_AddStringToObject(spot_root, "event", "spotify_action");
+                    cJSON_AddStringToObject(spot_root, "action_id", spot_id);
+                    cJSON_AddStringToObject(spot_root, "action", spot_act == SpotifyActionType::NEXT ? "NEXT" : "PREVIOUS");
+                    char *spot_str = cJSON_PrintUnformatted(spot_root);
+                    cJSON_Delete(spot_root);
+                    if (spot_str) {
+                        ESP_LOGI(TAG, "Sending spotify_action to WS: id=%s action=%s",
+                                 spot_id, spot_act == SpotifyActionType::NEXT ? "NEXT" : "PREVIOUS");
+                        ws_send_text(spot_str, true);
+                        free(spot_str);
+                    }
+                }
+            }
         }
 
         vTaskDelay(pdMS_TO_TICKS(100));

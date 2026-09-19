@@ -112,6 +112,52 @@ def run_core_suite(compiler: List[str]) -> int:
         run_res = subprocess.run([exe_buttons])
         if run_res.returncode != 0:
             return run_res.returncode
+
+        # 2. Test Faces
+        exe_faces = os.path.join(tmpdir, "test_faces.exe" if os.name == "nt" else "test_faces")
+        cmd_faces = compiler + [
+            "-std=c++17",
+            "-O2",
+            f"-I{HERE / 'shims'}",
+            f"-I{MAIN_DIR}",
+            "-o",
+            exe_faces,
+            str(HERE / "test_faces.cpp"),
+            str(MAIN_DIR / "face_policy.cpp"),
+        ]
+        print(f"[RUN] Compiling core face suite: {' '.join(cmd_faces)}")
+        compile_res = subprocess.run(cmd_faces, capture_output=True, text=True)
+        if compile_res.returncode != 0:
+            print("[ERROR] Compilation failed:")
+            print(compile_res.stderr)
+            return compile_res.returncode
+
+        print(f"[RUN] Executing {exe_faces}")
+        run_res = subprocess.run([exe_faces])
+        if run_res.returncode != 0:
+            return run_res.returncode
+
+        # 3. Test Spotify Controller
+        exe_spotify = os.path.join(tmpdir, "test_spotify.exe" if os.name == "nt" else "test_spotify")
+        cmd_spotify = compiler + [
+            "-std=c++17",
+            "-O2",
+            f"-I{HERE / 'shims'}",
+            f"-I{MAIN_DIR}",
+            "-o",
+            exe_spotify,
+            str(HERE / "test_spotify.cpp"),
+            str(MAIN_DIR / "spotify_controller.cpp"),
+        ]
+        print(f"[RUN] Compiling core spotify suite: {' '.join(cmd_spotify)}")
+        compile_res = subprocess.run(cmd_spotify, capture_output=True, text=True)
+        if compile_res.returncode != 0:
+            print("[ERROR] Compilation failed:")
+            print(compile_res.stderr)
+            return compile_res.returncode
+
+        print(f"[RUN] Executing {exe_spotify}")
+        run_res = subprocess.run([exe_spotify])
         return run_res.returncode
 
 def main() -> int:

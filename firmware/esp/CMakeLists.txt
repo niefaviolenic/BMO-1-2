@@ -86,5 +86,20 @@ file(GENERATE
     OUTPUT "${JOY_CREDENTIAL_HEADER}"
     CONTENT "#pragma once\n#define JOY_DEVICE_ID \"${JOY_DEVICE_ID_FROM_ENV}\"\n#define JOY_DEVICE_TOKEN \"${JOY_DEVICE_TOKEN_ESCAPED}\"\n")
 
+set(JOY_BOARD_PROFILE "bmo_v2_reference" CACHE STRING "Board profile to build: bmo_v2_reference, bmo_v2, or legacy_v1")
+
+if(JOY_BOARD_PROFILE STREQUAL "bmo_v2")
+    add_compile_definitions(JOY_BOARD_PROFILE_BMO_V2=1)
+    message(STATUS "Selected board profile: bmo_v2 (production)")
+elseif(JOY_BOARD_PROFILE STREQUAL "bmo_v2_reference")
+    add_compile_definitions(JOY_BOARD_PROFILE_BMO_V2_REFERENCE=1)
+    message(STATUS "Selected board profile: bmo_v2_reference (reference board)")
+elseif(JOY_BOARD_PROFILE STREQUAL "legacy_v1")
+    add_compile_definitions(JOY_BOARD_PROFILE_LEGACY_V1=1)
+    message(STATUS "Selected board profile: legacy_v1")
+else()
+    message(FATAL_ERROR "Unknown JOY_BOARD_PROFILE: '${JOY_BOARD_PROFILE}'. Allowed values: bmo_v2_reference, bmo_v2, legacy_v1")
+endif()
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(all_joy)

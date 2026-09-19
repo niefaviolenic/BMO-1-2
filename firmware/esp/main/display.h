@@ -76,5 +76,12 @@ void display_hide_ble_pairing();
 bool display_ble_pairing_is_visible();
 
 void display_test_pattern();
-
+void display_render_asset(uint8_t asset_id);
+void display_trigger_touch_overlay();
+void display_trigger_expression_overlay();
+void display_trigger_ble_discovery();
+void display_trigger_ble_connected();
+void display_trigger_ble_proof_accepted();
+void display_trigger_provisioning_success();
+void display_trigger_ble_stop();
 #endif

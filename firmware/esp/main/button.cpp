@@ -9,6 +9,7 @@
 #include "board_config.h"
 #include "button_policy.h"
 #include "wakeword.h"
+extern "C" void api_spotify_queue_action(int action_type);
 #include "driver/gpio.h"
 #if __has_include("driver/touch_sensor_legacy.h")
 #include "driver/touch_sensor_legacy.h"
@@ -311,28 +312,10 @@ void button_update()
                 joy_ble_on_physical_hold_2s();
                 break;
             case ButtonAction::EXPRESSION_ASSET_11:
-                if (getState() == JoyState::IDLE &&
-                    !joy_ble_is_active() &&
-                    !display_pairing_code_is_visible() &&
-                    !display_qr_code_is_visible() &&
-                    !display_ble_pairing_is_visible()) {
-                    const Face next_face = display_next_touch_face();
-                    ESP_LOGI(TAG, "Expression button click -> switched to face=%d", (int)next_face);
-                    audio_triggerExpressionAudio((int)next_face);
-                } else {
-                    ESP_LOGW(TAG, "Expression button ignored: state=%s (not IDLE or pairing visible)", joy_state_name(getState()));
-                }
+                display_trigger_expression_overlay();
                 break;
             case ButtonAction::TOUCH_ASSET_6:
-                if (getState() == JoyState::IDLE &&
-                    !joy_ble_is_active() &&
-                    !display_pairing_code_is_visible() &&
-                    !display_qr_code_is_visible() &&
-                    !display_ble_pairing_is_visible()) {
-                    const Face next_face = display_next_touch_face();
-                    ESP_LOGI(TAG, "Touch interaction -> switched to face=%d", (int)next_face);
-                    audio_triggerExpressionAudio((int)next_face);
-                }
+                display_trigger_touch_overlay();
                 break;
             case ButtonAction::VOLUME_UP:
                 audio_adjustVolume(VOLUME_STEP);
@@ -343,7 +326,10 @@ void button_update()
                 ESP_LOGI(TAG, "Volume down: %d", audio_getVolume());
                 break;
             case ButtonAction::SPOTIFY_NEXT:
+                api_spotify_queue_action(1);
+                break;
             case ButtonAction::SPOTIFY_PREV:
+                api_spotify_queue_action(2);
                 break;
             default:
                 break;
