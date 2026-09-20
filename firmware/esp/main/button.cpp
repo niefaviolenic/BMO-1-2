@@ -181,22 +181,42 @@ void button_init()
                 &touch_config));
     }
 
-    gpio_config_t button_config = {};
+    uint64_t pin_mask = 0;
+#if BOARD_PIN_IS_ASSIGNED(PIN_BTN_VOICE)
+    pin_mask |= (1ULL << PIN_BTN_VOICE);
+#endif
+#if BOARD_PIN_IS_ASSIGNED(PIN_BTN_PAIR)
+    pin_mask |= (1ULL << PIN_BTN_PAIR);
+#endif
+#if BOARD_PIN_IS_ASSIGNED(PIN_BTN_EXPRESSION)
+    pin_mask |= (1ULL << PIN_BTN_EXPRESSION);
+#endif
+#if BOARD_PIN_IS_ASSIGNED(PIN_BTN_VOL_UP)
+    pin_mask |= (1ULL << PIN_BTN_VOL_UP);
+#endif
+#if BOARD_PIN_IS_ASSIGNED(PIN_BTN_VOL_DOWN)
+    pin_mask |= (1ULL << PIN_BTN_VOL_DOWN);
+#endif
+#if BOARD_PIN_IS_ASSIGNED(PIN_BTN_SPOTIFY_NEXT)
+    pin_mask |= (1ULL << PIN_BTN_SPOTIFY_NEXT);
+#endif
+#if BOARD_PIN_IS_ASSIGNED(PIN_BTN_SPOTIFY_PREV)
+    pin_mask |= (1ULL << PIN_BTN_SPOTIFY_PREV);
+#endif
+    if (pin_mask == 0) {
+        pin_mask = (1ULL << BTN_BOOT) | (1ULL << BTN_VOL_UP) | (1ULL << BTN_VOL_DOWN) | (1ULL << BTN_EXPRESSION);
+    } else {
+        pin_mask |= (1ULL << BTN_BOOT);
+    }
 
-    button_config.pin_bit_mask =
-        (1ULL << BTN_BOOT) |
-        (1ULL << BTN_VOL_UP) |
-        (1ULL << BTN_VOL_DOWN) |
-        (1ULL << BTN_EXPRESSION);
+    gpio_config_t button_config = {};
+    button_config.pin_bit_mask = pin_mask;
     button_config.mode = GPIO_MODE_INPUT;
     button_config.pull_up_en = GPIO_PULLUP_ENABLE;
     button_config.pull_down_en = GPIO_PULLDOWN_DISABLE;
     button_config.intr_type = GPIO_INTR_DISABLE;
 
-    ESP_ERROR_CHECK(
-        gpio_config(
-            &button_config));
-
+    ESP_ERROR_CHECK(gpio_config(&button_config));
     const bool expression_button_pressed =
         gpio_get_level(BTN_EXPRESSION) == 0;
 
