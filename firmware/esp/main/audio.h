@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "esp_err.h"
-#define SPEAKER_DEFAULT_VOLUME 50
+#define SPEAKER_DEFAULT_VOLUME 70
 
 void audio_init();
 
@@ -63,5 +63,11 @@ void audio_play_pcm(const int16_t *mono_samples, size_t sample_count);
 bool audio_play_raw(const int16_t *samples, size_t sample_count, int channels, int sample_rate);
 bool audio_set_sample_rate(uint32_t sample_rate);
 void audio_play_error();
+void audio_playRecordingFinishedCue();
+void audio_playGoofyBoingCue();
+void audio_playVolumeUpCue();
+void audio_playVolumeDownCue();
+void audio_playSpotifyNextCue();
+void audio_playSpotifyPrevCue();
 
 #endif

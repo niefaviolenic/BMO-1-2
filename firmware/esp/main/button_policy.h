@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 constexpr int64_t BUTTON_DEBOUNCE_US = 30000LL;          // 30 ms debounce
-constexpr int64_t BLE_PAIRING_ENTRY_HOLD_US = 5000000LL; // 5 seconds hold to open pairing
+constexpr int64_t BLE_PAIRING_ENTRY_HOLD_US = 3000000LL; // 3 seconds hold to open pairing (per user spec)
 constexpr int64_t BLE_PAIRING_CONFIRM_HOLD_US = 2000000LL; // 2 seconds hold to confirm physical proof
 
 enum class ButtonAction : uint8_t {

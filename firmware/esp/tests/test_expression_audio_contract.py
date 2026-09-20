@@ -33,7 +33,7 @@ def function_body(source: str, signature: str) -> str:
 
 
 class ExpressionAudioContractTest(unittest.TestCase):
-    def test_expression_change_has_a_melodic_cue_and_full_default_volume(self) -> None:
+    def test_expression_change_has_a_melodic_cue_and_safe_default_volume(self) -> None:
         header = AUDIO_HEADER.read_text(encoding="utf-8")
         source = AUDIO_SOURCE.read_text(encoding="utf-8")
 
@@ -43,13 +43,15 @@ class ExpressionAudioContractTest(unittest.TestCase):
         self.assertIn("melody_hz", cue)
         self.assertGreaterEqual(cue.count("speaker_write_tone"), 1)
         self.assertIn("speaker_write_silence", cue)
-        self.assertRegex(header + source, r"SPEAKER_DEFAULT_VOLUME\s+100")
+        self.assertRegex(header + source, r"SPEAKER_DEFAULT_VOLUME\s+70\b")
+        self.assertNotIn("* 16 / 10", source)
+        self.assertIn("sinf", source)
 
     def test_voice_recording_does_not_play_expression_cue(self) -> None:
         source = STATE_SOURCE.read_text(encoding="utf-8")
         task = function_body(
             source,
-            r"static\s+void\s+joy_state_machine_task\s*\([^)]*\)",
+            r"void\s+joy_state_machine_step\s*\([^)]*\)",
         )
         recording = function_body(
             task,

@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include <math.h>
 
 #include "driver/gpio.h"
 #include "driver/i2s_std.h"
@@ -30,7 +31,7 @@ static const char *TAG = "AUDIO";
 
 #define SPEAKER_SAMPLE_RATE 16000
 #ifndef SPEAKER_DEFAULT_VOLUME
-#define SPEAKER_DEFAULT_VOLUME 100
+#define SPEAKER_DEFAULT_VOLUME 70
 #endif
 #define SPEAKER_CHUNK_FRAMES 256
 #define SPEAKER_OUTPUT_CHUNK_FRAMES 64
@@ -175,11 +176,8 @@ static const char *thinking_phrase(int index)
 
 static bool local_expression_is_allowed()
 {
-    return getState() == JoyState::IDLE &&
-           pairing_get_snapshot().phase == PairingPhase::NONE &&
-           !display_pairing_code_is_visible() &&
-           !display_qr_code_is_visible() &&
-           !display_ble_pairing_is_visible();
+    return getState() != JoyState::RECORDING &&
+           getState() != JoyState::SPEAKING;
 }
 
 static uint16_t read_wav_le16(const uint8_t *data)
@@ -228,9 +226,8 @@ static int16_t speaker_scale_sample(
     int16_t sample,
     int safe_volume)
 {
-    // Digital pre-amp gain multiplier (1.6x = ~+4.1dB)
-    int32_t boosted = (int32_t)sample * 16 / 10;
-    int32_t scaled = (boosted * safe_volume) / 100;
+    // Linear, proportional volume scaling with zero clipping distortion
+    int32_t scaled = ((int32_t)sample * safe_volume) / 100;
     return speaker_soft_clip(scaled);
 }
 
@@ -257,58 +254,62 @@ static esp_err_t speaker_write_tone(
     int16_t samples[SPEAKER_OUTPUT_CHUNK_FRAMES * 2];
 
     uint32_t rate = current_sample_rate ? current_sample_rate : SPEAKER_SAMPLE_RATE;
+    int total_frames = (rate * duration_ms) / 1000;
+    if(total_frames <= 0)
+        return ESP_OK;
 
-    int total_frames =
-        (rate * duration_ms) / 1000;
+    // Soft attack & decay envelope: 6ms smooth ramp up and ramp down to eliminate click/pop noise
+    int ramp_frames = (rate * 6) / 1000;
+    if(ramp_frames * 2 > total_frames)
+        ramp_frames = total_frames / 2;
 
-    int phase = 0;
+    int16_t amplitude = speaker_amplitude();
+    float phase_step = (2.0f * (float)M_PI * (float)frequency_hz) / (float)rate;
+    float phase = 0.0f;
+    int current_frame = 0;
 
-    int period =
-        rate / frequency_hz;
-
-    if(period < 2)
-        period = 2;
-    while(total_frames > 0)
+    while(current_frame < total_frames)
     {
-        int frames =
-            total_frames;
+        int chunk_frames = total_frames - current_frame;
+        if(chunk_frames > SPEAKER_OUTPUT_CHUNK_FRAMES)
+            chunk_frames = SPEAKER_OUTPUT_CHUNK_FRAMES;
 
-        if(frames > SPEAKER_OUTPUT_CHUNK_FRAMES)
-            frames = SPEAKER_OUTPUT_CHUNK_FRAMES;
-
-        // Mendapatkan amplitudo secara dinamis dari volume terbaru
-        int16_t amplitude = speaker_amplitude();
-
-        for(int i = 0; i < frames; i++)
+        for(int i = 0; i < chunk_frames; i++)
         {
-            int16_t sample =
-                (phase < (period / 2))
-                    ? amplitude
-                    : (int16_t)-amplitude;
+            int f = current_frame + i;
+            float env = 1.0f;
+            if(ramp_frames > 0)
+            {
+                if(f < ramp_frames)
+                    env = (float)f / (float)ramp_frames;
+                else if(f >= total_frames - ramp_frames)
+                    env = (float)(total_frames - 1 - f) / (float)ramp_frames;
+            }
+
+            float raw_sine = sinf(phase);
+            int16_t sample = (int16_t)(raw_sine * env * (float)amplitude);
 
             samples[i * 2] = sample;
             samples[i * 2 + 1] = sample;
 
-            phase++;
-
-            if(phase >= period)
-                phase = 0;
+            phase += phase_step;
+            if(phase >= 2.0f * (float)M_PI)
+                phase -= 2.0f * (float)M_PI;
         }
 
         size_t bytes_written = 0;
-
         esp_err_t write_result =
             i2s_channel_write(
                 speaker_tx_handle,
                 samples,
-                frames * 2 * sizeof(int16_t),
+                chunk_frames * 2 * sizeof(int16_t),
                 &bytes_written,
                 500);
 
         if(write_result != ESP_OK)
             return write_result;
 
-        total_frames -= frames;
+        current_frame += chunk_frames;
     }
 
     return ESP_OK;
@@ -559,6 +560,10 @@ void audio_init()
             expression_audio_task_handle = NULL;
         }
     }
+
+    // Startup speaker verification cue: pure sine wave C5-E5-G5 chime with soft envelope
+    ESP_LOGI(TAG, "Playing startup audio test cue on MAX98357A (C5-E5-G5 sine chime)...");
+    audio_playRecordingFinishedCue();
 }
 
 //--------------------------------------------------
@@ -1707,4 +1712,78 @@ void audio_play_error()
     {
         ESP_LOGW(TAG, "Error beep skipped: %s", esp_err_to_name(result));
     }
+}
+
+void audio_playRecordingFinishedCue()
+{
+    if(!speaker_ready)
+        return;
+    (void)audio_set_sample_rate(SPEAKER_SAMPLE_RATE);
+    (void)speaker_write_tone(523, 40); // C5
+    (void)speaker_write_silence(10);
+    (void)speaker_write_tone(659, 40); // E5
+    (void)speaker_write_silence(10);
+    (void)speaker_write_tone(784, 80); // G5 (positive completion chime)
+    (void)speaker_write_silence(20);
+}
+
+void audio_playGoofyBoingCue()
+{
+    if(!speaker_ready)
+        return;
+    (void)audio_set_sample_rate(SPEAKER_SAMPLE_RATE);
+    // Cartoon goofy wobble-boing ("Bleeeh! :P" pitch drop)
+    static const int freqs[] = {880, 720, 820, 600, 480, 360, 240};
+    for(int f : freqs) {
+        (void)speaker_write_tone(f, 35);
+    }
+    (void)speaker_write_silence(30);
+}
+
+void audio_playVolumeUpCue()
+{
+    if(!speaker_ready)
+        return;
+    (void)audio_set_sample_rate(SPEAKER_SAMPLE_RATE);
+    // Rising high beep at current volume
+    (void)speaker_write_tone(880, 40);  // A5
+    (void)speaker_write_silence(10);
+    (void)speaker_write_tone(1320, 60); // E6
+    (void)speaker_write_silence(20);
+}
+
+void audio_playVolumeDownCue()
+{
+    if(!speaker_ready)
+        return;
+    (void)audio_set_sample_rate(SPEAKER_SAMPLE_RATE);
+    // Falling low beep at current volume
+    (void)speaker_write_tone(880, 40); // A5
+    (void)speaker_write_silence(10);
+    (void)speaker_write_tone(587, 60); // D5
+    (void)speaker_write_silence(20);
+}
+
+void audio_playSpotifyNextCue()
+{
+    if(!speaker_ready)
+        return;
+    (void)audio_set_sample_rate(SPEAKER_SAMPLE_RATE);
+    // Fast forward skip cue (ascending quick notes)
+    (void)speaker_write_tone(784, 30);  // G5
+    (void)speaker_write_silence(10);
+    (void)speaker_write_tone(1175, 50); // D6
+    (void)speaker_write_silence(20);
+}
+
+void audio_playSpotifyPrevCue()
+{
+    if(!speaker_ready)
+        return;
+    (void)audio_set_sample_rate(SPEAKER_SAMPLE_RATE);
+    // Fast rewind skip cue (descending quick notes)
+    (void)speaker_write_tone(1175, 30); // D6
+    (void)speaker_write_silence(10);
+    (void)speaker_write_tone(784, 50);  // G5
+    (void)speaker_write_silence(20);
 }

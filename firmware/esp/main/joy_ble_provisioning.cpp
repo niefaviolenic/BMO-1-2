@@ -82,10 +82,10 @@ void joy_ble_start_pairing_window(void)
     char ble_name[16];
     snprintf(ble_name, sizeof(ble_name), "JOY-%.4s", id->provisioning_ref);
 
-    s_window_deadline_us = esp_timer_get_time() + 60000000LL;
-    ESP_LOGI(TAG, "Started 60-second BLE pairing window: local_name=%s, setup_nonce=%s",
+    s_window_deadline_us = esp_timer_get_time() + 120000000LL;
+    ESP_LOGI(TAG, "Started 120-second BLE pairing window: local_name=%s, setup_nonce=%s",
              ble_name, s_setup_nonce);
-    display_show_ble_pairing(60);
+    display_show_ble_pairing(120);
     audio_playBleActivated();
     joy_ble_nimble_start_advertising();
 }
@@ -179,6 +179,7 @@ esp_err_t joy_ble_arm_physical_confirmation(const char *session_id, const char *
 
     display_hide_ble_pairing();
     display_set_idle_face(FACE_SURPRISED);
+    audio_triggerExpressionAudio(7);
     ESP_LOGI(TAG, "Armed physical confirmation window (60s): session_id=%s", s_session_id);
     return ESP_OK;
 }

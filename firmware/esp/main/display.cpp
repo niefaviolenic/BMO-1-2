@@ -15,14 +15,12 @@ static FacePolicy s_face_policy;
 #include <string.h>
 
 #include "driver/gpio.h"
-#include "driver/spi_master.h"
-
 #include "esp_err.h"
 #include "esp_heap_caps.h"
-#include "esp_lcd_ili9341.h"
+#include "esp_lcd_io_i80.h"
 #include "esp_lcd_panel_io.h"
-#include "esp_lcd_panel_ops.h"
 #include "esp_log.h"
+#include "esp_rom_sys.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -30,42 +28,40 @@ static FacePolicy s_face_policy;
 
 static const char *TAG = "DISPLAY";
 
-#define LCD_HOST SPI2_HOST
-
 //--------------------------------------------------
-// PIN TFT ILI9341
+// 3.5-inch UNO TFT: HX8357-B, 8-bit Intel 8080 bus
+// Data Pins (D0-D7): GPIO 12, 13, 18, 3, 46, 9, 10, 11
+// Control Pins: WR=GPIO 7, RS=GPIO 6, CS=GPIO 5, RST=GPIO 4
+// RD: Set -1 / write-only to prevent conflict with GPIO 15 (Volume Down)
 //--------------------------------------------------
 
-#define LCD_PIN_MOSI GPIO_NUM_11
-#define LCD_PIN_MISO GPIO_NUM_13
-#define LCD_PIN_SCLK GPIO_NUM_12
-
-#define LCD_PIN_CS   GPIO_NUM_10
-#define LCD_PIN_DC   GPIO_NUM_9
-#define LCD_PIN_RST  GPIO_NUM_8
-
-// Backlight masih langsung ke 3V3, jadi tidak dikontrol software.
+#define LCD_PIN_D0   GPIO_NUM_12
+#define LCD_PIN_D1   GPIO_NUM_13
+#define LCD_PIN_D2   GPIO_NUM_18
+#define LCD_PIN_D3   GPIO_NUM_3
+#define LCD_PIN_D4   GPIO_NUM_46
+#define LCD_PIN_D5   GPIO_NUM_9
+#define LCD_PIN_D6   GPIO_NUM_10
+#define LCD_PIN_D7   GPIO_NUM_11
+#define LCD_PIN_RD   GPIO_NUM_15
+#define LCD_PIN_WR   GPIO_NUM_7
+#define LCD_PIN_RS   GPIO_NUM_6
+#define LCD_PIN_CS   GPIO_NUM_5
+#define LCD_PIN_RST  GPIO_NUM_4
 #define LCD_PIN_BL   (-1)
-
-//--------------------------------------------------
 
 #define LCD_H_RES 320
 #define LCD_V_RES 240
-
-#define LCD_SWAP_XY  true
-#define LCD_MIRROR_X true
-#define LCD_MIRROR_Y false
-
-#define LCD_PIXEL_CLOCK_HZ (5 * 1000 * 1000)
+#define LCD_PANEL_H_RES 480
+#define LCD_PANEL_V_RES 320
+#define LCD_PIXEL_CLOCK_HZ (2 * 1000 * 1000)
 
 #define LCD_CMD_BITS 8
 #define LCD_PARAM_BITS 8
+#define LCD_DRAW_LINES 8
 
-#define LCD_DRAW_LINES 10
-
-//--------------------------------------------------
-
-static esp_lcd_panel_handle_t panel_handle = NULL;
+static esp_lcd_i80_bus_handle_t lcd_bus_handle = NULL;
+static esp_lcd_panel_io_handle_t lcd_io_handle = NULL;
 static uint16_t *draw_buffers[2] = {NULL, NULL};
 static uint16_t *frame_buffer = NULL;
 
@@ -73,6 +69,17 @@ static SemaphoreHandle_t display_mutex = NULL;
 
 static bool display_ready = false;
 static bool display_on = false;
+
+static const gpio_num_t LCD_DATA_PINS[8] = {
+    LCD_PIN_D0,
+    LCD_PIN_D1,
+    LCD_PIN_D2,
+    LCD_PIN_D3,
+    LCD_PIN_D4,
+    LCD_PIN_D5,
+    LCD_PIN_D6,
+    LCD_PIN_D7,
+};
 
 static constexpr int FACE_CX = LCD_H_RES / 2;
 static constexpr int FACE_CY = LCD_V_RES / 2;
@@ -95,12 +102,7 @@ static int qr_total_duration_sec = 0;
 static bool ble_pairing_active = false;
 static int ble_pairing_remaining_sec = 0;
 static constexpr uint32_t SHY_DURATION_MS = 5000;
-static constexpr uint32_t SHY_FRAME_MS = 250;
-static TaskHandle_t shy_animation_task_handle = NULL;
-static portMUX_TYPE shy_animation_mux = portMUX_INITIALIZER_UNLOCKED;
-static bool shy_animation_active = false;
-static TickType_t shy_animation_deadline = 0;
-static int shy_animation_next_frame = 0;
+static inline void cancel_shy_animation() {}
 
 static constexpr uint64_t UNPAIRED_FACE_REVERT_DELAY_US = 4000000ULL;
 static esp_timer_handle_t unpaired_face_revert_timer = NULL;
@@ -215,8 +217,8 @@ static constexpr uint16_t rgb565(
 
 //--------------------------------------------------
 
-static constexpr uint16_t COLOR_BODY   = 0x5F5C;
-static constexpr uint16_t COLOR_FACE   = 0xDFF7;
+static constexpr uint16_t COLOR_BODY   = 0xCF17; // #bae0ce Mint Green (Screen BMO_320 x 240 (1).pdf)
+static constexpr uint16_t COLOR_FACE   = 0xCF17; // #bae0ce Mint Green (Screen BMO_320 x 240 (1).pdf)
 static constexpr uint16_t COLOR_BORDER = 0x0320;
 static constexpr uint16_t COLOR_BLACK  = 0x0000;
 static constexpr uint16_t COLOR_WHITE  = 0xFFFF;
@@ -268,38 +270,124 @@ static void display_wake();
 
 //--------------------------------------------------
 
+static void hx8357_write_command(
+    uint8_t command,
+    const uint8_t *data,
+    size_t data_size)
+{
+    ESP_ERROR_CHECK(
+        esp_lcd_panel_io_tx_param(
+            lcd_io_handle,
+            command,
+            data,
+            data_size));
+}
+
+static void hx8357_write_command1(
+    uint8_t command,
+    uint8_t value)
+{
+    const uint8_t data[] = {value};
+    hx8357_write_command(command, data, sizeof(data));
+}
+
+static void lcd_write_bitmap(
+    int x0,
+    int y0,
+    int x1,
+    int y1,
+    const uint16_t *pixels)
+{
+    const uint8_t column_address[] = {
+        (uint8_t)(x0 >> 8),
+        (uint8_t)x0,
+        (uint8_t)((x1 - 1) >> 8),
+        (uint8_t)(x1 - 1)};
+    const uint8_t page_address[] = {
+        (uint8_t)(y0 >> 8),
+        (uint8_t)y0,
+        (uint8_t)((y1 - 1) >> 8),
+        (uint8_t)(y1 - 1)};
+
+    hx8357_write_command(0x2A, column_address, sizeof(column_address));
+    hx8357_write_command(0x2B, page_address, sizeof(page_address));
+
+    const size_t pixel_count = (size_t)(x1 - x0) * (size_t)(y1 - y0);
+    ESP_ERROR_CHECK(
+        esp_lcd_panel_io_tx_color(
+            lcd_io_handle,
+            0x2C,
+            pixels,
+            pixel_count * sizeof(uint16_t)));
+}
+
 static void flush_framebuffer_locked()
 {
-    if(!display_ready || panel_handle == NULL)
+    if(!display_ready || lcd_io_handle == NULL)
         return;
 
     if(frame_buffer != NULL && draw_buffers[0] != NULL && draw_buffers[1] != NULL)
     {
         int buf_idx = 0;
-        for(int row = 0; row < LCD_V_RES; row += LCD_DRAW_LINES)
+        for(int panel_row = 0; panel_row < LCD_PANEL_V_RES; panel_row += LCD_DRAW_LINES)
         {
-            int rows = LCD_V_RES - row;
+            int rows = LCD_PANEL_V_RES - panel_row;
             if(rows > LCD_DRAW_LINES)
                 rows = LCD_DRAW_LINES;
 
             uint16_t *current_draw_buffer = draw_buffers[buf_idx];
+            for(int row = 0; row < rows; ++row)
+            {
+                const int source_y =
+                    (panel_row + row) * LCD_V_RES / LCD_PANEL_V_RES;
+                for(int column = 0; column < LCD_PANEL_H_RES; ++column)
+                {
+                    const int source_x =
+                         column * LCD_H_RES / LCD_PANEL_H_RES;
+                    current_draw_buffer[row * LCD_PANEL_H_RES + column] =
+                        frame_buffer[source_y * LCD_H_RES + source_x];
+                }
+            }
 
-            memcpy(
-                current_draw_buffer,
-                &frame_buffer[row * LCD_H_RES],
-                (size_t)LCD_H_RES * rows * sizeof(uint16_t));
-
-            ESP_ERROR_CHECK(
-                esp_lcd_panel_draw_bitmap(
-                    panel_handle,
-                    0,
-                    row,
-                    LCD_H_RES,
-                    row + rows,
-                    current_draw_buffer));
+            lcd_write_bitmap(
+                0,
+                panel_row,
+                LCD_PANEL_H_RES,
+                panel_row + rows,
+                current_draw_buffer);
 
             buf_idx = 1 - buf_idx;
         }
+    }
+}
+
+static void lcd_fill_physical_rect(
+    int x0,
+    int y0,
+    int x1,
+    int y1,
+    uint16_t color)
+{
+    const int width = x1 - x0;
+    if(width <= 0 || y1 <= y0 || draw_buffers[0] == NULL)
+        return;
+
+    for(int row = y0; row < y1; row += LCD_DRAW_LINES)
+    {
+        const int rows = (y1 - row > LCD_DRAW_LINES)
+            ? LCD_DRAW_LINES
+            : y1 - row;
+        const int pixel_count = width * rows;
+
+        for(int index = 0; index < pixel_count; ++index)
+            draw_buffers[0][index] = color;
+
+        lcd_write_bitmap(
+            x0,
+            row,
+            x1,
+            row + rows,
+            draw_buffers[0]);
     }
 }
 static void render_face_asset_locked(uint8_t asset_id)
@@ -342,8 +430,29 @@ static void display_policy_task(void *param)
         FaceDecision decision = s_face_policy.update(now_us);
         if (decision.face_changed) {
             display_render_asset(decision.asset_id);
+            ESP_LOGI(TAG, ">>> [EXPRESSION TRANSITION] Face changed to Asset %d - Triggering non-blocking audio feedback <<<", decision.asset_id);
+            switch(decision.asset_id) {
+                case 3: // HAPPY (IDLE)
+                    audio_triggerExpressionAudio(0); // "I am happy" (01.wav)
+                    break;
+                case 5: // SURPRISED
+                    audio_triggerExpressionAudio(7); // "I am surprised" (08.wav)
+                    break;
+                case 6: // CUTE / SHY / EXCITED
+                    audio_triggerExpressionAudio(1); // "I am cute" (02.wav)
+                    break;
+                case 11: // BAD FACE / ANGRY
+                    audio_triggerExpressionAudio(4); // "I am angry" (05.wav)
+                    break;
+                case 14: // SAD / ERROR
+                    audio_triggerExpressionAudio(5); // "I am sad" (06.wav)
+                    break;
+                default:
+                    // Uniform non-blocking audio trigger for other transitions
+                    audio_triggerExpressionAudio(0);
+                    break;
+            }
         }
-
         int delay_ms = 20;
         if (decision.next_deadline_us > 0) {
             int64_t diff_ms = (decision.next_deadline_us - now_us) / 1000LL;
@@ -395,32 +504,18 @@ static void fill_rect(
     if(draw_buffers[0] == NULL)
         return;
 
-    int width = x1 - x0;
-    int height = y1 - y0;
-
-    for(int row = 0; row < height; row += LCD_DRAW_LINES)
-    {
-        int rows = height - row;
-
-        if(rows > LCD_DRAW_LINES)
-            rows = LCD_DRAW_LINES;
-
-        int pixels = width * rows;
-
-        for(int i = 0; i < pixels; i++)
-        {
-            draw_buffers[0][i] = color;
-        }
-
-        ESP_ERROR_CHECK(
-            esp_lcd_panel_draw_bitmap(
-                panel_handle,
-                x0,
-                y0 + row,
-                x1,
-                y0 + row + rows,
-                draw_buffers[0]));
-    }
+    const int panel_x0 = x0 * LCD_PANEL_H_RES / LCD_H_RES;
+    const int panel_y0 = y0 * LCD_PANEL_V_RES / LCD_V_RES;
+    const int panel_x1 =
+        (x1 * LCD_PANEL_H_RES + LCD_H_RES - 1) / LCD_H_RES;
+    const int panel_y1 =
+        (y1 * LCD_PANEL_V_RES + LCD_V_RES - 1) / LCD_V_RES;
+    lcd_fill_physical_rect(
+        panel_x0,
+        panel_y0,
+        panel_x1,
+        panel_y1,
+        color);
 }
 
 //--------------------------------------------------
@@ -674,36 +769,10 @@ static void display_wake()
     if(display_on)
         return;
 
-    ESP_ERROR_CHECK(
-        esp_lcd_panel_disp_on_off(
-            panel_handle,
-            true));
-
-    vTaskDelay(
-        pdMS_TO_TICKS(50));
-
+    hx8357_write_command(0x11, NULL, 0); // exit sleep
+    vTaskDelay(pdMS_TO_TICKS(120));
+    hx8357_write_command(0x29, NULL, 0); // display on
     display_on = true;
-}
-
-//--------------------------------------------------
-
-static void draw_screen_base()
-{
-    fill_rect(0, 0, LCD_H_RES, LCD_V_RES, COLOR_BODY);
-
-    fill_round_rect(8, 8, 304, 224, 22, COLOR_BORDER);
-    fill_round_rect(12, 12, 296, 216, 19, COLOR_BODY);
-
-    fill_round_rect(28, 28, 264, 184, 22, COLOR_BLACK);
-    fill_round_rect(32, 32, 256, 176, 18, COLOR_FACE);
-
-    fill_circle(42, 220, 4, COLOR_BLACK);
-    fill_circle(278, 220, 4, COLOR_BLACK);
-}
-
-static void clear_face_panel()
-{
-    fill_round_rect(32, 32, 256, 176, 18, COLOR_FACE);
 }
 
 //--------------------------------------------------
@@ -809,69 +878,12 @@ static void draw_pairing_digit_scaled(
     }
 }
 
-static void draw_bluetooth_icon(int ucx, int ucy, int size)
-{
-    fill_circle(user_x_to_fb(ucx), ucy, size + 8, COLOR_BLUE);
-
-    const int spine_h = size;
-    const int wing_w = size * 3 / 5;
-    const int thick = 3;
-
-    // Vertical spine
-    draw_user_thick_line(ucx, ucy - spine_h, ucx, ucy + spine_h, COLOR_WHITE, thick);
-
-    // Top diagonal stroke
-    draw_user_thick_line(ucx - wing_w, ucy + spine_h / 2, ucx + wing_w, ucy - spine_h / 2, COLOR_WHITE, thick);
-    draw_user_thick_line(ucx + wing_w, ucy - spine_h / 2, ucx, ucy - spine_h, COLOR_WHITE, thick);
-
-    // Bottom diagonal stroke
-    draw_user_thick_line(ucx - wing_w, ucy - spine_h / 2, ucx + wing_w, ucy + spine_h / 2, COLOR_WHITE, thick);
-    draw_user_thick_line(ucx + wing_w, ucy + spine_h / 2, ucx, ucy + spine_h, COLOR_WHITE, thick);
-}
-
 static void draw_ble_pairing_overlay_locked()
 {
     display_wake();
-    draw_screen_base();
-    clear_face_panel();
-
-    // 1. Bluetooth Logo centered at (160, 86)
-    draw_bluetooth_icon(160, 86, 20);
-
-    // 2. Countdown Timer MM:SS at Y=144
-    int rem_sec = ble_pairing_remaining_sec;
-    if(rem_sec < 0)
-        rem_sec = 0;
-    const int minutes = rem_sec / 60;
-    const int seconds = rem_sec % 60;
-
-    const int start_x = 105;
-    const int start_y = 144;
-    const int scale_x = 4;
-    const int scale_y = 6;
-    const int d_w = 5 * scale_x; // 20
-    const int d_gap = 4;
-    const int colon_w = 6;
-    const int colon_gap = 8;
-
-    int cur_x = start_x;
-    draw_pairing_digit_scaled(cur_x, start_y, minutes / 10, scale_x, scale_y);
-    cur_x += d_w + d_gap;
-    draw_pairing_digit_scaled(cur_x, start_y, minutes % 10, scale_x, scale_y);
-    cur_x += d_w + colon_gap;
-
-    // Colon ':'
-    pairing_fill_x_mirrored_rect(cur_x, start_y + 10, 4, 5, COLOR_BLACK);
-    pairing_fill_x_mirrored_rect(cur_x, start_y + 26, 4, 5, COLOR_BLACK);
-    cur_x += colon_w + colon_gap;
-
-    draw_pairing_digit_scaled(cur_x, start_y, seconds / 10, scale_x, scale_y);
-    cur_x += d_w + d_gap;
-    draw_pairing_digit_scaled(cur_x, start_y, seconds % 10, scale_x, scale_y);
-
+    render_face_asset_locked(1); // Asset 1: Pure V2 Borderless BLE Pairing Screen (NO TIMER)
     flush_framebuffer_locked();
-    ESP_LOGI(TAG, "BLE pairing overlay rendered: remaining_sec=%d (%02d:%02d)",
-             ble_pairing_remaining_sec, minutes, seconds);
+    ESP_LOGI(TAG, "BLE pairing V2 screen rendered (timer disabled per user request)");
 }
 
 static void draw_pairing_overlay_locked()
@@ -928,428 +940,39 @@ static void draw_qr_overlay_locked()
 
 
 
-static void eye_round(
-    int x,
-    int y,
-    int r)
+static uint8_t face_to_v2_asset_id(Face face)
 {
-    fill_circle(x, y, r, COLOR_BLACK);
-}
-
-//--------------------------------------------------
-
-static void eye_big_cute(
-    int x,
-    int y)
-{
-    fill_circle(x, y, 18, COLOR_BLACK);
-    fill_circle(x - 6, y - 7, 5, COLOR_WHITE);
-    fill_circle(x + 5, y + 5, 3, COLOR_WHITE);
-}
-
-//--------------------------------------------------
-
-static void eye_sleepy(
-    int x,
-    int y)
-{
-    thick_line(x - 18, y, x + 18, y, COLOR_BLACK, 4);
-}
-
-//--------------------------------------------------
-
-static void eye_x(
-    int x,
-    int y,
-    int size,
-    int thickness)
-{
-    thick_line(x - size, y - size, x + size, y + size, COLOR_BLACK, thickness);
-    thick_line(x - size, y + size, x + size, y - size, COLOR_BLACK, thickness);
-}
-
-//--------------------------------------------------
-
-static void eye_star(
-    int x,
-    int y)
-{
-    fill_triangle(x, y - 18, x - 6, y - 5, x + 6, y - 5, COLOR_BLACK);
-    fill_triangle(x, y + 18, x - 6, y + 5, x + 6, y + 5, COLOR_BLACK);
-    fill_triangle(x - 18, y, x - 5, y - 6, x - 5, y + 6, COLOR_BLACK);
-    fill_triangle(x + 18, y, x + 5, y - 6, x + 5, y + 6, COLOR_BLACK);
-    fill_circle(x, y, 7, COLOR_BLACK);
-}
-
-//--------------------------------------------------
-
-static void eye_heart(
-    int x,
-    int y)
-{
-    fill_circle(x - 7, y - 5, 8, COLOR_RED);
-    fill_circle(x + 7, y - 5, 8, COLOR_RED);
-    fill_triangle(x - 16, y, x + 16, y, x, y + 20, COLOR_RED);
-}
-
-//--------------------------------------------------
-
-static void blush()
-{
-    fill_circle(FACE_CX - 82, FACE_CY + 32, 9, COLOR_PINK);
-    fill_circle(FACE_CX + 82, FACE_CY + 32, 9, COLOR_PINK);
-}
-
-//--------------------------------------------------
-
-static void cheek_lines()
-{
-    thick_line(FACE_CX - 92, FACE_CY + 28, FACE_CX - 75, FACE_CY + 22, COLOR_PINK, 2);
-    thick_line(FACE_CX - 92, FACE_CY + 39, FACE_CX - 75, FACE_CY + 33, COLOR_PINK, 2);
-
-    thick_line(FACE_CX + 75, FACE_CY + 22, FACE_CX + 92, FACE_CY + 28, COLOR_PINK, 2);
-    thick_line(FACE_CX + 75, FACE_CY + 33, FACE_CX + 92, FACE_CY + 39, COLOR_PINK, 2);
-}
-
-//--------------------------------------------------
-
-static void mouth_smile()
-{
-    draw_curve(FACE_CX - 55, FACE_CY + 30, FACE_CX, FACE_CY + 72, FACE_CX + 55, FACE_CY + 30, COLOR_BLACK, 3);
-}
-
-//--------------------------------------------------
-
-static void mouth_small_smile()
-{
-    draw_curve(FACE_CX - 32, FACE_CY + 36, FACE_CX, FACE_CY + 58, FACE_CX + 32, FACE_CY + 36, COLOR_BLACK, 3);
-}
-
-//--------------------------------------------------
-
-static void mouth_laugh()
-{
-    fill_round_rect(FACE_CX - 45, FACE_CY + 26, 90, 48, 18, COLOR_BLACK);
-    fill_round_rect(FACE_CX - 32, FACE_CY + 30, 64, 14, 8, COLOR_WHITE);
-}
-
-//--------------------------------------------------
-
-static void mouth_tiny()
-{
-    fill_circle(FACE_CX, FACE_CY + 40, 6, COLOR_BLACK);
-}
-
-//--------------------------------------------------
-
-static void mouth_open_small()
-{
-    fill_circle(FACE_CX, FACE_CY + 42, 16, COLOR_BLACK);
-    fill_circle(FACE_CX, FACE_CY + 38, 6, COLOR_FACE);
-}
-
-//--------------------------------------------------
-
-static void mouth_flat()
-{
-    fill_round_rect(FACE_CX - 45, FACE_CY + 48, 90, 7, 4, COLOR_BLACK);
-}
-
-//--------------------------------------------------
-
-static void draw_microphone_indicator()
-{
-    // Sound wave arcs indicating listening / audio capture
-    draw_curve(42, 42, 34, 54, 42, 66, COLOR_BLUE, 2);
-    draw_curve(37, 36, 27, 54, 37, 72, COLOR_BLUE, 2);
-
-    draw_curve(278, 42, 286, 54, 278, 66, COLOR_BLUE, 2);
-    draw_curve(283, 36, 293, 54, 283, 72, COLOR_BLUE, 2);
-}
-
-//--------------------------------------------------
-
-static void face_happy()
-{
-    clear_face_panel();
-
-    eye_round(FACE_CX - 55, FACE_CY - 35, 13);
-    eye_round(FACE_CX + 55, FACE_CY - 35, 13);
-
-    mouth_smile();
-    blush();
-}
-
-//--------------------------------------------------
-
-static void face_cute()
-{
-    clear_face_panel();
-
-    eye_big_cute(FACE_CX - 55, FACE_CY - 35);
-    eye_big_cute(FACE_CX + 55, FACE_CY - 35);
-
-    mouth_tiny();
-    cheek_lines();
-}
-
-//--------------------------------------------------
-
-static void face_shy(int frame_index)
-{
-    clear_face_panel();
-
-    const int phase = frame_index % 6;
-    static constexpr int gaze_offset[6] = {-5, -2, 2, 5, 2, -2};
-    const int gaze = gaze_offset[phase];
-    const int eye_y = FACE_CY - 34 + ((phase % 2) == 0 ? 0 : 2);
-
-    if(phase == 3)
-    {
-        eye_sleepy(FACE_CX - 55, eye_y);
-        eye_sleepy(FACE_CX + 55, eye_y);
-    }
-    else
-    {
-        eye_big_cute(FACE_CX - 55 + gaze, eye_y);
-        eye_big_cute(FACE_CX + 55 + gaze, eye_y);
-    }
-
-    const int blush_radius = (phase % 2) == 0 ? 10 : 13;
-    fill_circle(FACE_CX - 82, FACE_CY + 31, blush_radius, COLOR_PINK);
-    fill_circle(FACE_CX + 82, FACE_CY + 31, blush_radius, COLOR_PINK);
-    cheek_lines();
-
-    if((phase % 3) == 0)
-        mouth_tiny();
-    else
-        mouth_small_smile();
-}
-
-//--------------------------------------------------
-
-static void face_listening()
-{
-    clear_face_panel();
-
-    // Cute perked-up ears (outer black, inner pink)
-    fill_triangle(58, 36, 40, 68, 80, 65, COLOR_BLACK);
-    fill_triangle(59, 43, 46, 64, 74, 62, COLOR_PINK);
-
-    fill_triangle(262, 36, 280, 68, 240, 65, COLOR_BLACK);
-    fill_triangle(261, 43, 274, 64, 246, 62, COLOR_PINK);
-
-    // Inquisitive / alert eyebrows
-    thick_line(FACE_CX - 70, FACE_CY - 53, FACE_CX - 36, FACE_CY - 45, COLOR_BLACK, 3);
-    thick_line(FACE_CX + 36, FACE_CY - 45, FACE_CX + 70, FACE_CY - 53, COLOR_BLACK, 3);
-
-    // Cute big sparkling eyes
-    eye_big_cute(FACE_CX - 55, FACE_CY - 25);
-    eye_big_cute(FACE_CX + 55, FACE_CY - 25);
-
-    // Rosy blush cheeks
-    blush();
-
-    // Cute open small mouth
-    mouth_open_small();
-
-    // Subtle sound wave listening indicator
-    draw_microphone_indicator();
-}
-
-//--------------------------------------------------
-
-static void face_excited()
-{
-    clear_face_panel();
-
-    eye_star(FACE_CX - 55, FACE_CY - 35);
-    eye_star(FACE_CX + 55, FACE_CY - 35);
-
-    mouth_laugh();
-    blush();
-}
-
-//--------------------------------------------------
-
-static void face_sleepy()
-{
-    clear_face_panel();
-
-    eye_sleepy(FACE_CX - 55, FACE_CY - 35);
-    eye_sleepy(FACE_CX + 55, FACE_CY - 35);
-
-    mouth_small_smile();
-}
-
-//--------------------------------------------------
-
-static void face_angry()
-{
-    clear_face_panel();
-
-    eye_round(FACE_CX - 55, FACE_CY - 30, 12);
-    eye_round(FACE_CX + 55, FACE_CY - 30, 12);
-
-    thick_line(FACE_CX - 82, FACE_CY - 65, FACE_CX - 35, FACE_CY - 45, COLOR_BLACK, 4);
-    thick_line(FACE_CX + 35, FACE_CY - 45, FACE_CX + 82, FACE_CY - 65, COLOR_BLACK, 4);
-
-    mouth_flat();
-
-    fill_triangle(FACE_CX - 96, FACE_CY - 70, FACE_CX - 75, FACE_CY - 54, FACE_CX - 88, FACE_CY - 45, COLOR_RED);
-    fill_triangle(FACE_CX + 96, FACE_CY - 70, FACE_CX + 75, FACE_CY - 54, FACE_CX + 88, FACE_CY - 45, COLOR_RED);
-}
-
-//--------------------------------------------------
-
-static void face_sad()
-{
-    clear_face_panel();
-
-    eye_round(FACE_CX - 55, FACE_CY - 35, 13);
-    eye_round(FACE_CX + 55, FACE_CY - 35, 13);
-
-    thick_line(FACE_CX - 80, FACE_CY - 60, FACE_CX - 35, FACE_CY - 68, COLOR_BLACK, 3);
-    thick_line(FACE_CX + 35, FACE_CY - 68, FACE_CX + 80, FACE_CY - 60, COLOR_BLACK, 3);
-
-    draw_curve(FACE_CX - 38, FACE_CY + 62, FACE_CX, FACE_CY + 32, FACE_CX + 38, FACE_CY + 62, COLOR_BLACK, 3);
-    fill_circle(FACE_CX + 70, FACE_CY - 8, 5, COLOR_BLUE);
-}
-
-//--------------------------------------------------
-
-static void face_wink()
-{
-    clear_face_panel();
-
-    eye_sleepy(FACE_CX - 55, FACE_CY - 35);
-    eye_round(FACE_CX + 55, FACE_CY - 35, 14);
-
-    mouth_smile();
-    cheek_lines();
-}
-
-//--------------------------------------------------
-
-static void face_surprised()
-{
-    clear_face_panel();
-
-    eye_round(FACE_CX - 55, FACE_CY - 38, 17);
-    eye_round(FACE_CX + 55, FACE_CY - 38, 17);
-
-    fill_circle(FACE_CX - 55, FACE_CY - 42, 5, COLOR_WHITE);
-    fill_circle(FACE_CX + 55, FACE_CY - 42, 5, COLOR_WHITE);
-
-    mouth_open_small();
-
-    thick_line(FACE_CX - 78, FACE_CY - 72, FACE_CX - 35, FACE_CY - 80, COLOR_BLACK, 3);
-    thick_line(FACE_CX + 35, FACE_CY - 80, FACE_CX + 78, FACE_CY - 72, COLOR_BLACK, 3);
-}
-
-//--------------------------------------------------
-
-static void face_love()
-{
-    clear_face_panel();
-
-    eye_heart(FACE_CX - 55, FACE_CY - 35);
-    eye_heart(FACE_CX + 55, FACE_CY - 35);
-
-    mouth_small_smile();
-    blush();
-}
-
-//--------------------------------------------------
-
-static void face_confused()
-{
-    clear_face_panel();
-
-    eye_round(FACE_CX - 55, FACE_CY - 35, 13);
-    eye_sleepy(FACE_CX + 55, FACE_CY - 35);
-
-    thick_line(FACE_CX - 80, FACE_CY - 72, FACE_CX - 35, FACE_CY - 62, COLOR_BLACK, 3);
-    thick_line(FACE_CX + 35, FACE_CY - 62, FACE_CX + 80, FACE_CY - 72, COLOR_BLACK, 3);
-
-    fill_circle(FACE_CX, FACE_CY + 44, 6, COLOR_BLACK);
-    fill_circle(FACE_CX + 42, FACE_CY + 35, 4, COLOR_PURPLE);
-    fill_circle(FACE_CX + 55, FACE_CY + 23, 3, COLOR_ORANGE);
-    fill_circle(FACE_CX + 68, FACE_CY + 36, 3, COLOR_YELLOW);
-}
-
-//--------------------------------------------------
-static void face_dead()
-{
-    clear_face_panel();
-
-    eye_x(FACE_CX - 55, FACE_CY - 35, 18, 4);
-    eye_x(FACE_CX + 55, FACE_CY - 35, 18, 4);
-
-    mouth_flat();
-}
-
-//--------------------------------------------------
-
-static void draw_face_locked(
-    Face face)
-{
-    display_wake();
-    draw_screen_base();
-
     switch(face)
     {
         case FACE_HAPPY:
-            face_happy();
-            break;
-
-        case FACE_CUTE:
-            face_cute();
-            break;
-
-        case FACE_EXCITED:
-            face_excited();
-            break;
-
         case FACE_SLEEPY:
-            face_sleepy();
-            break;
-
-        case FACE_ANGRY:
-            face_angry();
-            break;
-
-        case FACE_SAD:
-            face_sad();
-            break;
-
         case FACE_WINK:
-            face_wink();
-            break;
-
-        case FACE_SURPRISED:
-            face_surprised();
-            break;
-
+            return 3;  // Asset 3: IDLE / HAPPY
+        case FACE_CUTE:
+        case FACE_EXCITED:
         case FACE_LOVE:
-            face_love();
-            break;
-
-        case FACE_CONFUSED:
-            face_confused();
-            break;
-
+            return 6;  // Asset 6: EXCITED / CUTE / SHY
+        case FACE_ANGRY:
+            return 11; // Asset 11: BAD FACE / ANGRY
+        case FACE_SAD:
         case FACE_DEAD:
-            face_dead();
-            break;
+            return 14; // Asset 14: ERROR / SAD
+        case FACE_SURPRISED:
+            return 5;  // Asset 5: SURPRISED
+        case FACE_CONFUSED:
+            return 10; // Asset 10: THINKING frame 1
         default:
-            face_excited();
-            break;
+            return 3;
     }
+}
 
-    flush_framebuffer_locked();
-
-    ESP_LOGI(TAG, "Face actually rendered: %s(%d)", face_name(face), (int)face);
+static void draw_face_locked(Face face)
+{
+    display_wake();
+    const uint8_t asset_id = face_to_v2_asset_id(face);
+    render_face_asset_locked(asset_id);
+    ESP_LOGI(TAG, "Face actually rendered (V2 Asset %d): %s(%d)",
+             asset_id, face_name(face), (int)face);
 }
 
 static void unpaired_face_revert_timer_cb(void *arg)
@@ -1369,121 +992,6 @@ static void unpaired_face_revert_timer_cb(void *arg)
 
     unlock_display();
 }
-
-static void draw_shy_frame_locked(int frame_index)
-{
-    display_wake();
-    draw_screen_base();
-    face_shy(frame_index);
-    flush_framebuffer_locked();
-    ESP_LOGI(TAG, "Shy animation frame=%d", frame_index);
-}
-
-static void cancel_shy_animation()
-{
-    bool was_active = false;
-
-    portENTER_CRITICAL(&shy_animation_mux);
-    was_active = shy_animation_active;
-    shy_animation_active = false;
-    portEXIT_CRITICAL(&shy_animation_mux);
-
-    if(was_active && shy_animation_task_handle != NULL)
-        xTaskNotifyGive(shy_animation_task_handle);
-}
-
-static void shy_animation_task(void *param)
-{
-    while(true)
-    {
-        (void)ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
-        while(true)
-        {
-            bool active = false;
-            portENTER_CRITICAL(&shy_animation_mux);
-            active = shy_animation_active;
-            portEXIT_CRITICAL(&shy_animation_mux);
-
-            if(!active)
-                break;
-
-            const uint32_t interrupted =
-                ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(SHY_FRAME_MS));
-            if(interrupted > 0)
-                continue;
-
-            const TickType_t now = xTaskGetTickCount();
-            bool finished = false;
-            int frame_index = 0;
-
-            portENTER_CRITICAL(&shy_animation_mux);
-            if(shy_animation_active &&
-               (int32_t)(now - shy_animation_deadline) >= 0)
-            {
-                shy_animation_active = false;
-                finished = true;
-            }
-            else if(shy_animation_active)
-            {
-                frame_index = shy_animation_next_frame++;
-            }
-            active = shy_animation_active;
-            portEXIT_CRITICAL(&shy_animation_mux);
-
-            if(finished)
-            {
-                if(lock_display(pdMS_TO_TICKS(250)))
-                {
-                    bool newer_shy_active = false;
-                    portENTER_CRITICAL(&shy_animation_mux);
-                    newer_shy_active = shy_animation_active;
-                    portEXIT_CRITICAL(&shy_animation_mux);
-
-                    if(!newer_shy_active &&
-                       display_ready &&
-                       current_display_mode == DisplayMode::IDLE &&
-                       !pairing_code_active &&
-                       !qr_code_active &&
-                       !ble_pairing_active)
-                    {
-                        draw_face_locked(current_touch_face);
-                    }
-                    unlock_display();
-                }
-                ESP_LOGI(TAG, "Shy animation finished; idle face restored");
-                break;
-            }
-
-            if(!active)
-                break;
-
-            if(lock_display(pdMS_TO_TICKS(250)))
-            {
-                bool may_render = false;
-                portENTER_CRITICAL(&shy_animation_mux);
-                may_render = shy_animation_active;
-                portEXIT_CRITICAL(&shy_animation_mux);
-
-                if(may_render &&
-                   display_ready &&
-                   current_display_mode == DisplayMode::IDLE &&
-                   !pairing_code_active &&
-                   !qr_code_active &&
-                   !ble_pairing_active)
-                {
-                    draw_shy_frame_locked(frame_index);
-                }
-                else if(may_render)
-                {
-                    cancel_shy_animation();
-                }
-                unlock_display();
-            }
-        }
-    }
-}
-
 //--------------------------------------------------
 
 [[maybe_unused]] static bool is_six_digit_pairing_code(
@@ -1523,9 +1031,303 @@ static void secure_clear_qr_code_locked()
 
 //--------------------------------------------------
 
+enum class LcdControllerType {
+    UNKNOWN,
+    HX8357B,
+    HX8357D,
+    ILI9486,
+    ILI9488,
+    ST7796S,
+};
+
+static LcdControllerType s_detected_controller = LcdControllerType::UNKNOWN;
+
+static uint64_t lcd_data_pin_mask()
+{
+    uint64_t mask = 0;
+    for(gpio_num_t pin : LCD_DATA_PINS)
+        mask |= 1ULL << pin;
+    return mask;
+}
+
+static void lcd_probe_set_data_mode(gpio_mode_t mode)
+{
+    gpio_config_t config = {};
+    config.pin_bit_mask = lcd_data_pin_mask();
+    config.mode = mode;
+    config.pull_up_en = GPIO_PULLUP_DISABLE;
+    config.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    config.intr_type = GPIO_INTR_DISABLE;
+    ESP_ERROR_CHECK(gpio_config(&config));
+}
+
+static void lcd_probe_write8(uint8_t value)
+{
+    for(int bit = 0; bit < 8; ++bit)
+        ESP_ERROR_CHECK(gpio_set_level(LCD_DATA_PINS[bit], (value >> bit) & 1U));
+
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_WR, 0));
+    esp_rom_delay_us(5);
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_WR, 1));
+    esp_rom_delay_us(5);
+}
+
+static uint8_t lcd_probe_read8()
+{
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RD, 0));
+    esp_rom_delay_us(10);
+
+    uint8_t value = 0;
+    for(int bit = 0; bit < 8; ++bit)
+        value |= (uint8_t)(gpio_get_level(LCD_DATA_PINS[bit]) << bit);
+
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RD, 1));
+    esp_rom_delay_us(10);
+    return value;
+}
+
+static void lcd_probe_read_register(
+    uint16_t command,
+    bool command_is_16_bit,
+    uint8_t *result,
+    size_t result_size)
+{
+    lcd_probe_set_data_mode(GPIO_MODE_OUTPUT);
+
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_CS, 0));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RS, 0));
+    if(command_is_16_bit)
+        lcd_probe_write8((uint8_t)(command >> 8));
+    lcd_probe_write8((uint8_t)command);
+
+    lcd_probe_set_data_mode(GPIO_MODE_INPUT);
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RS, 1));
+    esp_rom_delay_us(15);
+
+    for(size_t index = 0; index < result_size; ++index)
+        result[index] = lcd_probe_read8();
+
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_CS, 1));
+    lcd_probe_set_data_mode(GPIO_MODE_OUTPUT);
+}
+
+static void lcd_probe_controller()
+{
+    gpio_config_t control_config = {};
+    control_config.pin_bit_mask =
+        (1ULL << LCD_PIN_RD) |
+        (1ULL << LCD_PIN_WR) |
+        (1ULL << LCD_PIN_RS) |
+        (1ULL << LCD_PIN_CS) |
+        (1ULL << LCD_PIN_RST);
+    control_config.mode = GPIO_MODE_OUTPUT;
+    control_config.pull_up_en = GPIO_PULLUP_DISABLE;
+    control_config.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    control_config.intr_type = GPIO_INTR_DISABLE;
+    ESP_ERROR_CHECK(gpio_config(&control_config));
+
+    lcd_probe_set_data_mode(GPIO_MODE_OUTPUT);
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_CS, 1));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RS, 1));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_WR, 1));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RD, 1));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RST, 1));
+    vTaskDelay(pdMS_TO_TICKS(20));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RST, 0));
+    vTaskDelay(pdMS_TO_TICKS(50));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RST, 1));
+    vTaskDelay(pdMS_TO_TICKS(150));
+
+    uint8_t reg_0000[4] = {};
+    uint8_t reg_04[4] = {};
+    uint8_t reg_d3[5] = {};
+    uint8_t reg_bf[6] = {};
+
+    lcd_probe_read_register(0x0000, true, reg_0000, sizeof(reg_0000));
+    lcd_probe_read_register(0x0004, false, reg_04, sizeof(reg_04));
+    lcd_probe_read_register(0x00D3, false, reg_d3, sizeof(reg_d3));
+    lcd_probe_read_register(0x00BF, false, reg_bf, sizeof(reg_bf));
+
+    ESP_LOGI(TAG, "=== LCD CONTROLLER DIAGNOSIS ===");
+    ESP_LOGI(TAG, "LCD_ID reg0000(16-bit): %02X %02X %02X %02X",
+        reg_0000[0], reg_0000[1], reg_0000[2], reg_0000[3]);
+    ESP_LOGI(TAG, "LCD_ID reg04(8-bit):    %02X %02X %02X %02X",
+        reg_04[0], reg_04[1], reg_04[2], reg_04[3]);
+    ESP_LOGI(TAG, "LCD_ID regD3(8-bit):    %02X %02X %02X %02X %02X",
+        reg_d3[0], reg_d3[1], reg_d3[2], reg_d3[3], reg_d3[4]);
+    ESP_LOGI(TAG, "LCD_ID regBF(8-bit):    %02X %02X %02X %02X %02X %02X",
+        reg_bf[0], reg_bf[1], reg_bf[2], reg_bf[3], reg_bf[4], reg_bf[5]);
+
+    if(reg_bf[1] == 0x01 && reg_bf[2] == 0x62 &&
+       reg_bf[3] == 0x83 && reg_bf[4] == 0x57)
+    {
+        s_detected_controller = LcdControllerType::HX8357B;
+        ESP_LOGI(TAG, ">> IDENTIFIED: HX8357-B <<");
+    }
+    else if((reg_d3[2] == 0x83 && reg_d3[3] == 0x57) ||
+            (reg_04[2] == 0x80 && reg_04[3] == 0x00))
+    {
+        s_detected_controller = LcdControllerType::HX8357D;
+        ESP_LOGI(TAG, ">> IDENTIFIED: HX8357-D <<");
+    }
+    else if((reg_d3[2] == 0x94 && reg_d3[3] == 0x86) ||
+            (reg_04[2] == 0x94 && reg_04[3] == 0x86))
+    {
+        s_detected_controller = LcdControllerType::ILI9486;
+        ESP_LOGI(TAG, ">> IDENTIFIED: ILI9486 <<");
+    }
+    else if((reg_d3[2] == 0x94 && reg_d3[3] == 0x88) ||
+            (reg_04[2] == 0x54 && reg_04[3] == 0x80))
+    {
+        s_detected_controller = LcdControllerType::ILI9488;
+        ESP_LOGI(TAG, ">> IDENTIFIED: ILI9488 <<");
+    }
+    else if(reg_04[1] == 0x77 && reg_04[2] == 0x96)
+    {
+        s_detected_controller = LcdControllerType::ST7796S;
+        ESP_LOGI(TAG, ">> IDENTIFIED: ST7796S <<");
+    }
+    else
+    {
+        s_detected_controller = LcdControllerType::HX8357B; // default fallback
+        ESP_LOGW(TAG, ">> CONTROLLER UNRECOGNIZED: falling back to HX8357-B <<");
+    }
+
+    // Put controller back in reset state before I80 takes over
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RST, 0));
+    vTaskDelay(pdMS_TO_TICKS(20));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RST, 1));
+    vTaskDelay(pdMS_TO_TICKS(120));
+}
+
+static void init_controller_sequence(LcdControllerType type)
+{
+    if(type == LcdControllerType::HX8357D)
+    {
+        ESP_LOGI(TAG, "Executing HX8357-D initialization sequence");
+        static const uint8_t ext_unlock[] = {0xFF, 0x83, 0x57};
+        hx8357_write_command(0xB9, ext_unlock, sizeof(ext_unlock));
+        vTaskDelay(pdMS_TO_TICKS(5));
+
+        static const uint8_t set_power[] = {
+            0x00, 0x15, 0x1C, 0x1C, 0x83, 0xAA};
+        hx8357_write_command(0xB1, set_power, sizeof(set_power));
+
+        static const uint8_t set_display[] = {
+            0x02, 0x40, 0x00, 0x2A, 0x2A, 0x0D, 0x78};
+        hx8357_write_command(0xB4, set_display, sizeof(set_display));
+
+        static const uint8_t set_vcom[] = {0x50, 0x50};
+        hx8357_write_command(0xB6, set_vcom, sizeof(set_vcom));
+
+        static const uint8_t gamma[] = {
+            0x02, 0x0A, 0x11, 0x1D, 0x23, 0x35, 0x41, 0x4B, 0x4B, 0x42,
+            0x3A, 0x27, 0x1B, 0x08, 0x09, 0x03, 0x02, 0x0A, 0x11, 0x1D,
+            0x23, 0x35, 0x41, 0x4B, 0x4B, 0x42, 0x3A, 0x27, 0x1B, 0x08,
+            0x09, 0x03, 0x00, 0x01};
+        hx8357_write_command(0xE0, gamma, sizeof(gamma));
+
+        hx8357_write_command1(0x3A, 0x55); // RGB565
+        hx8357_write_command1(0x36, 0x28); // landscape + BGR
+        hx8357_write_command(0x11, NULL, 0); // sleep out
+        vTaskDelay(pdMS_TO_TICKS(150));
+        hx8357_write_command(0x29, NULL, 0); // display on
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    else if(type == LcdControllerType::ILI9486)
+    {
+        ESP_LOGI(TAG, "Executing ILI9486 initialization sequence");
+        hx8357_write_command(0x11, NULL, 0); // sleep out
+        vTaskDelay(pdMS_TO_TICKS(120));
+
+        static const uint8_t pwr1[] = {0x0D, 0x0D};
+        hx8357_write_command(0xC0, pwr1, sizeof(pwr1));
+        static const uint8_t pwr2[] = {0x43, 0x00};
+        hx8357_write_command(0xC1, pwr2, sizeof(pwr2));
+        static const uint8_t pwr3[] = {0x00};
+        hx8357_write_command(0xC2, pwr3, sizeof(pwr3));
+        static const uint8_t vcom[] = {0x00, 0x48, 0x00, 0x48};
+        hx8357_write_command(0xC5, vcom, sizeof(vcom));
+
+        hx8357_write_command1(0x36, 0x28); // landscape + BGR
+        hx8357_write_command1(0x3A, 0x55); // RGB565
+        hx8357_write_command(0x21, NULL, 0); // display inversion on
+
+        vTaskDelay(pdMS_TO_TICKS(120));
+        hx8357_write_command(0x29, NULL, 0); // display on
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    else if(type == LcdControllerType::ST7796S)
+    {
+        ESP_LOGI(TAG, "Executing ST7796S initialization sequence");
+        hx8357_write_command(0x11, NULL, 0); // sleep out
+        vTaskDelay(pdMS_TO_TICKS(120));
+
+        static const uint8_t cmd_enable[] = {0xC3};
+        hx8357_write_command(0xF0, cmd_enable, sizeof(cmd_enable));
+        static const uint8_t cmd_enable2[] = {0x96};
+        hx8357_write_command(0xF0, cmd_enable2, sizeof(cmd_enable2));
+
+        hx8357_write_command1(0x36, 0x28); // landscape + BGR
+        hx8357_write_command1(0x3A, 0x55); // RGB565
+
+        static const uint8_t doca[] = {0x40, 0x8A, 0x00, 0x00, 0x29, 0x19, 0xA5, 0x33};
+        hx8357_write_command(0xE8, doca, sizeof(doca));
+
+        static const uint8_t cmd_disable[] = {0x3C};
+        hx8357_write_command(0xF0, cmd_disable, sizeof(cmd_disable));
+        static const uint8_t cmd_disable2[] = {0x69};
+        hx8357_write_command(0xF0, cmd_disable2, sizeof(cmd_disable2));
+
+        hx8357_write_command(0x21, NULL, 0); // display inversion on
+        vTaskDelay(pdMS_TO_TICKS(120));
+        hx8357_write_command(0x29, NULL, 0); // display on
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    else // Default HX8357-B
+    {
+        ESP_LOGI(TAG, "Executing HX8357-B initialization sequence (High Contrast & Non-Reversed)");
+        static const uint8_t power_control[] = {0x44, 0x41, 0x06};
+        static const uint8_t vcom_control[] = {0x40, 0x10};
+        static const uint8_t power_normal[] = {0x05, 0x12};
+        static const uint8_t panel_driving[] = {0x14, 0x3B, 0x00, 0x02, 0x11};
+        static const uint8_t display_frame[] = {0x0C};
+        static const uint8_t undefined_ea[] = {0x03, 0x00, 0x00};
+        static const uint8_t undefined_eb[] = {0x40, 0x54, 0x26, 0xDB};
+        static const uint8_t gamma[] = {
+            0x00, 0x15, 0x00, 0x22, 0x00, 0x08,
+            0x77, 0x26, 0x66, 0x22, 0x04, 0x00};
+        static const uint8_t display_mode[] = {0x00};
+
+        hx8357_write_command(0x11, NULL, 0); // sleep out
+        vTaskDelay(pdMS_TO_TICKS(120));
+        hx8357_write_command(0xD0, power_control, sizeof(power_control));
+        hx8357_write_command(0xD1, vcom_control, sizeof(vcom_control));
+        hx8357_write_command(0xD2, power_normal, sizeof(power_normal));
+        hx8357_write_command(0xC0, panel_driving, sizeof(panel_driving));
+        hx8357_write_command(0xC5, display_frame, sizeof(display_frame));
+        hx8357_write_command(0xEA, undefined_ea, sizeof(undefined_ea));
+        hx8357_write_command(0xEB, undefined_eb, sizeof(undefined_eb));
+        hx8357_write_command(0xC8, gamma, sizeof(gamma));
+        hx8357_write_command1(0x36, 0x68); // landscape (MX=1, MV=1, BGR=1): un-reversed left-to-right!
+        hx8357_write_command1(0x3A, 0x55); // RGB565 / 16-bit MCU pixels
+        hx8357_write_command(0xB2, display_mode, sizeof(display_mode));
+        hx8357_write_command(0x20, NULL, 0); // Display Inversion OFF: restores true bright mint green (#b9dfce) from PDF!
+
+        const uint8_t column_address[] = {0x00, 0x00, 0x01, 0xDF};
+        const uint8_t page_address[] = {0x00, 0x00, 0x01, 0x3F};
+        hx8357_write_command(0x2A, column_address, sizeof(column_address));
+        hx8357_write_command(0x2B, page_address, sizeof(page_address));
+
+        vTaskDelay(pdMS_TO_TICKS(120));
+        hx8357_write_command(0x29, NULL, 0); // display on
+        vTaskDelay(pdMS_TO_TICKS(25));
+    }
+}
+
 void display_init()
 {
-    ESP_LOGI(TAG, "Initialize ILI9341 landscape");
+    ESP_LOGI(TAG, "Initialize 3.5-inch TFT (i80 8-bit bus, probing controller...)");
 
     display_mutex =
         xSemaphoreCreateMutex();
@@ -1536,89 +1338,93 @@ void display_init()
         return;
     }
 
-    spi_bus_config_t buscfg = {};
+    // Step 1: Probe the LCD controller to diagnose true IC
+    lcd_probe_controller();
 
-    buscfg.sclk_io_num = LCD_PIN_SCLK;
-    buscfg.mosi_io_num = LCD_PIN_MOSI;
-    buscfg.miso_io_num = LCD_PIN_MISO;
-    buscfg.quadwp_io_num = -1;
-    buscfg.quadhd_io_num = -1;
+    // Step 2: Configure RD pin HIGH (write mode) before I80 initialization
+    gpio_config_t rd_config = {};
+    rd_config.pin_bit_mask = 1ULL << LCD_PIN_RD;
+    rd_config.mode = GPIO_MODE_OUTPUT;
+    rd_config.pull_up_en = GPIO_PULLUP_DISABLE;
+    rd_config.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    rd_config.intr_type = GPIO_INTR_DISABLE;
+    ESP_ERROR_CHECK(gpio_config(&rd_config));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RD, 1));
 
-    buscfg.max_transfer_sz =
-        LCD_H_RES *
-        LCD_DRAW_LINES *
-        sizeof(uint16_t);
+    gpio_config_t reset_config = {};
+    reset_config.pin_bit_mask = 1ULL << LCD_PIN_RST;
+    reset_config.mode = GPIO_MODE_OUTPUT;
+    reset_config.pull_up_en = GPIO_PULLUP_DISABLE;
+    reset_config.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    reset_config.intr_type = GPIO_INTR_DISABLE;
+    ESP_ERROR_CHECK(gpio_config(&reset_config));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RST, 1));
+
+    // Step 3: Initialize Intel 8080 bus
+    esp_lcd_i80_bus_config_t bus_config = {};
+    bus_config.dc_gpio_num = LCD_PIN_RS;
+    bus_config.wr_gpio_num = LCD_PIN_WR;
+    bus_config.clk_src = LCD_CLK_SRC_DEFAULT;
+    bus_config.data_gpio_nums[0] = LCD_PIN_D0;
+    bus_config.data_gpio_nums[1] = LCD_PIN_D1;
+    bus_config.data_gpio_nums[2] = LCD_PIN_D2;
+    bus_config.data_gpio_nums[3] = LCD_PIN_D3;
+    bus_config.data_gpio_nums[4] = LCD_PIN_D4;
+    bus_config.data_gpio_nums[5] = LCD_PIN_D5;
+    bus_config.data_gpio_nums[6] = LCD_PIN_D6;
+    bus_config.data_gpio_nums[7] = LCD_PIN_D7;
+    bus_config.bus_width = 8;
+    bus_config.max_transfer_bytes =
+        LCD_PANEL_H_RES * LCD_DRAW_LINES * sizeof(uint16_t);
+    bus_config.dma_burst_size = 64;
 
     ESP_ERROR_CHECK(
-        spi_bus_initialize(
-            LCD_HOST,
-            &buscfg,
-            SPI_DMA_CH_AUTO));
+        esp_lcd_new_i80_bus(
+            &bus_config,
+            &lcd_bus_handle));
 
-    esp_lcd_panel_io_handle_t io_handle = NULL;
-
-    esp_lcd_panel_io_spi_config_t io_config = {};
-
+    esp_lcd_panel_io_i80_config_t io_config = {};
     io_config.cs_gpio_num = LCD_PIN_CS;
-    io_config.dc_gpio_num = LCD_PIN_DC;
-    io_config.spi_mode = 0;
-    io_config.pclk_hz = LCD_PIXEL_CLOCK_HZ;
+    io_config.pclk_hz = LCD_PIXEL_CLOCK_HZ; // 1 MHz for stable signal
     io_config.trans_queue_depth = 4;
     io_config.lcd_cmd_bits = LCD_CMD_BITS;
     io_config.lcd_param_bits = LCD_PARAM_BITS;
+    io_config.dc_levels.dc_idle_level = 0;
+    io_config.dc_levels.dc_cmd_level = 0;
+    io_config.dc_levels.dc_dummy_level = 0;
+    io_config.dc_levels.dc_data_level = 1;
+    io_config.flags.swap_color_bytes = 1;
 
     ESP_ERROR_CHECK(
-        esp_lcd_new_panel_io_spi(
-            LCD_HOST,
+        esp_lcd_new_panel_io_i80(
+            lcd_bus_handle,
             &io_config,
-            &io_handle));
+            &lcd_io_handle));
 
-    esp_lcd_panel_dev_config_t panel_config = {};
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RST, 0));
+    vTaskDelay(pdMS_TO_TICKS(20));
+    ESP_ERROR_CHECK(gpio_set_level(LCD_PIN_RST, 1));
+    vTaskDelay(pdMS_TO_TICKS(200));
 
-    panel_config.reset_gpio_num = LCD_PIN_RST;
-    panel_config.bits_per_pixel = 16;
-    panel_config.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_BGR;
+    // Step 4: Run controller specific initialization sequence
+    init_controller_sequence(s_detected_controller);
 
-    ESP_ERROR_CHECK(
-        esp_lcd_new_panel_ili9341(
-            io_handle,
-            &panel_config,
-            &panel_handle));
-
-    ESP_ERROR_CHECK(
-        esp_lcd_panel_reset(
-            panel_handle));
-
-    ESP_ERROR_CHECK(
-        esp_lcd_panel_init(
-            panel_handle));
-
-    ESP_ERROR_CHECK(
-        esp_lcd_panel_invert_color(
-            panel_handle,
-            false));
-
-    ESP_ERROR_CHECK(
-        esp_lcd_panel_swap_xy(
-            panel_handle,
-            LCD_SWAP_XY));
-
-    ESP_ERROR_CHECK(
-        esp_lcd_panel_mirror(
-            panel_handle,
-            LCD_MIRROR_X,
-            LCD_MIRROR_Y));
+    // Set address window to full 480x320
+    const uint8_t column_address[] = {0x00, 0x00, 0x01, 0xDF};
+    const uint8_t page_address[] = {0x00, 0x00, 0x01, 0x3F};
+    hx8357_write_command(0x2A, column_address, sizeof(column_address));
+    hx8357_write_command(0x2B, page_address, sizeof(page_address));
 
     draw_buffers[0] =
         (uint16_t*)heap_caps_malloc(
-            LCD_H_RES *
+            LCD_PANEL_H_RES *
             LCD_DRAW_LINES *
             sizeof(uint16_t),
             MALLOC_CAP_DMA);
 
     draw_buffers[1] =
         (uint16_t*)heap_caps_malloc(
-            LCD_H_RES *
+            LCD_PANEL_H_RES *
             LCD_DRAW_LINES *
             sizeof(uint16_t),
             MALLOC_CAP_DMA);
@@ -1656,35 +1462,19 @@ void display_init()
                 sizeof(uint16_t));
     }
 
-    if(frame_buffer != NULL)
+    if(frame_buffer == NULL)
     {
-        memset(frame_buffer, 0, LCD_H_RES * LCD_V_RES * sizeof(uint16_t));
+        ESP_LOGE(TAG, "Frame buffer allocation failed");
+        return;
+    }
+
+    for(size_t i = 0; i < (size_t)LCD_H_RES * LCD_V_RES; ++i) {
+        frame_buffer[i] = 0xCF17; // #bae0ce Mint Green
     }
 
     display_ready = true;
-
-    ESP_ERROR_CHECK(
-        esp_lcd_panel_disp_on_off(
-            panel_handle,
-            true));
-
     display_on = true;
 
-    if(shy_animation_task_handle == NULL)
-    {
-        BaseType_t ret = xTaskCreate(
-            shy_animation_task,
-            "shy_animation",
-            4096,
-            NULL,
-            3,
-            &shy_animation_task_handle);
-        if(ret != pdPASS)
-        {
-            shy_animation_task_handle = NULL;
-            ESP_LOGE(TAG, "Failed to create shy_animation task");
-        }
-    }
 
     if(unpaired_face_revert_timer == NULL)
     {
@@ -1700,10 +1490,9 @@ void display_init()
         }
     }
 
-    ESP_LOGI(TAG, "ILI9341 Ready");
+    ESP_LOGI(TAG, "Display Ready (480x320 panel, 320x240 frame_buffer)");
     s_face_policy.reset(esp_timer_get_time());
     display_render_asset(s_face_policy.get_current_asset_id());
-
     xTaskCreateWithCaps(
         display_policy_task,
         "display_policy",
@@ -1728,19 +1517,12 @@ void display_sleep()
     if(!lock_display(pdMS_TO_TICKS(1000)))
         return;
 
-    fill_rect(
-        0,
-        0,
-        LCD_H_RES,
-        LCD_V_RES,
-        COLOR_BLACK);
-
-    flush_framebuffer_locked();
-
-    display_on = true;
-
-    ESP_LOGI(TAG, "Display sleep screen");
-
+    if(display_on)
+    {
+        hx8357_write_command(0x28, NULL, 0); // display off
+        hx8357_write_command(0x10, NULL, 0); // enter sleep
+        display_on = false;
+    }
     unlock_display();
 }
 
@@ -1932,54 +1714,17 @@ Face display_get_idle_face()
 
 bool display_start_shy()
 {
-    if(!display_ready || shy_animation_task_handle == NULL)
-        return false;
-
-    if(!lock_display(pdMS_TO_TICKS(1000)))
-        return false;
-
-    if(current_display_mode != DisplayMode::IDLE ||
-       pairing_code_active ||
-       qr_code_active ||
-       ble_pairing_active)
-    {
-        unlock_display();
-        return false;
-    }
-
-    cancel_unpaired_revert_timer_locked();
-
-    // Shy is transient. HAPPY remains the persistent idle face that is
-    // restored after five seconds or after a higher-priority interaction.
-    current_touch_face = FACE_HAPPY;
-
-    portENTER_CRITICAL(&shy_animation_mux);
-    shy_animation_active = true;
-    shy_animation_deadline =
-        xTaskGetTickCount() + pdMS_TO_TICKS(SHY_DURATION_MS);
-    shy_animation_next_frame = 1;
-    portEXIT_CRITICAL(&shy_animation_mux);
-
-    draw_shy_frame_locked(0);
-    unlock_display();
-
-    xTaskNotifyGive(shy_animation_task_handle);
-    ESP_LOGI(TAG, "Shy animation started: duration_ms=%lu", (unsigned long)SHY_DURATION_MS);
+    display_trigger_touch_overlay();
     return true;
 }
 
 void display_cancel_shy()
 {
-    cancel_shy_animation();
 }
 
 bool display_is_shy_active()
 {
-    bool active = false;
-    portENTER_CRITICAL(&shy_animation_mux);
-    active = shy_animation_active;
-    portEXIT_CRITICAL(&shy_animation_mux);
-    return active;
+    return s_face_policy.get_current_mode() == FaceMode::IDLE_OVERLAY;
 }
 
 bool display_is_unpaired_revert_active()
@@ -2275,17 +2020,8 @@ bool display_show_ble_pairing(int remaining_seconds)
 
 void display_update_ble_countdown(int remaining_seconds)
 {
-    if(!lock_display(pdMS_TO_TICKS(100)))
-        return;
-
-    current_display_mode = DisplayMode::IDLE;
-    if(display_ready && display_on && ble_pairing_active)
-    {
-        ble_pairing_remaining_sec = remaining_seconds;
-        draw_ble_pairing_overlay_locked();
-    }
-
-    unlock_display();
+    // Timer display disabled per user request
+    ble_pairing_remaining_sec = remaining_seconds;
 }
 
 void display_hide_ble_pairing()

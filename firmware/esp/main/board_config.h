@@ -7,33 +7,40 @@
 #if defined(CONFIG_JOY_BOARD_PROFILE_BMO_V2) || defined(JOY_BOARD_PROFILE_BMO_V2)
     #define BOARD_PROFILE_NAME "bmo_v2"
 
-    #define PIN_LCD_MOSI 11
-    #define PIN_LCD_MISO 13
-    #define PIN_LCD_SCLK 12
-    #define PIN_LCD_CS   10
-    #define PIN_LCD_DC   9
-    #define PIN_LCD_RST  8
+    // 3.5-inch HX8357-B 8-bit Intel 8080 bus LCD
+    #define PIN_LCD_D0   12
+    #define PIN_LCD_D1   13
+    #define PIN_LCD_D2   18
+    #define PIN_LCD_D3   3
+    #define PIN_LCD_D4   46
+    #define PIN_LCD_D5   9
+    #define PIN_LCD_D6   10
+    #define PIN_LCD_D7   11
+
+    #define PIN_LCD_RD   (-1) // Write-only to avoid GPIO 15 conflict
+    #define PIN_LCD_WR   7
+    #define PIN_LCD_RS   6
+    #define PIN_LCD_CS   5
+    #define PIN_LCD_RST  4
 
     #define PIN_I2S_SPK_BCLK 1
     #define PIN_I2S_SPK_WS   2
     #define PIN_I2S_SPK_DIN  42
 
-    #define PIN_I2S_MIC_BCLK 5
-    #define PIN_I2S_MIC_WS   4
-    #define PIN_I2S_MIC_DIN  6
+    #define PIN_I2S_MIC_BCLK 39
+    #define PIN_I2S_MIC_WS   40
+    #define PIN_I2S_MIC_DIN  41
 
-    #define PIN_TOUCH_PAD 14
+    #define PIN_TOUCH_PAD (-1) // Touch pad disabled per user request
 
     // 7 Physical buttons confirmed by hardware team
     #define PIN_BTN_VOICE        20  // A1 (Segitiga)
     #define PIN_BTN_PAIR         21  // A2 (Bulat kecil)
     #define PIN_BTN_EXPRESSION   47  // A3 (Bulat besar)
     #define PIN_BTN_VOL_UP       48  // A4 (Atas)
-    #define PIN_BTN_VOL_DOWN     15  // A5 (Bawah)
+    #define PIN_BTN_VOL_DOWN     45  // A5 (Bawah, moved from 15 to avoid LCD_RD conflict)
     #define PIN_BTN_SPOTIFY_NEXT 0   // A6 (Kanan)
-    // GPIO 35 is reserved for Octal PSRAM (CONFIG_SPIRAM_MODE_OCT=y) on ESP32-S3.
-    // Disabled (-1) to protect PSRAM bus from crashing until HW team reassigns.
-    #define PIN_BTN_SPOTIFY_PREV (-1)
+    #define PIN_BTN_SPOTIFY_PREV 38  // A7 (Kiri, moved from 35 to avoid Octal PSRAM conflict)
     #if !defined(PIN_BTN_VOICE) || (PIN_BTN_VOICE < 0)
         #error "PIN_BTN_VOICE must be defined and >= 0 for bmo_v2 production board profile"
     #endif
@@ -51,6 +58,9 @@
     #endif
     #if !defined(PIN_BTN_SPOTIFY_NEXT) || (PIN_BTN_SPOTIFY_NEXT < 0)
         #error "PIN_BTN_SPOTIFY_NEXT must be defined and >= 0 for bmo_v2 production board profile"
+    #endif
+    #if !defined(PIN_BTN_SPOTIFY_PREV) || (PIN_BTN_SPOTIFY_PREV < 0)
+        #error "PIN_BTN_SPOTIFY_PREV must be defined and >= 0 for bmo_v2 production board profile"
     #endif
 #elif defined(CONFIG_JOY_BOARD_PROFILE_BMO_V2_REFERENCE) || defined(JOY_BOARD_PROFILE_BMO_V2_REFERENCE)
     #define BOARD_PROFILE_NAME "bmo_v2_reference"
@@ -70,16 +80,15 @@
     #define PIN_I2S_MIC_WS   4
     #define PIN_I2S_MIC_DIN  6
 
-    #define PIN_TOUCH_PAD 14
+    #define PIN_TOUCH_PAD        (-1)
 
-    // 7 dedicated inputs unassigned (-1) until hardware staff supplies replacement wiring
-    #define PIN_BTN_VOICE        (-1)
-    #define PIN_BTN_PAIR         (-1)
-    #define PIN_BTN_EXPRESSION   (-1)
-    #define PIN_BTN_VOL_UP       (-1)
-    #define PIN_BTN_VOL_DOWN     (-1)
-    #define PIN_BTN_SPOTIFY_NEXT (-1)
-    #define PIN_BTN_SPOTIFY_PREV (-1)
+    #define PIN_BTN_VOICE        20  // A1 (Segitiga)
+    #define PIN_BTN_PAIR         21  // A2 (Bulat kecil)
+    #define PIN_BTN_EXPRESSION   47  // A3 (Bulat besar)
+    #define PIN_BTN_VOL_UP       48  // A4 (Atas)
+    #define PIN_BTN_VOL_DOWN     45  // A5 (Bawah)
+    #define PIN_BTN_SPOTIFY_NEXT 0   // A6 (Kanan)
+    #define PIN_BTN_SPOTIFY_PREV 38  // A7 (Kiri)
 #else
     #define BOARD_PROFILE_NAME "legacy_v1"
 

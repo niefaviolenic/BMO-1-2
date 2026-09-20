@@ -21,18 +21,24 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "model_path.h"
+#include "board_config.h"
 
 static const char *TAG = "WAKE";
 
 //--------------------------------------------------
-// I2S microphone pins.
-// Ubah ini kalau wiring mic kamu beda.
+// I2S microphone pins (INMP441)
+// Using GPIO 39 (BCLK), 40 (WS), 41 (DIN) to prevent collision with LCD (CS=5, RST=4, RS=6)
 //--------------------------------------------------
 
-#define WAKEWORD_I2S_BCLK GPIO_NUM_5
-#define WAKEWORD_I2S_WS   GPIO_NUM_4
-#define WAKEWORD_I2S_DIN  GPIO_NUM_6
-
+#if defined(PIN_I2S_MIC_BCLK) && (PIN_I2S_MIC_BCLK >= 0)
+#define WAKEWORD_I2S_BCLK static_cast<gpio_num_t>(PIN_I2S_MIC_BCLK)
+#define WAKEWORD_I2S_WS   static_cast<gpio_num_t>(PIN_I2S_MIC_WS)
+#define WAKEWORD_I2S_DIN  static_cast<gpio_num_t>(PIN_I2S_MIC_DIN)
+#else
+#define WAKEWORD_I2S_BCLK GPIO_NUM_39
+#define WAKEWORD_I2S_WS   GPIO_NUM_40
+#define WAKEWORD_I2S_DIN  GPIO_NUM_41
+#endif
 //--------------------------------------------------
 
 #define WAKEWORD_MODEL_PARTITION "model"

@@ -69,15 +69,14 @@ static void test_ble_pairing_holds()
     policy.update_raw(false, true, false, false, false, false, false, false, 1040000LL, SystemInteractionState::IDLE);
     assert(policy.get_pending_action_count() == 0);
 
-    // 4.99s hold -> not yet 5s, no action
-    policy.update_raw(false, true, false, false, false, false, false, false, 5990000LL, SystemInteractionState::IDLE);
+    // 2.95s hold -> not yet 3s, no action
+    policy.update_raw(false, true, false, false, false, false, false, false, 3950000LL, SystemInteractionState::IDLE);
     assert(policy.get_pending_action_count() == 0);
 
-    // 5.05s hold -> triggers BLE_OPEN_DISCOVERY
-    policy.update_raw(false, true, false, false, false, false, false, false, 6050000LL, SystemInteractionState::IDLE);
+    // 3.05s hold -> triggers BLE_OPEN_DISCOVERY
+    policy.update_raw(false, true, false, false, false, false, false, false, 4050000LL, SystemInteractionState::IDLE);
     assert(policy.get_pending_action_count() == 1);
     assert(policy.pop_action() == ButtonAction::BLE_OPEN_DISCOVERY);
-
     // Continuing to hold -> NO repeat
     policy.update_raw(false, true, false, false, false, false, false, false, 7000000LL, SystemInteractionState::PAIRING_DISCOVERING);
     assert(policy.get_pending_action_count() == 0);
@@ -195,12 +194,10 @@ static void test_discovery_5s_hold_into_arm_does_not_confirm()
     policy.update_raw(false, true, false, false, false, false, false, false, 1000000LL, SystemInteractionState::IDLE);
     policy.update_raw(false, true, false, false, false, false, false, false, 1040000LL, SystemInteractionState::IDLE);
     assert(policy.get_pending_action_count() == 0);
-
-    // At 5.05s hold -> BLE_OPEN_DISCOVERY
-    policy.update_raw(false, true, false, false, false, false, false, false, 6050000LL, SystemInteractionState::IDLE);
+    // At 3.05s hold -> BLE_OPEN_DISCOVERY
+    policy.update_raw(false, true, false, false, false, false, false, false, 4050000LL, SystemInteractionState::IDLE);
     assert(policy.get_pending_action_count() == 1);
     assert(policy.pop_action() == ButtonAction::BLE_OPEN_DISCOVERY);
-
     // Continues holding into PAIRING_DISCOVERING
     policy.update_raw(false, true, false, false, false, false, false, false, 7000000LL, SystemInteractionState::PAIRING_DISCOVERING);
     assert(policy.get_pending_action_count() == 0);
@@ -271,7 +268,7 @@ static void test_old_board_expr_and_boot_pairing()
         // 5s hold on BOOT in IDLE -> BLE_OPEN_DISCOVERY
         policy.update_raw(false, false, false, false, false, false, false, false, 1000000LL, SystemInteractionState::IDLE, true);
         policy.update_raw(false, false, false, false, false, false, false, false, 1040000LL, SystemInteractionState::IDLE, true);
-        policy.update_raw(false, false, false, false, false, false, false, false, 6050000LL, SystemInteractionState::IDLE, true);
+        policy.update_raw(false, false, false, false, false, false, false, false, 4050000LL, SystemInteractionState::IDLE, true);
         assert(policy.get_pending_action_count() == 1);
         assert(policy.pop_action() == ButtonAction::BLE_OPEN_DISCOVERY);
 
@@ -395,6 +392,29 @@ static void test_expression_and_touch()
     printf("  [PASS] test_expression_and_touch\n");
 }
 
+static void test_spotify_next_hold_does_not_trigger_pairing()
+{
+    ButtonPolicy policy;
+
+    // Press Spotify Next (arg 6 = true) while BOOT is false (gated in button.cpp)
+    policy.update_raw(false, false, false, false, false, true, false, false, 1000000LL, SystemInteractionState::IDLE, false);
+    policy.update_raw(false, false, false, false, false, true, false, false, 1040000LL, SystemInteractionState::IDLE, false);
+    // Debounced: emits SPOTIFY_NEXT
+    assert(policy.get_pending_action_count() == 1);
+    assert(policy.pop_action() == ButtonAction::SPOTIFY_NEXT);
+
+    // Continue holding for 5 seconds (6.05s mark)
+    policy.update_raw(false, false, false, false, false, true, false, false, 6050000LL, SystemInteractionState::IDLE, false);
+    // MUST NOT emit BLE_OPEN_DISCOVERY!
+    assert(policy.get_pending_action_count() == 0);
+
+    // Release
+    policy.update_raw(false, false, false, false, false, false, false, false, 7000000LL, SystemInteractionState::IDLE, false);
+    assert(policy.get_pending_action_count() == 0);
+
+    printf("  [PASS] test_spotify_next_hold_does_not_trigger_pairing\n");
+}
+
 int main()
 {
     printf("Running Host C++ Button Policy Tests...\n");
@@ -409,6 +429,7 @@ int main()
     test_pairing_owns_inputs_blocks_voice_and_face();
     test_volume_and_spotify_cancellation();
     test_expression_and_touch();
+    test_spotify_next_hold_does_not_trigger_pairing();
     printf("All Host C++ Button Policy Tests Passed!\n");
     return 0;
 }

@@ -140,12 +140,8 @@ static bool native_touch_update()
 }
 static bool read_touch_level()
 {
-    if(native_touch_enabled) {
-        return native_touch_update();
-    }
-    return (gpio_get_level(TOUCH_PIN) == 1);
+    return false; // Touch sensor disabled per user request
 }
-
 
 static const char *joy_state_name(JoyState state)
 {
@@ -164,49 +160,26 @@ static const char *joy_state_name(JoyState state)
 
 void button_init()
 {
-    const bool native_touch_ready = native_touch_init();
+    ESP_LOGI(TAG, "Touch sensor on GPIO14 is disabled (false-trigger prevention)");
 
-    if(!native_touch_ready)
-    {
-        gpio_config_t touch_config = {};
-
-        touch_config.pin_bit_mask = 1ULL << TOUCH_PIN;
-        touch_config.mode = GPIO_MODE_INPUT;
-        touch_config.pull_up_en = GPIO_PULLUP_DISABLE;
-        touch_config.pull_down_en = GPIO_PULLDOWN_ENABLE;
-        touch_config.intr_type = GPIO_INTR_DISABLE;
-
-        ESP_ERROR_CHECK(
-            gpio_config(
-                &touch_config));
-    }
+    const gpio_num_t all_button_pins[] = {
+        (gpio_num_t)PIN_BTN_VOICE,        // A1 (GPIO 20)
+        (gpio_num_t)PIN_BTN_PAIR,         // A2 (GPIO 21)
+        (gpio_num_t)PIN_BTN_EXPRESSION,   // A3 (GPIO 47)
+        (gpio_num_t)PIN_BTN_VOL_UP,       // A4 (GPIO 48)
+        (gpio_num_t)PIN_BTN_VOL_DOWN,     // A5 (GPIO 45)
+        (gpio_num_t)PIN_BTN_SPOTIFY_NEXT, // A6 (GPIO 0)
+        (gpio_num_t)PIN_BTN_SPOTIFY_PREV  // A7 (GPIO 38)
+    };
 
     uint64_t pin_mask = 0;
-#if BOARD_PIN_IS_ASSIGNED(PIN_BTN_VOICE)
-    pin_mask |= (1ULL << PIN_BTN_VOICE);
-#endif
-#if BOARD_PIN_IS_ASSIGNED(PIN_BTN_PAIR)
-    pin_mask |= (1ULL << PIN_BTN_PAIR);
-#endif
-#if BOARD_PIN_IS_ASSIGNED(PIN_BTN_EXPRESSION)
-    pin_mask |= (1ULL << PIN_BTN_EXPRESSION);
-#endif
-#if BOARD_PIN_IS_ASSIGNED(PIN_BTN_VOL_UP)
-    pin_mask |= (1ULL << PIN_BTN_VOL_UP);
-#endif
-#if BOARD_PIN_IS_ASSIGNED(PIN_BTN_VOL_DOWN)
-    pin_mask |= (1ULL << PIN_BTN_VOL_DOWN);
-#endif
-#if BOARD_PIN_IS_ASSIGNED(PIN_BTN_SPOTIFY_NEXT)
-    pin_mask |= (1ULL << PIN_BTN_SPOTIFY_NEXT);
-#endif
-#if BOARD_PIN_IS_ASSIGNED(PIN_BTN_SPOTIFY_PREV)
-    pin_mask |= (1ULL << PIN_BTN_SPOTIFY_PREV);
-#endif
-    if (pin_mask == 0) {
-        pin_mask = (1ULL << BTN_BOOT) | (1ULL << BTN_VOL_UP) | (1ULL << BTN_VOL_DOWN) | (1ULL << BTN_EXPRESSION);
-    } else {
-        pin_mask |= (1ULL << BTN_BOOT);
+    for (gpio_num_t pin : all_button_pins) {
+        if ((int)pin >= 0) {
+            gpio_reset_pin(pin);
+            gpio_set_direction(pin, GPIO_MODE_INPUT);
+            gpio_set_pull_mode(pin, GPIO_PULLUP_ONLY);
+            pin_mask |= (1ULL << pin);
+        }
     }
 
     gpio_config_t button_config = {};
@@ -215,28 +188,16 @@ void button_init()
     button_config.pull_up_en = GPIO_PULLUP_ENABLE;
     button_config.pull_down_en = GPIO_PULLDOWN_DISABLE;
     button_config.intr_type = GPIO_INTR_DISABLE;
-
     ESP_ERROR_CHECK(gpio_config(&button_config));
-    const bool expression_button_pressed =
-        gpio_get_level(BTN_EXPRESSION) == 0;
 
-    ESP_LOGI(
-        TAG,
-        "Touch backend: %s",
-        native_touch_enabled ? "ESP32-S3 capacitive" : "GPIO digital fallback");
-
-    ESP_LOGI(
-        TAG,
-        "Input ready: touch=%d vol_up=%d vol_down=%d",
-        TOUCH_PIN,
-        BTN_VOL_UP,
-        BTN_VOL_DOWN);
-
-    ESP_LOGI(
-        TAG,
-        "Expression button ready: pin=%d active_low=1 initial_pressed=%d",
-        BTN_EXPRESSION,
-        expression_button_pressed ? 1 : 0);
+    ESP_LOGI(TAG, "7 Physical Buttons initialized (Active-LOW, Internal Pull-Up):");
+    ESP_LOGI(TAG, "  A1_VOICE       -> GPIO %d", PIN_BTN_VOICE);
+    ESP_LOGI(TAG, "  A2_PAIR        -> GPIO %d", PIN_BTN_PAIR);
+    ESP_LOGI(TAG, "  A3_EXPRESSION  -> GPIO %d", PIN_BTN_EXPRESSION);
+    ESP_LOGI(TAG, "  A4_VOLUME_UP   -> GPIO %d", PIN_BTN_VOL_UP);
+    ESP_LOGI(TAG, "  A5_VOLUME_DOWN -> GPIO %d", PIN_BTN_VOL_DOWN);
+    ESP_LOGI(TAG, "  A6_SPOTIFY_NEXT-> GPIO %d", PIN_BTN_SPOTIFY_NEXT);
+    ESP_LOGI(TAG, "  A7_SPOTIFY_PREV-> GPIO %d", PIN_BTN_SPOTIFY_PREV);
 
     s_button_policy.reset();
 }
@@ -247,24 +208,75 @@ void button_update()
 {
     int64_t now = esp_timer_get_time();
 
-    // Read GPIO states
-    const bool expr_down = (gpio_get_level(BTN_EXPRESSION) == 0);
-    const bool boot_down = (gpio_get_level(BTN_BOOT) == 0);
-    const bool vol_up_down = (gpio_get_level(BTN_VOL_UP) == 0);
-    const bool vol_dn_down = (gpio_get_level(BTN_VOL_DOWN) == 0);
+    // Direct pin reads (Active-LOW: 0 = pressed/grounded, 1 = idle/high)
+    const bool btn_voice_down     = (gpio_get_level((gpio_num_t)PIN_BTN_VOICE) == 0);
+    const bool btn_pair_down      = (gpio_get_level((gpio_num_t)PIN_BTN_PAIR) == 0);
+    const bool btn_expr_down      = (gpio_get_level((gpio_num_t)PIN_BTN_EXPRESSION) == 0);
+    const bool btn_vol_up         = (gpio_get_level((gpio_num_t)PIN_BTN_VOL_UP) == 0);
+    const bool btn_vol_dn         = (gpio_get_level((gpio_num_t)PIN_BTN_VOL_DOWN) == 0);
+    const bool btn_spot_next_down = (gpio_get_level((gpio_num_t)PIN_BTN_SPOTIFY_NEXT) == 0);
+    const bool btn_spot_prev_down = (gpio_get_level((gpio_num_t)PIN_BTN_SPOTIFY_PREV) == 0);
+    const bool touch_pad_down     = false; // Disabled per user instruction
+    const bool btn_boot_down      = false;
 
-    bool btn_voice_down = BOARD_PIN_IS_ASSIGNED(PIN_BTN_VOICE) ? (gpio_get_level((gpio_num_t)PIN_BTN_VOICE) == 0) : false;
-    bool btn_pair_down = false;
-    if (BOARD_PIN_IS_ASSIGNED(PIN_BTN_PAIR)) {
-        btn_pair_down = (gpio_get_level((gpio_num_t)PIN_BTN_PAIR) == 0);
+    // Responsive real-time edge detection log for every button
+    static bool prev_voice = false;
+    static bool prev_pair = false;
+    static bool prev_expr = false;
+    static bool prev_vol_up = false;
+    static bool prev_vol_dn = false;
+    static bool prev_spot_next = false;
+    static bool prev_spot_prev = false;
+    static int64_t last_status_log_us = 0;
+
+    if (btn_voice_down != prev_voice) {
+        prev_voice = btn_voice_down;
+        ESP_LOGI(TAG, "⚡ [PIN EVENT] A1_VOICE (GPIO %d) -> %s (level=%d)",
+                 PIN_BTN_VOICE, btn_voice_down ? "GROUNDED (PRESSED)" : "HIGH (RELEASED)", btn_voice_down ? 0 : 1);
     }
-    bool btn_expr_down = BOARD_PIN_IS_ASSIGNED(PIN_BTN_EXPRESSION) ? (gpio_get_level((gpio_num_t)PIN_BTN_EXPRESSION) == 0) : expr_down;
-    bool btn_vol_up = BOARD_PIN_IS_ASSIGNED(PIN_BTN_VOL_UP) ? (gpio_get_level((gpio_num_t)PIN_BTN_VOL_UP) == 0) : vol_up_down;
-    bool btn_vol_dn = BOARD_PIN_IS_ASSIGNED(PIN_BTN_VOL_DOWN) ? (gpio_get_level((gpio_num_t)PIN_BTN_VOL_DOWN) == 0) : vol_dn_down;
-    bool btn_spot_next_down = BOARD_PIN_IS_ASSIGNED(PIN_BTN_SPOTIFY_NEXT) ? (gpio_get_level((gpio_num_t)PIN_BTN_SPOTIFY_NEXT) == 0) : false;
-    bool btn_spot_prev_down = BOARD_PIN_IS_ASSIGNED(PIN_BTN_SPOTIFY_PREV) ? (gpio_get_level((gpio_num_t)PIN_BTN_SPOTIFY_PREV) == 0) : false;
-    bool touch_pad_down = read_touch_level();
-    bool btn_boot_down = boot_down;
+    if (btn_pair_down != prev_pair) {
+        prev_pair = btn_pair_down;
+        ESP_LOGI(TAG, "⚡ [PIN EVENT] A2_PAIR (GPIO %d) -> %s (level=%d)",
+                 PIN_BTN_PAIR, btn_pair_down ? "GROUNDED (PRESSED)" : "HIGH (RELEASED)", btn_pair_down ? 0 : 1);
+    }
+    if (btn_expr_down != prev_expr) {
+        prev_expr = btn_expr_down;
+        ESP_LOGI(TAG, "⚡ [PIN EVENT] A3_EXPRESSION (GPIO %d) -> %s (level=%d)",
+                 PIN_BTN_EXPRESSION, btn_expr_down ? "GROUNDED (PRESSED)" : "HIGH (RELEASED)", btn_expr_down ? 0 : 1);
+    }
+    if (btn_vol_up != prev_vol_up) {
+        prev_vol_up = btn_vol_up;
+        ESP_LOGI(TAG, "⚡ [PIN EVENT] A4_VOLUME_UP (GPIO %d) -> %s (level=%d)",
+                 PIN_BTN_VOL_UP, btn_vol_up ? "GROUNDED (PRESSED)" : "HIGH (RELEASED)", btn_vol_up ? 0 : 1);
+    }
+    if (btn_vol_dn != prev_vol_dn) {
+        prev_vol_dn = btn_vol_dn;
+        ESP_LOGI(TAG, "⚡ [PIN EVENT] A5_VOLUME_DOWN (GPIO %d) -> %s (level=%d)",
+                 PIN_BTN_VOL_DOWN, btn_vol_dn ? "GROUNDED (PRESSED)" : "HIGH (RELEASED)", btn_vol_dn ? 0 : 1);
+    }
+    if (btn_spot_next_down != prev_spot_next) {
+        prev_spot_next = btn_spot_next_down;
+        ESP_LOGI(TAG, "⚡ [PIN EVENT] A6_SPOTIFY_NEXT (GPIO %d) -> %s (level=%d)",
+                 PIN_BTN_SPOTIFY_NEXT, btn_spot_next_down ? "GROUNDED (PRESSED)" : "HIGH (RELEASED)", btn_spot_next_down ? 0 : 1);
+    }
+    if (btn_spot_prev_down != prev_spot_prev) {
+        prev_spot_prev = btn_spot_prev_down;
+        ESP_LOGI(TAG, "⚡ [PIN EVENT] A7_SPOTIFY_PREV (GPIO %d) -> %s (level=%d)",
+                 PIN_BTN_SPOTIFY_PREV, btn_spot_prev_down ? "GROUNDED (PRESSED)" : "HIGH (RELEASED)", btn_spot_prev_down ? 0 : 1);
+    }
+
+    // Periodic live levels every 2 seconds
+    if (now - last_status_log_us >= 2000000LL) {
+        last_status_log_us = now;
+        ESP_LOGI(TAG, "[PIN LIVE LEVELS] A1(%d)=%d A2(%d)=%d A3(%d)=%d A4(%d)=%d A5(%d)=%d A6(%d)=%d A7(%d)=%d",
+                 PIN_BTN_VOICE, btn_voice_down ? 0 : 1,
+                 PIN_BTN_PAIR, btn_pair_down ? 0 : 1,
+                 PIN_BTN_EXPRESSION, btn_expr_down ? 0 : 1,
+                 PIN_BTN_VOL_UP, btn_vol_up ? 0 : 1,
+                 PIN_BTN_VOL_DOWN, btn_vol_dn ? 0 : 1,
+                 PIN_BTN_SPOTIFY_NEXT, btn_spot_next_down ? 0 : 1,
+                 PIN_BTN_SPOTIFY_PREV, btn_spot_prev_down ? 0 : 1);
+    }
 
     // Pairing state owns inputs so face/voice cannot override it
     SystemInteractionState sys_interaction = SystemInteractionState::IDLE;
@@ -303,6 +315,7 @@ void button_update()
         ButtonAction action = s_button_policy.pop_action();
         switch (action) {
             case ButtonAction::VOICE_START:
+                ESP_LOGI(TAG, ">>> [ACTION EXECUTED] VOICE_START (A1 pressed: recording started) <<<");
                 if (getState() == JoyState::IDLE && !joy_ble_is_active()) {
                     if (wakeword_task()) {
                         audio_triggerWakeAck();
@@ -310,19 +323,21 @@ void button_update()
                 }
                 break;
             case ButtonAction::VOICE_STOP:
+                ESP_LOGI(TAG, ">>> [ACTION EXECUTED] VOICE_STOP (A1 pressed: recording stopped & uploading) <<<");
+                audio_playRecordingFinishedCue();
                 request_finish_recording();
                 break;
             case ButtonAction::BLE_OPEN_DISCOVERY: {
+                ESP_LOGI(TAG, ">>> [ACTION EXECUTED] BLE_OPEN_DISCOVERY (A2 held 3s: opening 2-min pairing window) <<<");
                 const joy_runtime_creds_t *runtime = joy_runtime_get();
                 const bool was_provisioned = (runtime && runtime->is_provisioned);
                 if (was_provisioned) {
-                    ESP_LOGI(TAG, ">>> 5-SECOND HOLD DETECTED (PAIRED): Unpairing and opening BLE Pairing Window! <<<");
                     joy_ble_unpair();
                     joy_ble_start_pairing_window();
                 } else {
-                    ESP_LOGI(TAG, ">>> 5-SECOND HOLD DETECTED (UNPAIRED): Opening BLE Pairing Window! <<<");
                     joy_ble_start_pairing_window();
                 }
+                audio_playBleActivated();
                 break;
             }
             case ButtonAction::BLE_PHYSICAL_CONFIRM:
@@ -330,32 +345,42 @@ void button_update()
                 ESP_LOGI(TAG, ">>> PHYSICAL PROOF 2S HOLD CONFIRMED & SENT VIA BLE! <<<");
                 ESP_LOGI(TAG, "=======================================================");
                 joy_ble_on_physical_hold_2s();
+                audio_triggerExpressionAudio(2); // Play "I am excited" (03.wav)
                 break;
             case ButtonAction::EXPRESSION_ASSET_11:
+                ESP_LOGI(TAG, ">>> [ACTION EXECUTED] EXPRESSION_ASSET_11 (A3 pressed: Bad Face / Muka Jelek) <<<");
                 display_trigger_expression_overlay();
+                audio_playGoofyBoingCue(); // Cartoon goofy wobble-boing ("Bleeeh! :P")
                 break;
             case ButtonAction::TOUCH_ASSET_6:
+                ESP_LOGI(TAG, ">>> [ACTION EXECUTED] TOUCH_ASSET_6 (Head touched: Shy / Cute Face) <<<");
                 display_trigger_touch_overlay();
+                audio_triggerExpressionAudio(1); // Play "I am cute" (02.wav)
                 break;
             case ButtonAction::VOLUME_UP:
                 audio_adjustVolume(VOLUME_STEP);
-                ESP_LOGI(TAG, "Volume up: %d", audio_getVolume());
+                ESP_LOGI(TAG, ">>> [ACTION EXECUTED] VOLUME_UP (A4 pressed: Volume %d%%) <<<", audio_getVolume());
+                audio_playVolumeUpCue(); // Rising beep at new volume
                 break;
             case ButtonAction::VOLUME_DOWN:
                 audio_adjustVolume(-VOLUME_STEP);
-                ESP_LOGI(TAG, "Volume down: %d", audio_getVolume());
+                ESP_LOGI(TAG, ">>> [ACTION EXECUTED] VOLUME_DOWN (A5 pressed: Volume %d%%) <<<", audio_getVolume());
+                audio_playVolumeDownCue(); // Falling beep at new volume
                 break;
             case ButtonAction::SPOTIFY_NEXT:
+                ESP_LOGI(TAG, ">>> [ACTION EXECUTED] SPOTIFY_NEXT (A6 pressed: Spotify Next Track) <<<");
+                audio_playSpotifyNextCue(); // Fast forward skip cue
                 api_spotify_queue_action(1);
                 break;
             case ButtonAction::SPOTIFY_PREV:
+                ESP_LOGI(TAG, ">>> [ACTION EXECUTED] SPOTIFY_PREV (A7 pressed: Spotify Previous Track) <<<");
+                audio_playSpotifyPrevCue(); // Fast backward skip cue
                 api_spotify_queue_action(2);
                 break;
             default:
                 break;
         }
     }
-
     // Touch is handled by ButtonPolicy; it never confirms a pairing challenge.
 
 }
