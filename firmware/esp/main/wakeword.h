@@ -10,15 +10,15 @@
 // Digital gain settings for far-field microphone optimization (INMP441 MEMS)
 // Boost multiplier: 2.5x (~+8dB boost) using fixed-point numerator / denominator
 #ifndef MIC_GAIN_NUMERATOR
-#define MIC_GAIN_NUMERATOR 5
+#define MIC_GAIN_NUMERATOR 8
 #endif
 
 #ifndef MIC_GAIN_DENOMINATOR
-#define MIC_GAIN_DENOMINATOR 2
+#define MIC_GAIN_DENOMINATOR 1
 #endif
 
 #ifndef MIC_DIGITAL_GAIN_FACTOR
-#define MIC_DIGITAL_GAIN_FACTOR 2.5f
+#define MIC_DIGITAL_GAIN_FACTOR 8.0f
 #endif
 
 enum class RecordingStatus : uint8_t

@@ -16,16 +16,25 @@
 #include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
-#include "freertos/task.h"
+#include "board_config.h"
+
 static const char *TAG = "AUDIO";
 
 //--------------------------------------------------
 // MAX98357A speaker pins.
 //--------------------------------------------------
 
-#define SPEAKER_I2S_BCLK GPIO_NUM_1
-#define SPEAKER_I2S_WS   GPIO_NUM_2
-#define SPEAKER_I2S_DIN  GPIO_NUM_42
+#if defined(PIN_I2S_SPK_BCLK) && (PIN_I2S_SPK_BCLK >= 0)
+#define SPEAKER_I2S_BCLK static_cast<gpio_num_t>(PIN_I2S_SPK_BCLK)
+#define SPEAKER_I2S_WS   static_cast<gpio_num_t>(PIN_I2S_SPK_WS)
+#define SPEAKER_I2S_DIN  static_cast<gpio_num_t>(PIN_I2S_SPK_DIN)
+#define HAS_SPEAKER_HARDWARE 1
+#else
+#define SPEAKER_I2S_BCLK GPIO_NUM_NC
+#define SPEAKER_I2S_WS   GPIO_NUM_NC
+#define SPEAKER_I2S_DIN  GPIO_NUM_NC
+#define HAS_SPEAKER_HARDWARE 0
+#endif
 
 //--------------------------------------------------
 
@@ -409,6 +418,62 @@ void audio_init()
             return;
         }
     }
+
+#if !HAS_SPEAKER_HARDWARE
+    ESP_LOGW(TAG, "Speaker hardware disabled (pins disabled or assigned to MIC)");
+    if(wake_ack_worker_task_handle == NULL)
+    {
+        BaseType_t ret = xTaskCreatePinnedToCoreWithCaps(
+            wake_ack_worker_task,
+            "wake_ack_worker",
+            4096,
+            NULL,
+            5,
+            &wake_ack_worker_task_handle,
+            0,
+            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if(ret != pdPASS)
+        {
+            ESP_LOGE(TAG, "Failed to create wake_ack_worker task");
+            wake_ack_worker_task_handle = NULL;
+        }
+    }
+    if(thinking_filler_task_handle == NULL)
+    {
+        BaseType_t ret = xTaskCreatePinnedToCoreWithCaps(
+            thinking_filler_worker_task,
+            "thinking_filler",
+            4096,
+            NULL,
+            4,
+            &thinking_filler_task_handle,
+            0,
+            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if(ret != pdPASS)
+        {
+            ESP_LOGE(TAG, "Failed to create thinking_filler task");
+            thinking_filler_task_handle = NULL;
+        }
+    }
+    if(expression_audio_task_handle == NULL)
+    {
+        BaseType_t ret = xTaskCreatePinnedToCoreWithCaps(
+            expression_audio_worker_task,
+            "expression_audio",
+            4096,
+            NULL,
+            5,
+            &expression_audio_task_handle,
+            0,
+            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if(ret != pdPASS)
+        {
+            ESP_LOGE(TAG, "Failed to create expression_audio task");
+            expression_audio_task_handle = NULL;
+        }
+    }
+    return;
+#endif
 
     i2s_chan_config_t channel_config =
         I2S_CHANNEL_DEFAULT_CONFIG(

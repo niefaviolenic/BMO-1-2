@@ -23,15 +23,17 @@
     #define PIN_LCD_CS   5
     #define PIN_LCD_RST  4
 
-    #define PIN_I2S_SPK_BCLK 1
-    #define PIN_I2S_SPK_WS   2
-    #define PIN_I2S_SPK_DIN  42
+    // Speaker pins (disabled: pins 1, 2, 42 assigned to MIC)
+    #define PIN_I2S_SPK_BCLK (-1)
+    #define PIN_I2S_SPK_WS   (-1)
+    #define PIN_I2S_SPK_DIN  (-1)
 
-    #define PIN_I2S_MIC_BCLK 39
-    #define PIN_I2S_MIC_WS   40
-    #define PIN_I2S_MIC_DIN  41
+    // Microphone I2S pins (SD=1, SCK=2, WS=42)
+    #define PIN_I2S_MIC_BCLK 2   // SCK (Clock)
+    #define PIN_I2S_MIC_WS   42  // WS (Word Select / LRCLK)
+    #define PIN_I2S_MIC_DIN  1   // SD (Serial Data into ESP32)
 
-    #define PIN_TOUCH_PAD (-1) // Touch pad disabled per user request
+    #define PIN_TOUCH_PAD 41 // Digital touch sensor I/O on GPIO 41
 
     // 7 Physical buttons confirmed by hardware team
     #define PIN_BTN_VOICE        20  // A1 (Segitiga)
@@ -72,15 +74,15 @@
     #define PIN_LCD_DC   9
     #define PIN_LCD_RST  8
 
-    #define PIN_I2S_SPK_BCLK 1
-    #define PIN_I2S_SPK_WS   2
-    #define PIN_I2S_SPK_DIN  42
+    #define PIN_I2S_SPK_BCLK (-1)
+    #define PIN_I2S_SPK_WS   (-1)
+    #define PIN_I2S_SPK_DIN  (-1)
 
-    #define PIN_I2S_MIC_BCLK 5
-    #define PIN_I2S_MIC_WS   4
-    #define PIN_I2S_MIC_DIN  6
+    #define PIN_I2S_MIC_BCLK 2   // SCK
+    #define PIN_I2S_MIC_WS   42  // WS
+    #define PIN_I2S_MIC_DIN  1   // SD
 
-    #define PIN_TOUCH_PAD        (-1)
+    #define PIN_TOUCH_PAD    41
 
     #define PIN_BTN_VOICE        20  // A1 (Segitiga)
     #define PIN_BTN_PAIR         21  // A2 (Bulat kecil)
@@ -99,13 +101,13 @@
     #define PIN_LCD_DC   9
     #define PIN_LCD_RST  8
 
-    #define PIN_I2S_SPK_BCLK 1
-    #define PIN_I2S_SPK_WS   2
-    #define PIN_I2S_SPK_DIN  42
+    #define PIN_I2S_SPK_BCLK (-1)
+    #define PIN_I2S_SPK_WS   (-1)
+    #define PIN_I2S_SPK_DIN  (-1)
 
-    #define PIN_I2S_MIC_BCLK 5
-    #define PIN_I2S_MIC_WS   4
-    #define PIN_I2S_MIC_DIN  6
+    #define PIN_I2S_MIC_BCLK 2
+    #define PIN_I2S_MIC_WS   42
+    #define PIN_I2S_MIC_DIN  1
 
     #define PIN_TOUCH_PAD 14
     #define PIN_BOOT_BTN  0

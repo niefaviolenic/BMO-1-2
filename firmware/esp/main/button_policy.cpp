@@ -188,9 +188,13 @@ void ButtonPolicy::update_raw(
         push_action(ButtonAction::EXPRESSION_ASSET_11);
     }
 
-    // 4. Touch pad: short touch in IDLE
-    if (touch_edge && sys_state == SystemInteractionState::IDLE) {
-        push_action(ButtonAction::TOUCH_ASSET_6);
+    // 4. Touch pad: Tap-to-Talk / Touch-to-Wake in IDLE or stop recording in RECORDING
+    if (touch_edge) {
+        if (sys_state == SystemInteractionState::IDLE) {
+            push_action(ButtonAction::TOUCH_ASSET_6);
+        } else if (sys_state == SystemInteractionState::RECORDING) {
+            push_action(ButtonAction::VOICE_STOP);
+        }
     }
 
     // 5. Volume buttons: cancel as a pair if simultaneous

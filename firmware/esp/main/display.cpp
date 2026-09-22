@@ -1766,6 +1766,8 @@ void display_set_mode(DisplayMode mode)
         cancel_shy_animation();
         audio_cancelExpressionAudio();
         cancel_unpaired_revert_timer_locked();
+        ble_pairing_active = false;
+        ble_pairing_remaining_sec = 0;
     }
 
     if(!lock_display(pdMS_TO_TICKS(1000)))

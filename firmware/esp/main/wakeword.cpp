@@ -57,13 +57,13 @@ static const char *TAG = "WAKE";
 #define PREROLL_BUFFER_SAMPLES 24000 // ~1.5s at 16kHz mono circular pre-roll buffer
 
 #ifndef MIC_GAIN_NUMERATOR
-#define MIC_GAIN_NUMERATOR 5
+#define MIC_GAIN_NUMERATOR 8
 #endif
 #ifndef MIC_GAIN_DENOMINATOR
-#define MIC_GAIN_DENOMINATOR 2
+#define MIC_GAIN_DENOMINATOR 1
 #endif
 #ifndef MIC_DIGITAL_GAIN_FACTOR
-#define MIC_DIGITAL_GAIN_FACTOR 2.5f
+#define MIC_DIGITAL_GAIN_FACTOR 8.0f
 #endif
 
 #define SILENCE_THRESHOLD 400
@@ -406,6 +406,9 @@ static int sample_peak(
         if(value < 0)
             value = -value;
 
+        if(value > 32767)
+            value = 32767;
+
         if(value > peak)
             peak = value;
     }
@@ -441,10 +444,18 @@ static esp_err_t wakeword_i2s_init(
     if(i2s_rx_handle != NULL)
         return ESP_OK;
 
+    gpio_reset_pin(WAKEWORD_I2S_BCLK);
+    gpio_reset_pin(WAKEWORD_I2S_WS);
+    gpio_reset_pin(WAKEWORD_I2S_DIN);
+    gpio_set_pull_mode(WAKEWORD_I2S_DIN, GPIO_FLOATING);
+
     i2s_chan_config_t channel_config =
         I2S_CHANNEL_DEFAULT_CONFIG(
             I2S_NUM_1,
             I2S_ROLE_MASTER);
+    channel_config.dma_desc_num = 8;
+    channel_config.dma_frame_num = 256;
+
     ESP_RETURN_ON_ERROR(
         i2s_new_channel(
             &channel_config,
@@ -462,10 +473,13 @@ static esp_err_t wakeword_i2s_init(
     std_config.slot_cfg =
         I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(
             I2S_DATA_BIT_WIDTH_32BIT,
-            I2S_SLOT_MODE_MONO);
+            I2S_SLOT_MODE_STEREO);
+
+    std_config.slot_cfg.slot_bit_width =
+        I2S_SLOT_BIT_WIDTH_32BIT;
 
     std_config.slot_cfg.slot_mask =
-        I2S_STD_SLOT_LEFT;
+        I2S_STD_SLOT_BOTH;
 
     std_config.gpio_cfg.mclk =
         I2S_GPIO_UNUSED;
@@ -506,7 +520,7 @@ static esp_err_t wakeword_i2s_init(
 
     ESP_LOGI(
         TAG,
-        "I2S mic ready: BCLK=%d WS=%d DIN=%d rate=%d gain=%.1fx (%d/%d)",
+        "I2S mic ready: BCLK=%d WS=%d DIN=%d rate=%d mode=STEREO_32BIT gain=%.1fx (%d/%d)",
         WAKEWORD_I2S_BCLK,
         WAKEWORD_I2S_WS,
         WAKEWORD_I2S_DIN,
@@ -529,6 +543,11 @@ static void wakeword_listener_task(
         xTaskGetTickCount() +
         pdMS_TO_TICKS(WAKEWORD_STARTUP_GUARD_MS);
 
+    static bool s_prefer_right_channel = false;
+    int window_max_peak = 0;
+    int window_max_l = 0;
+    int window_max_r = 0;
+
     ESP_LOGI(
         TAG,
         "Listening for Hi Joy");
@@ -541,7 +560,7 @@ static void wakeword_listener_task(
             i2s_channel_read(
                 i2s_rx_handle,
                 raw_i2s_buffer,
-                wakeword_chunk_size * sizeof(int32_t),
+                wakeword_chunk_size * 2 * sizeof(int32_t),
                 &bytes_read,
                 RECORD_I2S_READ_TIMEOUT_MS);
 
@@ -581,10 +600,10 @@ static void wakeword_listener_task(
             continue;
         }
 
-        int raw_samples =
-            bytes_read / sizeof(int32_t);
+        int stereo_samples =
+            bytes_read / (2 * sizeof(int32_t));
 
-        if(raw_samples == 0)
+        if(stereo_samples == 0)
         {
             if(get_recording_status() == RecordingStatus::ACTIVE)
             {
@@ -596,7 +615,7 @@ static void wakeword_listener_task(
             continue;
         }
 
-        if(raw_samples < wakeword_chunk_size)
+        if(stereo_samples < wakeword_chunk_size)
         {
             if(get_recording_status() == RecordingStatus::ACTIVE)
             {
@@ -608,13 +627,43 @@ static void wakeword_listener_task(
             continue;
         }
 
+        // Extract 16-bit audio samples from 32-bit slot (INMP441 24-bit MSB-aligned)
+        int chunk_max_l = 0;
+        int chunk_max_r = 0;
         for(int i = 0; i < wakeword_chunk_size; i++)
         {
-            int16_t raw_sample =
-                (int16_t)(raw_i2s_buffer[i] >> 16);
-            sample_buffer[i] =
-                apply_mic_gain(raw_sample);
+            // Shift by 14 to convert 24-bit aligned data to 16-bit with optimal sensitivity
+            int32_t val_l = raw_i2s_buffer[2 * i] >> 14;
+            int32_t val_r = raw_i2s_buffer[2 * i + 1] >> 14;
+
+            int abs_l = abs((int)val_l);
+            int abs_r = abs((int)val_r);
+            if(abs_l > chunk_max_l) chunk_max_l = abs_l;
+            if(abs_r > chunk_max_r) chunk_max_r = abs_r;
         }
+
+        // Dynamically select channel without interleaving waveform (which would distort acoustics)
+        if(chunk_max_r > chunk_max_l * 2 && chunk_max_r > 50) {
+            s_prefer_right_channel = true;
+        } else if(chunk_max_l > chunk_max_r * 2 && chunk_max_l > 50) {
+            s_prefer_right_channel = false;
+        }
+
+        for(int i = 0; i < wakeword_chunk_size; i++)
+        {
+            int32_t val = s_prefer_right_channel ? (raw_i2s_buffer[2 * i + 1] >> 14)
+                                                 : (raw_i2s_buffer[2 * i] >> 14);
+
+            if (val > 32767) val = 32767;
+            else if (val < -32768) val = -32768;
+
+            sample_buffer[i] = apply_mic_gain((int16_t)val);
+        }
+
+        int current_peak = sample_peak(sample_buffer, wakeword_chunk_size);
+        if(current_peak > window_max_peak) window_max_peak = current_peak;
+        if(chunk_max_l > window_max_l) window_max_l = chunk_max_l;
+        if(chunk_max_r > window_max_r) window_max_r = chunk_max_r;
 
         frame_count++;
 
@@ -623,14 +672,52 @@ static void wakeword_listener_task(
             continue;
         }
 
-        if((frame_count % 100) == 0)
+        if((frame_count % 50) == 0)
         {
+            int nz_count = 0;
+            int first_nz_idx = -1;
+            uint32_t first_nz_val = 0;
+            int max_idx = 0;
+            int32_t max_val = 0;
+            for(int k = 0; k < wakeword_chunk_size * 2; k++) {
+                if(raw_i2s_buffer[k] != 0) {
+                    nz_count++;
+                    if(first_nz_idx < 0) {
+                        first_nz_idx = k;
+                        first_nz_val = (uint32_t)raw_i2s_buffer[k];
+                    }
+                    if(abs((int)(raw_i2s_buffer[k] >> 16)) > abs((int)(max_val >> 16))) {
+                        max_val = raw_i2s_buffer[k];
+                        max_idx = k;
+                    }
+                }
+            }
+
             ESP_LOGI(
                 TAG,
-                "Mic peak: %d",
-                sample_peak(
-                    sample_buffer,
-                    wakeword_chunk_size));
+                "Mic peak: %d (window peak=%d, raw L=%d, R=%d, ch=%s, gain=%.1fx, state=%s)",
+                current_peak,
+                window_max_peak,
+                window_max_l,
+                window_max_r,
+                s_prefer_right_channel ? "RIGHT" : "LEFT",
+                (double)MIC_DIGITAL_GAIN_FACTOR,
+                (getState() == JoyState::RECORDING ? "RECORDING" : (getState() == JoyState::IDLE ? "IDLE" : "BUSY")));
+            ESP_LOGI(
+                TAG,
+                "Buffer stats: bytes=%u nz=%d/%d first_nz[%d]=0x%08lX max[%d]=0x%08lX (L0=0x%08lX R0=0x%08lX)",
+                (unsigned)bytes_read,
+                nz_count,
+                wakeword_chunk_size * 2,
+                first_nz_idx,
+                (unsigned long)first_nz_val,
+                max_idx,
+                (unsigned long)max_val,
+                (unsigned long)raw_i2s_buffer[0],
+                (unsigned long)raw_i2s_buffer[1]);
+            window_max_peak = 0;
+            window_max_l = 0;
+            window_max_r = 0;
         }
 
         JoyState current_state = getState();
@@ -653,10 +740,14 @@ static void wakeword_listener_task(
 
                 if(detected == WAKENET_DETECTED)
                 {
-                    PairingSnapshot pairing_snapshot = pairing_get_snapshot();
-                    if (pairing_snapshot.phase != PairingPhase::NONE || display_pairing_code_is_visible() || display_qr_code_is_visible() || display_ble_pairing_is_visible())
+                    if (display_ble_pairing_is_visible())
                     {
-                        ESP_LOGW(TAG, "Hi Joy detected but ignored: robot is in pairing mode or QR display mode");
+                        display_hide_ble_pairing();
+                    }
+                    PairingSnapshot pairing_snapshot = pairing_get_snapshot();
+                    if (pairing_snapshot.phase != PairingPhase::NONE || display_pairing_code_is_visible() || display_qr_code_is_visible())
+                    {
+                        ESP_LOGW(TAG, "Hi Joy detected but ignored: active pairing proof in progress");
                         continue;
                     }
 
@@ -692,6 +783,8 @@ static void wakeword_listener_task(
             bool leading_silence_reached = false;
             int samples_to_copy = 0;
 
+            bool speech_just_detected = false;
+
             portENTER_CRITICAL(&recording_mux);
 
             if(!recording_is_active_locked() || record_buffer == NULL)
@@ -726,6 +819,7 @@ static void wakeword_listener_task(
                             recording_speech_detected = true;
                             speech_samples += samples_to_copy;
                             silence_samples = 0;
+                            speech_just_detected = true;
                         }
                         else
                         {
@@ -761,6 +855,11 @@ static void wakeword_listener_task(
             }
 
             portEXIT_CRITICAL(&recording_mux);
+
+            if(speech_just_detected)
+            {
+                ESP_LOGI(TAG, "Recording speech detected! (peak: %d >= threshold: %d)", peak, SILENCE_THRESHOLD);
+            }
 
             if(buffer_unavailable)
             {
@@ -944,7 +1043,7 @@ void wakeword_init()
 
     raw_i2s_buffer =
         (int32_t *)calloc(
-            wakeword_chunk_size,
+            wakeword_chunk_size * 2,
             sizeof(int32_t));
 
     if(sample_buffer == NULL ||
@@ -1006,10 +1105,14 @@ void wakeword_init()
 
 bool wakeword_task()
 {
-    PairingSnapshot pairing_snapshot = pairing_get_snapshot();
-    if (pairing_snapshot.phase != PairingPhase::NONE || display_pairing_code_is_visible() || display_qr_code_is_visible() || display_ble_pairing_is_visible())
+    if (display_ble_pairing_is_visible())
     {
-        ESP_LOGW(TAG, "Wake task rejected: robot is in pairing mode or QR display mode");
+        display_hide_ble_pairing();
+    }
+    PairingSnapshot pairing_snapshot = pairing_get_snapshot();
+    if (pairing_snapshot.phase != PairingPhase::NONE || display_pairing_code_is_visible() || display_qr_code_is_visible())
+    {
+        ESP_LOGW(TAG, "Wake task rejected: active pairing proof in progress");
         return false;
     }
 
