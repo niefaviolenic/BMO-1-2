@@ -23,10 +23,10 @@
     #define PIN_LCD_CS   5
     #define PIN_LCD_RST  4
 
-    // Speaker pins (disabled: pins 1, 2, 42 assigned to MIC)
-    #define PIN_I2S_SPK_BCLK (-1)
-    #define PIN_I2S_SPK_WS   (-1)
-    #define PIN_I2S_SPK_DIN  (-1)
+    // Speaker pins (MAX98357A I2S DAC Amplifier)
+    #define PIN_I2S_SPK_BCLK 16
+    #define PIN_I2S_SPK_WS   17
+    #define PIN_I2S_SPK_DIN  39
 
     // Microphone I2S pins (SD=1, SCK=2, WS=42)
     #define PIN_I2S_MIC_BCLK 2   // SCK (Clock)
@@ -67,16 +67,25 @@
 #elif defined(CONFIG_JOY_BOARD_PROFILE_BMO_V2_REFERENCE) || defined(JOY_BOARD_PROFILE_BMO_V2_REFERENCE)
     #define BOARD_PROFILE_NAME "bmo_v2_reference"
 
-    #define PIN_LCD_MOSI 11
-    #define PIN_LCD_MISO 13
-    #define PIN_LCD_SCLK 12
-    #define PIN_LCD_CS   10
-    #define PIN_LCD_DC   9
-    #define PIN_LCD_RST  8
+    // 3.5-inch HX8357-B 8-bit Intel 8080 bus LCD (sync with production)
+    #define PIN_LCD_D0   12
+    #define PIN_LCD_D1   13
+    #define PIN_LCD_D2   18
+    #define PIN_LCD_D3   3
+    #define PIN_LCD_D4   46
+    #define PIN_LCD_D5   9
+    #define PIN_LCD_D6   10
+    #define PIN_LCD_D7   11
+    #define PIN_LCD_RD   (-1)
+    #define PIN_LCD_WR   7
+    #define PIN_LCD_RS   6
+    #define PIN_LCD_CS   5
+    #define PIN_LCD_RST  4
 
-    #define PIN_I2S_SPK_BCLK (-1)
-    #define PIN_I2S_SPK_WS   (-1)
-    #define PIN_I2S_SPK_DIN  (-1)
+    // Speaker pins (MAX98357A I2S DAC Amplifier)
+    #define PIN_I2S_SPK_BCLK 16
+    #define PIN_I2S_SPK_WS   17
+    #define PIN_I2S_SPK_DIN  39
 
     #define PIN_I2S_MIC_BCLK 2   // SCK
     #define PIN_I2S_MIC_WS   42  // WS
@@ -101,9 +110,9 @@
     #define PIN_LCD_DC   9
     #define PIN_LCD_RST  8
 
-    #define PIN_I2S_SPK_BCLK (-1)
-    #define PIN_I2S_SPK_WS   (-1)
-    #define PIN_I2S_SPK_DIN  (-1)
+    #define PIN_I2S_SPK_BCLK 16
+    #define PIN_I2S_SPK_WS   17
+    #define PIN_I2S_SPK_DIN  39
 
     #define PIN_I2S_MIC_BCLK 2
     #define PIN_I2S_MIC_WS   42

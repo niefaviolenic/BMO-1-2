@@ -2,7 +2,7 @@ import sys
 import time
 import serial
 
-PORT = sys.argv[1] if len(sys.argv) > 1 else "COM12"
+PORT = sys.argv[1] if len(sys.argv) > 1 else "COM5"
 BAUD = int(sys.argv[2]) if len(sys.argv) > 2 else 115200
 
 while True:

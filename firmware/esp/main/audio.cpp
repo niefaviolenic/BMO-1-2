@@ -479,6 +479,8 @@ void audio_init()
         I2S_CHANNEL_DEFAULT_CONFIG(
             I2S_NUM_0,
             I2S_ROLE_MASTER);
+    channel_config.dma_desc_num = 8;
+    channel_config.dma_frame_num = 256;
     channel_config.auto_clear_after_cb = true;
     channel_config.auto_clear_before_cb = true;
     esp_err_t result =

@@ -57,13 +57,13 @@ static const char *TAG = "WAKE";
 #define PREROLL_BUFFER_SAMPLES 24000 // ~1.5s at 16kHz mono circular pre-roll buffer
 
 #ifndef MIC_GAIN_NUMERATOR
-#define MIC_GAIN_NUMERATOR 8
+#define MIC_GAIN_NUMERATOR 5
 #endif
 #ifndef MIC_GAIN_DENOMINATOR
-#define MIC_GAIN_DENOMINATOR 1
+#define MIC_GAIN_DENOMINATOR 2
 #endif
 #ifndef MIC_DIGITAL_GAIN_FACTOR
-#define MIC_DIGITAL_GAIN_FACTOR 8.0f
+#define MIC_DIGITAL_GAIN_FACTOR 2.5f
 #endif
 
 #define SILENCE_THRESHOLD 400
@@ -447,8 +447,7 @@ static esp_err_t wakeword_i2s_init(
     gpio_reset_pin(WAKEWORD_I2S_BCLK);
     gpio_reset_pin(WAKEWORD_I2S_WS);
     gpio_reset_pin(WAKEWORD_I2S_DIN);
-    gpio_set_pull_mode(WAKEWORD_I2S_DIN, GPIO_FLOATING);
-
+    gpio_set_pull_mode(WAKEWORD_I2S_DIN, GPIO_PULLDOWN_ONLY);
     i2s_chan_config_t channel_config =
         I2S_CHANNEL_DEFAULT_CONFIG(
             I2S_NUM_1,
@@ -572,8 +571,15 @@ static void wakeword_listener_task(
 
         if(read_result != ESP_OK)
         {
-            RecordingStatus status = get_recording_status();
+            static TickType_t s_last_read_err_log = 0;
+            if((now - s_last_read_err_log) >= pdMS_TO_TICKS(2000))
+            {
+                s_last_read_err_log = now;
+                ESP_LOGW(TAG, "[MIC DIAG] I2S DMA read error: %s (BCLK=%d, WS=%d, DIN=%d)",
+                         esp_err_to_name(read_result), WAKEWORD_I2S_BCLK, WAKEWORD_I2S_WS, WAKEWORD_I2S_DIN);
+            }
 
+            RecordingStatus status = get_recording_status();
             if(status == RecordingStatus::ACTIVE)
             {
                 if(read_result == ESP_ERR_TIMEOUT)
@@ -617,6 +623,13 @@ static void wakeword_listener_task(
 
         if(stereo_samples < wakeword_chunk_size)
         {
+            static TickType_t s_last_underflow_log = 0;
+            if((now - s_last_underflow_log) >= pdMS_TO_TICKS(2000))
+            {
+                s_last_underflow_log = now;
+                ESP_LOGW(TAG, "[MIC DIAG] I2S DMA partial read/underflow: got %d samples, expected %d",
+                         stereo_samples, wakeword_chunk_size);
+            }
             if(get_recording_status() == RecordingStatus::ACTIVE)
             {
                 fail_recording(
@@ -628,13 +641,13 @@ static void wakeword_listener_task(
         }
 
         // Extract 16-bit audio samples from 32-bit slot (INMP441 24-bit MSB-aligned)
+        // Bits [31..16] are standard 16-bit PCM. Shift by 16 for clean, unclipped speech.
         int chunk_max_l = 0;
         int chunk_max_r = 0;
         for(int i = 0; i < wakeword_chunk_size; i++)
         {
-            // Shift by 14 to convert 24-bit aligned data to 16-bit with optimal sensitivity
-            int32_t val_l = raw_i2s_buffer[2 * i] >> 14;
-            int32_t val_r = raw_i2s_buffer[2 * i + 1] >> 14;
+            int32_t val_l = raw_i2s_buffer[2 * i] >> 16;
+            int32_t val_r = raw_i2s_buffer[2 * i + 1] >> 16;
 
             int abs_l = abs((int)val_l);
             int abs_r = abs((int)val_r);
@@ -642,20 +655,17 @@ static void wakeword_listener_task(
             if(abs_r > chunk_max_r) chunk_max_r = abs_r;
         }
 
-        // Dynamically select channel without interleaving waveform (which would distort acoustics)
-        if(chunk_max_r > chunk_max_l * 2 && chunk_max_r > 50) {
-            s_prefer_right_channel = true;
-        } else if(chunk_max_l > chunk_max_r * 2 && chunk_max_l > 50) {
+        // Primary channel is LEFT (INMP441 with L/R tied to GND).
+        // Only switch to RIGHT if LEFT is silent and RIGHT has clear signal (L/R tied to VDD).
+        if(chunk_max_l > 10) {
             s_prefer_right_channel = false;
+        } else if(chunk_max_l == 0 && chunk_max_r > 30) {
+            s_prefer_right_channel = true;
         }
-
         for(int i = 0; i < wakeword_chunk_size; i++)
         {
-            int32_t val = s_prefer_right_channel ? (raw_i2s_buffer[2 * i + 1] >> 14)
-                                                 : (raw_i2s_buffer[2 * i] >> 14);
-
-            if (val > 32767) val = 32767;
-            else if (val < -32768) val = -32768;
+            int32_t val = s_prefer_right_channel ? (raw_i2s_buffer[2 * i + 1] >> 16)
+                                                 : (raw_i2s_buffer[2 * i] >> 16);
 
             sample_buffer[i] = apply_mic_gain((int16_t)val);
         }
@@ -715,6 +725,22 @@ static void wakeword_listener_task(
                 (unsigned long)max_val,
                 (unsigned long)raw_i2s_buffer[0],
                 (unsigned long)raw_i2s_buffer[1]);
+            if(nz_count == 0)
+            {
+                static int s_zero_diag_count = 0;
+                if((++s_zero_diag_count % 3) == 0)
+                {
+                    ESP_LOGW(TAG,
+                             "[MIC DIAG] All %d samples are 0x00000000! Check INMP441: VDD=3.3V, GND, SD->GPIO%d, SCK->GPIO%d, WS->GPIO%d, L/R->GND",
+                             wakeword_chunk_size * 2, WAKEWORD_I2S_DIN, WAKEWORD_I2S_BCLK, WAKEWORD_I2S_WS);
+                }
+            }
+            else if(nz_count == wakeword_chunk_size * 2 && (first_nz_val == 0xFFFFFFFF || first_nz_val == 0x7FFFFFFF))
+            {
+                ESP_LOGW(TAG, "[MIC DIAG] All samples saturated (0x%08lX)! DIN pin may be floating HIGH or shorted to VDD",
+                         (unsigned long)first_nz_val);
+            }
+
             window_max_peak = 0;
             window_max_l = 0;
             window_max_r = 0;
@@ -740,6 +766,7 @@ static void wakeword_listener_task(
 
                 if(detected == WAKENET_DETECTED)
                 {
+                    ESP_LOGI(TAG, ">>> [WAKENET DETECTED] Wake word 'Hi Joy' recognized! Triggering listening face & recording <<<");
                     if (display_ble_pairing_is_visible())
                     {
                         display_hide_ble_pairing();
@@ -997,8 +1024,7 @@ void wakeword_init()
     wakenet_data =
         wakenet->create(
             model_name,
-            DET_MODE_90);
-
+            DET_MODE_95);
     if(wakenet_data == NULL)
     {
         ESP_LOGE(

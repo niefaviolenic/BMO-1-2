@@ -86,7 +86,7 @@ file(GENERATE
     OUTPUT "${JOY_CREDENTIAL_HEADER}"
     CONTENT "#pragma once\n#define JOY_DEVICE_ID \"${JOY_DEVICE_ID_FROM_ENV}\"\n#define JOY_DEVICE_TOKEN \"${JOY_DEVICE_TOKEN_ESCAPED}\"\n")
 
-set(JOY_BOARD_PROFILE "bmo_v2_reference" CACHE STRING "Board profile to build: bmo_v2_reference, bmo_v2, or legacy_v1")
+set(JOY_BOARD_PROFILE "bmo_v2" CACHE STRING "Board profile to build: bmo_v2, bmo_v2_reference, or legacy_v1")
 
 if(JOY_BOARD_PROFILE STREQUAL "bmo_v2")
     add_compile_definitions(JOY_BOARD_PROFILE_BMO_V2=1)

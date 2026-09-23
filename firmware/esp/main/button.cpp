@@ -44,100 +44,6 @@ static const char *TAG="BUTTON";
 
 static ButtonPolicy s_button_policy;
 
-// GPIO14 is an ESP32-S3 native touch channel. The previous implementation
-// treated it only as a digital input, which cannot detect a bare capacitive
-// pad. Keep the digital fallback if native touch setup is unavailable.
-#if JOY_HAS_TOUCH_PAD
-static constexpr touch_pad_t TOUCH_CHANNEL = TOUCH_PAD_NUM14;
-#endif
-static bool native_touch_enabled = false;
-static bool native_touch_level = false;
-static bool native_touch_baseline_ready = false;
-static uint32_t native_touch_raw = 0;
-static uint32_t native_touch_baseline = 0;
-static uint32_t native_touch_threshold = 0;
-static uint64_t native_touch_calibration_sum = 0;
-static int native_touch_calibration_samples = 0;
-
-static bool native_touch_init()
-{
-#if JOY_HAS_TOUCH_PAD
-    if(touch_pad_init() != ESP_OK)
-        return false;
-
-    if(touch_pad_config(TOUCH_CHANNEL) != ESP_OK ||
-       touch_pad_set_voltage(TOUCH_PAD_HIGH_VOLTAGE_THRESHOLD, TOUCH_PAD_LOW_VOLTAGE_THRESHOLD, TOUCH_PAD_ATTEN_VOLTAGE_THRESHOLD) != ESP_OK ||
-       touch_pad_set_cnt_mode(TOUCH_CHANNEL, TOUCH_PAD_SLOPE_7, TOUCH_PAD_TIE_OPT_LOW) != ESP_OK ||
-       touch_pad_set_fsm_mode(TOUCH_FSM_MODE_TIMER) != ESP_OK ||
-       touch_pad_fsm_start() != ESP_OK)
-    {
-        (void)touch_pad_deinit();
-        return false;
-    }
-    native_touch_enabled = true;
-    native_touch_level = false;
-    native_touch_baseline_ready = false;
-    native_touch_raw = 0;
-    native_touch_baseline = 0;
-    native_touch_threshold = 2500;
-    native_touch_calibration_sum = 0;
-    native_touch_calibration_samples = 0;
-    ESP_LOGI(TAG, "Native touch sensor initialized in timer FSM mode with filter on GPIO14 (T%d)", TOUCH_CHANNEL);
-    return true;
-#else
-    return false;
-#endif
-}
-
-static bool native_touch_update()
-{
-#if JOY_HAS_TOUCH_PAD
-    if(!native_touch_enabled)
-        return false;
-
-    uint32_t val = 0;
-    if(touch_pad_filter_read_smooth(TOUCH_CHANNEL, &val) != ESP_OK)
-    {
-        if(touch_pad_read_raw_data(TOUCH_CHANNEL, &val) != ESP_OK)
-            return false;
-    }
-
-    native_touch_raw = val;
-    if(!native_touch_baseline_ready)
-    {
-        native_touch_calibration_sum += val;
-        native_touch_calibration_samples++;
-        if(native_touch_calibration_samples >= 32)
-        {
-            native_touch_baseline = (uint32_t)(native_touch_calibration_sum / 32ULL);
-            native_touch_threshold = 2500U;
-            native_touch_baseline_ready = true;
-            ESP_LOGI(TAG, "Native touch calibrated: baseline=%lu delta_thresh=%lu",
-                     (unsigned long)native_touch_baseline,
-                     (unsigned long)native_touch_threshold);
-        }
-        return false;
-    }
-
-    uint32_t delta = (val > native_touch_baseline) ? (val - native_touch_baseline) : (native_touch_baseline - val);
-
-    if (delta >= native_touch_threshold)
-    {
-        native_touch_level = true;
-        // Never adjust baseline while pressed
-    }
-    else
-    {
-        native_touch_level = false;
-        // Very slow baseline tracking when untouched (over 256 samples)
-        native_touch_baseline = (native_touch_baseline * 255U + val) / 256U;
-    }
-
-    return native_touch_level;
-#else
-    return false;
-#endif
-}
 static bool read_touch_level()
 {
 #if defined(PIN_TOUCH_PAD) && (PIN_TOUCH_PAD >= 0)
@@ -147,18 +53,6 @@ static bool read_touch_level()
 #endif
 }
 
-static const char *joy_state_name(JoyState state)
-{
-    switch(state)
-    {
-        case JoyState::IDLE: return "IDLE";
-        case JoyState::RECORDING: return "RECORDING";
-        case JoyState::THINKING: return "THINKING";
-        case JoyState::SPEAKING: return "SPEAKING";
-        case JoyState::ERROR_STATE: return "ERROR";
-        default: return "UNKNOWN";
-    }
-}
 
 //--------------------------------------------------
 
