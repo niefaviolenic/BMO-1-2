@@ -15,6 +15,56 @@
 #include "freertos/task.h"
 #include "esp_heap_caps.h"
 
+#include <cstdio>
+#include <cstring>
+
+static void serial_cli_task(void *param)
+{
+    vTaskDelay(pdMS_TO_TICKS(1500));
+    ESP_LOGI("CLI", "==================================================");
+    ESP_LOGI("CLI", " Joy Serial CLI Ready");
+    ESP_LOGI("CLI", " Command: WIFI:<SSID>:<PASSWORD>");
+    ESP_LOGI("CLI", " Example: WIFI:MyWifiNetwork:mypassword123");
+    ESP_LOGI("CLI", " Status : STATUS");
+    ESP_LOGI("CLI", "==================================================");
+
+    char line_buf[128];
+    while (true)
+    {
+        if (fgets(line_buf, sizeof(line_buf), stdin) != NULL)
+        {
+            size_t len = strlen(line_buf);
+            while (len > 0 && (line_buf[len - 1] == '\r' || line_buf[len - 1] == '\n'))
+            {
+                line_buf[--len] = '\0';
+            }
+            if (len == 0) continue;
+
+            if (strncmp(line_buf, "WIFI:", 5) == 0)
+            {
+                char *ssid = line_buf + 5;
+                char *colon = strchr(ssid, ':');
+                char *pass = NULL;
+                if (colon)
+                {
+                    *colon = '\0';
+                    pass = colon + 1;
+                }
+                ESP_LOGI("CLI", ">> Received Wi-Fi config via Serial CLI: SSID=\"%s\"", ssid);
+                wifi_connect_to_ap(ssid, pass ? pass : "");
+            }
+            else if (strcmp(line_buf, "STATUS") == 0)
+            {
+                const joy_runtime_creds_t *rt = joy_runtime_get();
+                ESP_LOGI("CLI", ">> Status: Wi-Fi=%s, SSID=\"%s\", IP=%s",
+                         network_is_wifi_connected() ? "CONNECTED" : "DISCONNECTED",
+                         (rt && rt->wifi_ssid[0]) ? rt->wifi_ssid : "(none)",
+                         network_has_ip() ? "YES" : "NO");
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+}
 static const char *TAG = "MAIN";
 
 static void api_init_when_network_ready_task(void *param)
@@ -72,6 +122,13 @@ extern "C" void app_main()
         3,
         NULL,
         MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    xTaskCreate(
+        serial_cli_task,
+        "serial_cli",
+        4096,
+        NULL,
+        2,
+        NULL);
 
     // Jalankan background task state machine orchestrator
     joy_state_machine_init();

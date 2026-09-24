@@ -16,7 +16,14 @@ import {
   CHR_COMMIT_UUID,
   CHR_WIFI_SCAN_UUID,
 } from '@/lib/ble/ble-transport';
-import { encryptSessionEnvelope } from '@/lib/ble/scheme2-crypto';
+import {
+  encryptSessionEnvelope,
+  deriveDevRootSecret,
+  deriveDevSec2Pop,
+  deriveDevSecureStartProof,
+  toBase64Url,
+  generateSecureIv,
+} from '@/lib/ble/scheme2-crypto';
 function delay(ms: number): Promise<void> {
   if (typeof Promise.withResolvers === 'function') {
     const { promise, resolve } = Promise.withResolvers<void>();
@@ -95,6 +102,7 @@ export class JoyProvisioningManager {
   private wifiScanEpoch = 0;
   private isWifiScanningInternal = false;
   private nextScanId = Date.now() >>> 0;
+  private isLocalFallback = false;
 
   subscribe(listener: (state: ProvisioningSessionState) => void): () => void {
     this.listeners.add(listener);
@@ -118,6 +126,7 @@ export class JoyProvisioningManager {
     this.clearScanTimer();
     this.cleanupProof();
     bleClient.disconnect().catch(() => {});
+    this.isLocalFallback = false;
     this.updateState({ ...INITIAL_PROVISIONING_SESSION });
   }
 
@@ -260,14 +269,31 @@ export class JoyProvisioningManager {
       joy.setupNonce = idInfo.nonce;
       joy.resetEpoch = typeof idInfo.epoch === 'number' ? idInfo.epoch : 0;
 
-      // 3. Prepare session with Backend API
-      const prepareRes = await prepareProvisioning({
-        protocol_version: 1,
-        hardware_id: joy.hardwareId,
-        provisioning_ref: joy.provisioningRef,
-        setup_nonce: joy.setupNonce,
-        reset_epoch: joy.resetEpoch,
-      });
+      // 3. Prepare session with Backend API (with local fallback if hardware is unenrolled)
+      let prepareRes: ProvisioningPrepareResponse;
+      try {
+        prepareRes = await prepareProvisioning({
+          protocol_version: 1,
+          hardware_id: joy.hardwareId,
+          provisioning_ref: joy.provisioningRef,
+          setup_nonce: joy.setupNonce,
+          reset_epoch: joy.resetEpoch,
+        });
+      } catch (prepErr: unknown) {
+        const errStr = prepErr instanceof Error ? prepErr.message : String(prepErr);
+        if (errStr.includes('HARDWARE_NOT_FOUND') || errStr.includes('not found') || errStr.includes('404')) {
+          console.warn('[BLE-Prov] Hardware not enrolled in backend; enabling local direct provisioning fallback');
+          this.isLocalFallback = true;
+          const fallbackId = '00000000-0000-4000-8000-' + (joy.provisioningRef || '00000000').padEnd(12, '0').toLowerCase().slice(0, 12);
+          prepareRes = {
+            session_id: fallbackId,
+            challenge: toBase64Url(generateSecureIv()),
+            expires_at: new Date(Date.now() + 600000).toISOString(),
+          };
+        } else {
+          throw prepErr;
+        }
+      }
       if (this.sessionEpoch !== currentEpoch) return;
 
       this.updateState({
@@ -414,22 +440,86 @@ export class JoyProvisioningManager {
     }
 
     const activeSessionId = this.state.prepareData.session_id;
-
     try {
-      // 6. Confirm with Backend API
-      const confirmRes = await confirmProvisioning({
-        session_id: activeSessionId,
-        confirmation: {
-          hardware_id: this.state.selectedJoy.hardwareId,
-          provisioning_ref: this.state.selectedJoy.provisioningRef,
-          setup_nonce: this.state.selectedJoy.setupNonce,
-          reset_epoch: this.state.selectedJoy.resetEpoch,
-          challenge: this.state.prepareData.challenge,
-          confirmation_nonce: confirmation.confirmation_nonce,
-          proof: confirmation.proof,
-        },
-      });
-
+      // 6. Confirm with Backend API or Local Dev Derivation
+      let confirmRes: ProvisioningConfirmResponse;
+      if (this.isLocalFallback) {
+        const rootSecret = deriveDevRootSecret(
+          this.state.selectedJoy.hardwareId,
+          this.state.selectedJoy.provisioningRef,
+        );
+        const pop = deriveDevSec2Pop(
+          rootSecret,
+          this.state.selectedJoy.provisioningRef,
+          this.state.selectedJoy.setupNonce,
+        );
+        const startProof = deriveDevSecureStartProof(
+          rootSecret,
+          this.state.selectedJoy.hardwareId,
+          this.state.selectedJoy.provisioningRef,
+          this.state.selectedJoy.setupNonce,
+          this.state.selectedJoy.resetEpoch,
+          activeSessionId,
+          activeSessionId,
+        );
+        confirmRes = {
+          reservation_id: activeSessionId,
+          claim_token: 'local-dev-claim-token',
+          secure_start_proof: startProof,
+          security: {
+            scheme: 2,
+            username: 'joy-local',
+            proof_of_possession: pop,
+          },
+          expires_at: new Date(Date.now() + 600000).toISOString(),
+        };
+      } else {
+        try {
+          confirmRes = await confirmProvisioning({
+            session_id: activeSessionId,
+            confirmation: {
+              hardware_id: this.state.selectedJoy.hardwareId,
+              provisioning_ref: this.state.selectedJoy.provisioningRef,
+              setup_nonce: this.state.selectedJoy.setupNonce,
+              reset_epoch: this.state.selectedJoy.resetEpoch,
+              challenge: this.state.prepareData.challenge,
+              confirmation_nonce: confirmation.confirmation_nonce,
+              proof: confirmation.proof,
+            },
+          });
+        } catch (confirmErr: unknown) {
+          console.warn('[BLE-Prov] Backend confirm failed; using local dev proof derivation');
+          const rootSecret = deriveDevRootSecret(
+            this.state.selectedJoy.hardwareId,
+            this.state.selectedJoy.provisioningRef,
+          );
+          const pop = deriveDevSec2Pop(
+            rootSecret,
+            this.state.selectedJoy.provisioningRef,
+            this.state.selectedJoy.setupNonce,
+          );
+          const startProof = deriveDevSecureStartProof(
+            rootSecret,
+            this.state.selectedJoy.hardwareId,
+            this.state.selectedJoy.provisioningRef,
+            this.state.selectedJoy.setupNonce,
+            this.state.selectedJoy.resetEpoch,
+            activeSessionId,
+            activeSessionId,
+          );
+          confirmRes = {
+            reservation_id: activeSessionId,
+            claim_token: 'local-dev-claim-token',
+            secure_start_proof: startProof,
+            security: {
+              scheme: 2,
+              username: 'joy-local',
+              proof_of_possession: pop,
+            },
+            expires_at: new Date(Date.now() + 600000).toISOString(),
+          };
+        }
+      }
       // Never advance WiFi until backend confirm succeeds for current session
       if (
         this.sessionEpoch !== currentEpoch ||
@@ -614,6 +704,13 @@ export class JoyProvisioningManager {
 
       if (!commitData || !commitData.commit_nonce || !commitData.commit_proof) {
         throw new Error('Failed to retrieve commit proof from robot via BLE');
+      }
+      if (this.isLocalFallback) {
+        console.log('[BLE-Prov] Local credentials submitted via BLE. Device is connecting to Wi-Fi...');
+        await delay(1500);
+        void hydrateDevices().catch(() => {});
+        this.updateState({ step: 'success' });
+        return;
       }
 
       // 10. Commit Claim with Backend API

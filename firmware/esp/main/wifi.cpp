@@ -21,6 +21,12 @@
 #include "cJSON.h"
 static const char *WIFI_TAG = "WIFI";
 
+#ifndef DEFAULT_WIFI_SSID
+#define DEFAULT_WIFI_SSID ""
+#endif
+#ifndef DEFAULT_WIFI_PASS
+#define DEFAULT_WIFI_PASS ""
+#endif
 static TaskHandle_t time_sync_task_handle = NULL;
 static TaskHandle_t s_finalize_task_handle = NULL;
 static volatile bool s_finalize_spawn_pending = false;
@@ -457,9 +463,15 @@ void wifi_init(void)
         strncpy((char*)wifi_config.sta.password, runtime->wifi_password, sizeof(wifi_config.sta.password) - 1);
         ESP_LOGI(WIFI_TAG, "WiFi config loaded from NVS: ssid=\"%s\"", (const char*)wifi_config.sta.ssid);
     }
+    else if (strlen(DEFAULT_WIFI_SSID) > 0)
+    {
+        strncpy((char*)wifi_config.sta.ssid, DEFAULT_WIFI_SSID, sizeof(wifi_config.sta.ssid) - 1);
+        strncpy((char*)wifi_config.sta.password, DEFAULT_WIFI_PASS, sizeof(wifi_config.sta.password) - 1);
+        ESP_LOGI(WIFI_TAG, "Using fallback static Wi-Fi: ssid=\"%s\"", DEFAULT_WIFI_SSID);
+    }
     else
     {
-        ESP_LOGI(WIFI_TAG, "No WiFi credentials in NVS. Device ready for BLE provisioning.");
+        ESP_LOGI(WIFI_TAG, "No WiFi credentials in NVS. Device ready for Serial CLI (WIFI:<SSID>:<PASS>) or BLE provisioning.");
     }
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
@@ -475,6 +487,7 @@ void wifi_connect_to_ap(const char *ssid, const char *password)
 {
     if (!ssid || strlen(ssid) == 0) return;
     ESP_LOGI(WIFI_TAG, "Configuring WiFi STA for SSID \"%s\"...", ssid);
+    joy_ble_stop_provisioning();
     api_ws_reset_authentication_blocked();
     joy_runtime_save_wifi(ssid, password ? password : "");
 

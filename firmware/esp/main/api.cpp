@@ -687,7 +687,7 @@ static bool send_authenticate() {
 
     const joy_identity_t *id = joy_identity_get();
     const joy_runtime_creds_t *rt = joy_runtime_get();
-    const char *hw_id = (id && id->hardware_id[0]) ? id->hardware_id : JOY_DEVICE_ID;
+    const char *hw_id = (rt && rt->is_provisioned && id && id->hardware_id[0]) ? id->hardware_id : JOY_DEVICE_ID;
     const char *dev_tok = (rt && rt->is_provisioned && rt->runtime_device_token[0])
         ? rt->runtime_device_token
         : JOY_DEVICE_TOKEN;
@@ -894,7 +894,8 @@ static void handle_ws_message(const char *payload, int len) {
              (strcmp(state_node->valuestring, "idle") != 0 && !active_request_is_null));
 
         const joy_identity_t *id = joy_identity_get();
-        const char *expected_hw_id = (id && id->hardware_id[0]) ? id->hardware_id : JOY_DEVICE_ID;
+        const joy_runtime_creds_t *rt = joy_runtime_get();
+        const char *expected_hw_id = (rt && rt->is_provisioned && id && id->hardware_id[0]) ? id->hardware_id : JOY_DEVICE_ID;
 
         bool authenticated_event_is_valid =
             status_node != NULL && cJSON_IsString(status_node) &&
@@ -2205,7 +2206,7 @@ static JoyUploadResult upload_wav_voice(const char *uuid, int16_t *record_buf, s
     // Set headers
     const joy_identity_t *id = joy_identity_get();
     const joy_runtime_creds_t *rt = joy_runtime_get();
-    const char *hw_id = (id && id->hardware_id[0]) ? id->hardware_id : JOY_DEVICE_ID;
+    const char *hw_id = (rt && rt->is_provisioned && id && id->hardware_id[0]) ? id->hardware_id : JOY_DEVICE_ID;
     const char *dev_tok = (rt && rt->is_provisioned && rt->runtime_device_token[0])
         ? rt->runtime_device_token
         : JOY_DEVICE_TOKEN;

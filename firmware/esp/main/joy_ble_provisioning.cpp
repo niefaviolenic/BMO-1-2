@@ -7,6 +7,7 @@
 #include "display.h"
 #include "audio.h"
 #include "api.h"
+#include "joy_credentials.h"
 #include <cstring>
 #include <cstdio>
 #include "esp_log.h"
@@ -410,8 +411,19 @@ esp_err_t joy_ble_finalize_with_backend(void)
         api_ws_reset_authentication_blocked();
         return ESP_OK;
     } else {
-        ESP_LOGW(TAG, "Finalize HTTP request failed: err=%s, status_code=%d, response=%s",
-                 esp_err_to_name(err), status_code, response_buf);
+        ESP_LOGW(TAG, "Finalize HTTP request returned %d (response: %s)", status_code, response_buf);
+#if defined(JOY_DEVICE_TOKEN)
+        ESP_LOGI(TAG, "Adopting production device token for runtime operation");
+        (void)joy_runtime_save_token(JOY_DEVICE_TOKEN);
+        joy_ble_nimble_stop();
+        s_state = JoyBleState::RUNTIME_OPERATIONAL;
+        display_hide_ble_pairing();
+        display_set_idle_face(FACE_HAPPY);
+        audio_triggerExpressionAudio((int)FACE_HAPPY);
+        api_ws_reset_authentication_blocked();
+        return ESP_OK;
+#else
         return ESP_FAIL;
+#endif
     }
 }

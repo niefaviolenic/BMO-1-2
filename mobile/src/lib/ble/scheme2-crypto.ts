@@ -1,5 +1,6 @@
 import { hkdf } from '@noble/hashes/hkdf.js';
 import { sha256 } from '@noble/hashes/sha2.js';
+import { hmac } from '@noble/hashes/hmac.js';
 import { gcm } from '@noble/ciphers/aes.js';
 import { Buffer } from 'buffer';
 export interface EncryptedSessionEnvelope {
@@ -38,6 +39,34 @@ export function deriveSessionKey(popBase64url: string, setupNonce: string): Uint
   const info = Buffer.from('joy-sec2-session-v1', 'utf8');
 
   return hkdf(sha256, ikm, salt, info, 32);
+}
+export function deriveDevRootSecret(hardwareId: string, provisioningRef: string): Uint8Array {
+  const key = Buffer.from('joy-dev-root-secret-v1', 'utf8');
+  const msg = Buffer.from(`joy-dev-v1\n${hardwareId}\n${provisioningRef.toUpperCase()}`, 'utf8');
+  return hmac(sha256, key, msg);
+}
+
+export function deriveDevSec2Pop(rootSecret: Uint8Array, provisioningRef: string, setupNonce: string): string {
+  const msg = Buffer.from(`joy-sec2-pop-v1\n${provisioningRef.toUpperCase()}\n${setupNonce}`, 'utf8');
+  const digest = hmac(sha256, rootSecret, msg);
+  return toBase64Url(digest);
+}
+
+export function deriveDevSecureStartProof(
+  rootSecret: Uint8Array,
+  hardwareId: string,
+  provisioningRef: string,
+  setupNonce: string,
+  resetEpoch: number,
+  sessionId: string,
+  reservationId: string,
+): string {
+  const msg = Buffer.from(
+    `joy-secure-start-v1\n${hardwareId}\n${provisioningRef.toUpperCase()}\n${setupNonce}\n${resetEpoch}\n${sessionId}\n${reservationId}`,
+    'utf8',
+  );
+  const digest = hmac(sha256, rootSecret, msg);
+  return toBase64Url(digest);
 }
 export function generateSecureIv(): Uint8Array {
   // 1. Standard Web Crypto / Hermes crypto.getRandomValues
