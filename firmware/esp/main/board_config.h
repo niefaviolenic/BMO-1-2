@@ -25,8 +25,8 @@
 
     // Speaker pins (MAX98357A I2S DAC Amplifier)
     #define PIN_I2S_SPK_BCLK 16
-    #define PIN_I2S_SPK_WS   17
-    #define PIN_I2S_SPK_DIN  39
+    #define PIN_I2S_SPK_WS   14
+    #define PIN_I2S_SPK_DIN  17
 
     // Microphone I2S pins (SD=1, SCK=2, WS=42)
     #define PIN_I2S_MIC_BCLK 2   // SCK (Clock)
@@ -84,8 +84,8 @@
 
     // Speaker pins (MAX98357A I2S DAC Amplifier)
     #define PIN_I2S_SPK_BCLK 16
-    #define PIN_I2S_SPK_WS   17
-    #define PIN_I2S_SPK_DIN  39
+    #define PIN_I2S_SPK_WS   14
+    #define PIN_I2S_SPK_DIN  17
 
     #define PIN_I2S_MIC_BCLK 2   // SCK
     #define PIN_I2S_MIC_WS   42  // WS
@@ -111,8 +111,8 @@
     #define PIN_LCD_RST  8
 
     #define PIN_I2S_SPK_BCLK 16
-    #define PIN_I2S_SPK_WS   17
-    #define PIN_I2S_SPK_DIN  39
+    #define PIN_I2S_SPK_WS   14
+    #define PIN_I2S_SPK_DIN  17
 
     #define PIN_I2S_MIC_BCLK 2
     #define PIN_I2S_MIC_WS   42

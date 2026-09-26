@@ -128,6 +128,16 @@ void FacePolicy::trigger_expression_overlay(int64_t now_us)
     }
 }
 
+void FacePolicy::trigger_custom_overlay(int64_t now_us, uint8_t asset_id)
+{
+    if (m_mode == FaceMode::IDLE_DEFAULT || m_mode == FaceMode::IDLE_OVERLAY) {
+        m_mode = FaceMode::IDLE_OVERLAY;
+        m_current_asset = asset_id;
+        m_deadline_us = now_us + 5000000LL;
+        m_face_changed = true;
+    }
+}
+
 FaceDecision FacePolicy::update(int64_t now_us)
 {
     bool changed = m_face_changed;

@@ -430,28 +430,7 @@ static void display_policy_task(void *param)
         FaceDecision decision = s_face_policy.update(now_us);
         if (decision.face_changed) {
             display_render_asset(decision.asset_id);
-            ESP_LOGI(TAG, ">>> [EXPRESSION TRANSITION] Face changed to Asset %d - Triggering non-blocking audio feedback <<<", decision.asset_id);
-            switch(decision.asset_id) {
-                case 3: // HAPPY (IDLE)
-                    audio_triggerExpressionAudio(0); // "I am happy" (01.wav)
-                    break;
-                case 5: // SURPRISED
-                    audio_triggerExpressionAudio(7); // "I am surprised" (08.wav)
-                    break;
-                case 6: // CUTE / SHY / EXCITED
-                    audio_triggerExpressionAudio(1); // "I am cute" (02.wav)
-                    break;
-                case 11: // BAD FACE / ANGRY
-                    audio_triggerExpressionAudio(4); // "I am angry" (05.wav)
-                    break;
-                case 14: // SAD / ERROR
-                    audio_triggerExpressionAudio(5); // "I am sad" (06.wav)
-                    break;
-                default:
-                    // Uniform non-blocking audio trigger for other transitions
-                    audio_triggerExpressionAudio(0);
-                    break;
-            }
+            ESP_LOGI(TAG, ">>> [EXPRESSION TRANSITION] Face changed to Asset %d <<<", decision.asset_id);
         }
         int delay_ms = 20;
         if (decision.next_deadline_us > 0) {
@@ -2075,6 +2054,19 @@ void display_trigger_touch_overlay() {
 
 void display_trigger_expression_overlay() {
     s_face_policy.trigger_expression_overlay(esp_timer_get_time());
+}
+
+void display_trigger_expression_test(int expression_index) {
+    if (expression_index < 0 || expression_index >= 10) return;
+    Face face = static_cast<Face>(expression_index);
+    uint8_t asset_id = face_to_v2_asset_id(face);
+
+    ESP_LOGI(TAG, ">>> [EXPRESSION TEST] Index %d (%s) -> Asset %d <<<",
+             expression_index, face_name(face), asset_id);
+
+    s_face_policy.trigger_custom_overlay(esp_timer_get_time(), asset_id);
+    display_render_asset(asset_id);
+    audio_triggerExpressionAudio(expression_index);
 }
 
 void display_trigger_ble_discovery() {

@@ -23,9 +23,12 @@ static void serial_cli_task(void *param)
     vTaskDelay(pdMS_TO_TICKS(1500));
     ESP_LOGI("CLI", "==================================================");
     ESP_LOGI("CLI", " Joy Serial CLI Ready");
-    ESP_LOGI("CLI", " Command: WIFI:<SSID>:<PASSWORD>");
-    ESP_LOGI("CLI", " Example: WIFI:MyWifiNetwork:mypassword123");
-    ESP_LOGI("CLI", " Status : STATUS");
+    ESP_LOGI("CLI", " Command: EXPR:<NAME|0-9|NEXT> - Test expression & voice");
+    ESP_LOGI("CLI", " Example: EXPR:SAD, EXPR:HAPPY, EXPR:NEXT");
+    ESP_LOGI("CLI", " Command: TEST:AUDIO          - Speaker chime test");
+    ESP_LOGI("CLI", " Command: TEST:ALL            - Test all 10 expressions");
+    ESP_LOGI("CLI", " Command: WIFI:<SSID>:<PASS>  - Set WiFi");
+    ESP_LOGI("CLI", " Command: STATUS              - Check system status");
     ESP_LOGI("CLI", "==================================================");
 
     char line_buf[128];
@@ -40,7 +43,51 @@ static void serial_cli_task(void *param)
             }
             if (len == 0) continue;
 
-            if (strncmp(line_buf, "WIFI:", 5) == 0)
+            if (strncmp(line_buf, "EXPR:", 5) == 0)
+            {
+                const char *cmd = line_buf + 5;
+                int expr_idx = -1;
+                if (strcasecmp(cmd, "HAPPY") == 0 || strcmp(cmd, "0") == 0) expr_idx = 0;
+                else if (strcasecmp(cmd, "CUTE") == 0 || strcmp(cmd, "1") == 0) expr_idx = 1;
+                else if (strcasecmp(cmd, "EXCITED") == 0 || strcmp(cmd, "2") == 0) expr_idx = 2;
+                else if (strcasecmp(cmd, "SLEEPY") == 0 || strcmp(cmd, "3") == 0) expr_idx = 3;
+                else if (strcasecmp(cmd, "ANGRY") == 0 || strcmp(cmd, "4") == 0) expr_idx = 4;
+                else if (strcasecmp(cmd, "SAD") == 0 || strcmp(cmd, "5") == 0) expr_idx = 5;
+                else if (strcasecmp(cmd, "WINK") == 0 || strcmp(cmd, "6") == 0) expr_idx = 6;
+                else if (strcasecmp(cmd, "SURPRISED") == 0 || strcmp(cmd, "7") == 0) expr_idx = 7;
+                else if (strcasecmp(cmd, "LOVE") == 0 || strcmp(cmd, "8") == 0) expr_idx = 8;
+                else if (strcasecmp(cmd, "CONFUSED") == 0 || strcmp(cmd, "9") == 0) expr_idx = 9;
+                else if (strcasecmp(cmd, "NEXT") == 0) {
+                    static int s_cli_next = 0;
+                    expr_idx = s_cli_next;
+                    s_cli_next = (s_cli_next + 1) % 10;
+                }
+
+                if (expr_idx >= 0 && expr_idx < 10)
+                {
+                    ESP_LOGI("CLI", ">> Testing Expression [%d] via CLI", expr_idx);
+                    display_trigger_expression_test(expr_idx);
+                }
+                else
+                {
+                    ESP_LOGW("CLI", ">> Unknown expression: '%s'. Valid: HAPPY, CUTE, EXCITED, SLEEPY, ANGRY, SAD, WINK, SURPRISED, LOVE, CONFUSED, NEXT, or 0-9", cmd);
+                }
+            }
+            else if (strcmp(line_buf, "TEST:AUDIO") == 0)
+            {
+                ESP_LOGI("CLI", ">> Testing speaker audio on MAX98357A (DIN=17, BCLK=16, LRC=14)...");
+                audio_playRecordingFinishedCue();
+            }
+            else if (strcmp(line_buf, "TEST:ALL") == 0)
+            {
+                ESP_LOGI("CLI", ">> Testing all 10 expressions in sequence...");
+                for (int i = 0; i < 10; i++)
+                {
+                    display_trigger_expression_test(i);
+                    vTaskDelay(pdMS_TO_TICKS(2500));
+                }
+            }
+            else if (strncmp(line_buf, "WIFI:", 5) == 0)
             {
                 char *ssid = line_buf + 5;
                 char *colon = strchr(ssid, ':');
@@ -60,6 +107,17 @@ static void serial_cli_task(void *param)
                          network_is_wifi_connected() ? "CONNECTED" : "DISCONNECTED",
                          (rt && rt->wifi_ssid[0]) ? rt->wifi_ssid : "(none)",
                          network_has_ip() ? "YES" : "NO");
+            }
+            else if (strcmp(line_buf, "HELP") == 0)
+            {
+                ESP_LOGI("CLI", "Available commands:");
+                ESP_LOGI("CLI", "  EXPR:<NAME>       - Test expression & voice (SAD, HAPPY, ANGRY, CUTE, EXCITED, SLEEPY, WINK, SURPRISED, LOVE, CONFUSED)");
+                ESP_LOGI("CLI", "  EXPR:NEXT         - Cycle to next expression");
+                ESP_LOGI("CLI", "  EXPR:<0-9>        - Test expression by index");
+                ESP_LOGI("CLI", "  TEST:AUDIO        - Test speaker hardware chime");
+                ESP_LOGI("CLI", "  TEST:ALL          - Test all 10 expressions sequentially");
+                ESP_LOGI("CLI", "  WIFI:<SSID>:<PWD> - Connect Wi-Fi");
+                ESP_LOGI("CLI", "  STATUS            - Check status");
             }
         }
         vTaskDelay(pdMS_TO_TICKS(50));

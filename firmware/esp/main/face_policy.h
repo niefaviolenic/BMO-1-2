@@ -48,6 +48,7 @@ public:
     void trigger_ble_stop(int64_t now_us);
     void trigger_touch_overlay(int64_t now_us);
     void trigger_expression_overlay(int64_t now_us);
+    void trigger_custom_overlay(int64_t now_us, uint8_t asset_id);
 
     FaceDecision update(int64_t now_us);
 

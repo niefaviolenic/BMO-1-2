@@ -79,6 +79,7 @@ void display_test_pattern();
 void display_render_asset(uint8_t asset_id);
 void display_trigger_touch_overlay();
 void display_trigger_expression_overlay();
+void display_trigger_expression_test(int expression_index);
 void display_trigger_ble_discovery();
 void display_trigger_ble_connected();
 void display_trigger_ble_proof_accepted();

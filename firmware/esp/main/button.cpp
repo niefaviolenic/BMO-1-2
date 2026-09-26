@@ -264,11 +264,13 @@ void button_update()
                 joy_ble_on_physical_hold_2s();
                 audio_triggerExpressionAudio(2); // Play "I am excited" (03.wav)
                 break;
-            case ButtonAction::EXPRESSION_ASSET_11:
-                ESP_LOGI(TAG, ">>> [ACTION EXECUTED] EXPRESSION_ASSET_11 (A3 pressed: Bad Face / Muka Jelek) <<<");
-                display_trigger_expression_overlay();
-                audio_playGoofyBoingCue(); // Cartoon goofy wobble-boing ("Bleeeh! :P")
+            case ButtonAction::EXPRESSION_ASSET_11: {
+                static int s_btn_expr_index = 0;
+                ESP_LOGI(TAG, ">>> [ACTION EXECUTED] EXPRESSION BUTTON A3 pressed: Cycling to Expression %d <<<", s_btn_expr_index);
+                display_trigger_expression_test(s_btn_expr_index);
+                s_btn_expr_index = (s_btn_expr_index + 1) % 10;
                 break;
+            }
             case ButtonAction::TOUCH_ASSET_6:
                 ESP_LOGI(TAG, ">>> [ACTION EXECUTED] Touch Sensor (GPIO %d): Tap-to-Talk / Touch-to-Wake (recording started) <<<", PIN_TOUCH_PAD);
                 if (getState() == JoyState::IDLE) {
